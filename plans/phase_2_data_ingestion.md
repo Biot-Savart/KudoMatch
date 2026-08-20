@@ -81,3 +81,35 @@ flowchart TD
 
 - Create [`lib/queries/matches.ts`](lib/queries/matches.ts:1) and [`lib/queries/tournaments.ts`](lib/queries/tournaments.ts:1) with caching and Supabase queries.
 - Update [`app/page.tsx`](app/page.tsx:1) to query live matches from Supabase using React Query / RSC.
+
+---
+
+## ⭐️ Seeding Historical Data for End-to-End Testing
+
+To test the application's prediction interfaces, scoring engine, real-time sync, and social pools/standings, a dedicated historical seeder is provided.
+
+### 1. Seeding Command
+
+You can seed a fully-populated, realistic testing state using a single command:
+
+```bash
+npm run seed:historic
+```
+
+### 2. Seeding Content
+
+Running this command provisions:
+
+- **Premier League 24/25 Tournament & 20 EPL Teams** with official API-Football logos and short names.
+- **7 Mock Users** with distinct profiles, realistic avatars, and emails (`@kudomatch.test`):
+  - `@marcus_striker`, `@sarah_tactician`, `@alex_gk`, `@sam_analytics`, `@elena_scout`, `@dave_pundit`, `@kudo_champ`.
+- **Matchweek 10 (10 Finished Matches)** with authentic past scores.
+- **Matchweek 11 (10 Finished Matches)** with authentic past scores.
+- **Matchweek 12 (10 Upcoming/Scheduled Matches)** with future kickoff times, ready for predictions.
+- **155 Scored Predictions** mapped to Matchweeks 10 & 11 with varied point outcomes (3pts exact, 2pts goal-diff, 1pt winner-only, 0pts incorrect), populated via a transaction workflow to bypass locking triggers.
+- **4 Custom Leagues / Pools** with invite codes:
+  - `PREM25` - _Premier League Official Hub_ (Public, 8 members)
+  - `WARRIOR` - _Weekend Warriors_ (Private, 7 members)
+  - `CHAMP9` - _The Champions Circle_ (Private, 4 members)
+  - `BANTER` - _Office Banter League_ (Private, 8 members)
+- **Automatic Points Sync** via Postgres triggers and `recalculate_all_scores()` to populate user total points, streaks, badges, and league stand-alone leaderboards!

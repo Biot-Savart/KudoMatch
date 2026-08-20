@@ -25,6 +25,23 @@ declare
   v_kickoff_time timestamp with time zone;
   v_match_status text;
 begin
+  -- If this is an UPDATE and the predicted scores have NOT changed, it means the scoring engine
+  -- is updating points_earned or updated_at. We bypass all lock/kickoff validation checks.
+  if TG_OP = 'UPDATE'
+     and OLD.predicted_home_score is not distinct from NEW.predicted_home_score
+     and OLD.predicted_away_score is not distinct from NEW.predicted_away_score then
+    -- Derive predicted_winner just to ensure complete database consistency
+    if NEW.predicted_home_score > NEW.predicted_away_score then
+      NEW.predicted_winner := 'home';
+    elsif NEW.predicted_home_score < NEW.predicted_away_score then
+      NEW.predicted_winner := 'away';
+    else
+      NEW.predicted_winner := 'draw';
+    end if;
+    NEW.updated_at := timezone('utc'::text, now());
+    return NEW;
+  end if;
+
   -- 1. Fetch kickoff time and status for the target match
   select kickoff_time, status into v_kickoff_time, v_match_status
   from public.matches
