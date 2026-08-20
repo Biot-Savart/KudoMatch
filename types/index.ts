@@ -58,6 +58,13 @@ export interface Prediction {
 	created_at: string;
 }
 
+export interface PredictionWithMatch extends Prediction {
+	match?: Match & {
+		home_team?: Team;
+		away_team?: Team;
+	};
+}
+
 export interface Pool {
 	id: string; // UUID
 	name: string;

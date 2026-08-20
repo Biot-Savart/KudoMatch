@@ -134,14 +134,43 @@ export function MatchCard({
 					<div className="flex flex-col items-center justify-center gap-1">
 						{match.status === 'finished' ? (
 							// Actual result if finished
-							<div className="flex items-center gap-2 bg-black/45 px-3 py-1.5 rounded-xl border border-white/5">
-								<span className="text-lg font-black text-white">
-									{match.home_score}
-								</span>
-								<span className="text-xs font-bold text-slate-500">:</span>
-								<span className="text-lg font-black text-white">
-									{match.away_score}
-								</span>
+							<div className="flex flex-col items-center gap-1.5">
+								<div className="flex items-center gap-2 bg-black/45 px-3 py-1.5 rounded-xl border border-white/5">
+									<span className="text-lg font-black text-white">
+										{match.home_score}
+									</span>
+									<span className="text-xs font-bold text-slate-500">:</span>
+									<span className="text-lg font-black text-white">
+										{match.away_score}
+									</span>
+								</div>
+
+								{existingPrediction && (
+									<div className="flex flex-col items-center mt-1">
+										<div
+											className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${
+												existingPrediction.points_earned === 3
+													? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
+													: existingPrediction.points_earned === 2
+														? 'bg-teal-500/10 border-teal-500/20 text-teal-400'
+														: existingPrediction.points_earned === 1
+															? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+															: 'bg-slate-500/10 border-slate-500/20 text-slate-400'
+											}`}
+										>
+											+{existingPrediction.points_earned} PTS
+										</div>
+										<span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">
+											{existingPrediction.points_earned === 3
+												? 'Exact Score'
+												: existingPrediction.points_earned === 2
+													? 'Outcome & Diff'
+													: existingPrediction.points_earned === 1
+														? 'Winner Only'
+														: 'Miss'}
+										</span>
+									</div>
+								)}
 							</div>
 						) : (
 							// Prediction score or Prediction Edit Trigger
@@ -187,42 +216,59 @@ export function MatchCard({
 					</div>
 				</div>
 
-				{/* Quick outcome 1 / X / 2 pills selector */}
-				<div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-4">
-					<button
-						onClick={() => handleQuickSelection('home')}
-						disabled={isLocked || !userId}
-						className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
-							activeOption === 'home'
-								? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-								: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none'
-						}`}
-					>
-						1
-					</button>
-					<button
-						onClick={() => handleQuickSelection('draw')}
-						disabled={isLocked || !userId}
-						className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
-							activeOption === 'draw'
-								? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-								: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none'
-						}`}
-					>
-						X
-					</button>
-					<button
-						onClick={() => handleQuickSelection('away')}
-						disabled={isLocked || !userId}
-						className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
-							activeOption === 'away'
-								? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-								: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none'
-						}`}
-					>
-						2
-					</button>
-				</div>
+				{/* Bottom Section */}
+				{match.status === 'finished' ? (
+					existingPrediction ? (
+						<div className="flex items-center justify-center gap-2 border-t border-white/5 pt-4 text-xs font-bold text-slate-400">
+							<span>Your Pick:</span>
+							<span className="text-white font-black bg-white/5 px-2 py-0.5 rounded-md">
+								{existingPrediction.predicted_home_score} -{' '}
+								{existingPrediction.predicted_away_score}
+							</span>
+						</div>
+					) : (
+						<div className="text-center border-t border-white/5 pt-4 text-xs font-bold text-slate-500">
+							No prediction submitted
+						</div>
+					)
+				) : (
+					/* Quick outcome 1 / X / 2 pills selector */
+					<div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-4">
+						<button
+							onClick={() => handleQuickSelection('home')}
+							disabled={isLocked || !userId}
+							className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
+								activeOption === 'home'
+									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
+									: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none'
+							}`}
+						>
+							1
+						</button>
+						<button
+							onClick={() => handleQuickSelection('draw')}
+							disabled={isLocked || !userId}
+							className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
+								activeOption === 'draw'
+									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
+									: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none'
+							}`}
+						>
+							X
+						</button>
+						<button
+							onClick={() => handleQuickSelection('away')}
+							disabled={isLocked || !userId}
+							className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
+								activeOption === 'away'
+									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
+									: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none'
+							}`}
+						>
+							2
+						</button>
+					</div>
+				)}
 			</CardContent>
 		</Card>
 	);
