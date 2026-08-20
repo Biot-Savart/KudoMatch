@@ -9,6 +9,9 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const RAPIDAPI_KEY =
 	process.env.RAPIDAPI_KEY || process.env.NEXT_PUBLIC_RAPIDAPI_KEY;
+const FOOTBALL_DATA_API_KEY =
+	process.env.FOOTBALL_DATA_API_KEY ||
+	process.env.NEXT_PUBLIC_FOOTBALL_DATA_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 	console.error('❌ Missing Supabase environment variables. Check .env.local');
@@ -272,15 +275,93 @@ async function seed() {
 	let apiFixtures: any[] = [];
 	let usingLiveApi = false;
 
-	// 2. Fetch via API-Football if key exists
+	// 2. Try Fetching from Football-Data.org (FIRST PRIORITY DIRECT API)
 	if (
+		FOOTBALL_DATA_API_KEY &&
+		FOOTBALL_DATA_API_KEY !== 'your-football-data-api-key' &&
+		!FOOTBALL_DATA_API_KEY.includes('placeholder')
+	) {
+		try {
+			console.log(
+				'📡 Fetching Premier League fixtures from Football-Data.org...',
+			);
+			const url = 'https://api.football-data.org/v4/competitions/PL/matches';
+			const res = await fetch(url, {
+				headers: {
+					'X-Auth-Token': FOOTBALL_DATA_API_KEY,
+				},
+			});
+
+			if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+
+			const json = await res.json();
+			const matches = json.matches || [];
+
+			if (matches.length > 0) {
+				console.log(
+					`✅ Retrieved ${matches.length} fixtures from Football-Data.org!`,
+				);
+				usingLiveApi = true;
+
+				const teamsMap = new Map();
+				matches.forEach((item: any) => {
+					const home = item.homeTeam;
+					const away = item.awayTeam;
+
+					if (home.id) {
+						teamsMap.set(home.id, {
+							name: home.name,
+							short_name: home.tla || home.name.substring(0, 3).toUpperCase(),
+							logo_url: home.crest,
+							external_id: home.id,
+						});
+					}
+					if (away.id) {
+						teamsMap.set(away.id, {
+							name: away.name,
+							short_name: away.tla || away.name.substring(0, 3).toUpperCase(),
+							logo_url: away.crest,
+							external_id: away.id,
+						});
+					}
+				});
+
+				apiTeams = Array.from(teamsMap.values());
+				apiFixtures = matches.map((item: any) => {
+					const isFinished = item.status === 'FINISHED';
+					const isLive = item.status === 'IN_PLAY' || item.status === 'PAUSED';
+
+					return {
+						matchday: item.matchday,
+						round: `Regular Season - ${item.matchday}`,
+						home_external_id: item.homeTeam.id,
+						away_external_id: item.awayTeam.id,
+						kickoff_time: item.utcDate,
+						home_score: isFinished ? item.score.fullTime.home : null,
+						away_score: isFinished ? item.score.fullTime.away : null,
+						status: isFinished ? 'finished' : isLive ? 'live' : 'scheduled',
+						external_id: item.id,
+					};
+				});
+			}
+		} catch (err) {
+			console.warn(
+				'⚠️ Football-Data.org fetch failed, trying RapidAPI/API-Football next...',
+				err,
+			);
+		}
+	}
+
+	// 3. Fallback to API-Football (RapidAPI) if key exists and Football-Data wasn't run
+	if (
+		!usingLiveApi &&
 		RAPIDAPI_KEY &&
 		RAPIDAPI_KEY !== 'your-supabase-anon-key' &&
 		!RAPIDAPI_KEY.includes('placeholder')
 	) {
 		try {
 			console.log(
-				'📡 Fetching live Premier League fixtures from API-Football...',
+				'📡 Fetching Premier League fixtures from RapidAPI/API-Football...',
 			);
 			const url =
 				'https://api-football-v1.p.rapidapi.com/v3/fixtures?league=39&season=2024';
@@ -297,10 +378,11 @@ async function seed() {
 			const fixtures = json.response || [];
 
 			if (fixtures.length > 0) {
-				console.log(`✅ Retrieved ${fixtures.length} fixtures from live API!`);
+				console.log(
+					`✅ Retrieved ${fixtures.length} fixtures from API-Football!`,
+				);
 				usingLiveApi = true;
 
-				// Extract teams and fixtures
 				const teamsMap = new Map();
 				fixtures.forEach((item: any) => {
 					const home = item.teams.home;
@@ -321,7 +403,6 @@ async function seed() {
 
 				apiTeams = Array.from(teamsMap.values());
 				apiFixtures = fixtures.map((item: any) => {
-					// Normalize kickoff string
 					return {
 						matchday: parseInt(item.league.round.replace(/[^0-9]/g, '')) || 1,
 						round: item.league.round,
@@ -343,12 +424,16 @@ async function seed() {
 			}
 		} catch (err) {
 			console.warn(
-				'⚠️ API fetch failed. Swerving back to beautiful built-in fallback dataset:',
+				'⚠️ API-Football fetch failed. Swerving back to beautiful built-in fallback dataset:',
 				err,
 			);
 		}
-	} else {
-		console.log('ℹ️ No active API key found. Launching local fallback seeder.');
+	}
+
+	if (!usingLiveApi) {
+		console.log(
+			'ℹ️ No active/functioning live API keys detected. Launching local fallback seeder.',
+		);
 	}
 
 	// Define lists to upsert
