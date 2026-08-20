@@ -7,6 +7,10 @@
 		"build": "next build",
 		"start": "next start",
 		"lint": "next lint",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
 		"seed": "tsx scripts/seed-fixtures.ts",
 		"seed:historic": "tsx scripts/seed-historic-data.ts",
 		"score:simulate": "tsx scripts/score-match.ts --simulate",
@@ -39,16 +43,24 @@
 		"zustand": "^5.0.15"
 	},
 	"devDependencies": {
+		"@testing-library/jest-dom": "^7.0.1",
+		"@testing-library/react": "^16.3.2",
+		"@testing-library/user-event": "^14.6.5",
 		"@types/node": "^20.12.12",
 		"@types/react": "^18.3.3",
 		"@types/react-dom": "^18.3.0",
+		"@vitejs/plugin-react": "^6.1.0",
+		"@vitest/coverage-v8": "^4.1.11",
 		"autoprefixer": "^10.4.19",
 		"dotenv": "^17.4.2",
 		"eslint": "^8.57.0",
 		"eslint-config-next": "^14.2.3",
+		"happy-dom": "^20.11.6",
+		"jsdom": "^30.0.1",
 		"postcss": "^8.4.38",
 		"tailwindcss": "^3.4.3",
 		"tsx": "^4.23.12",
-		"typescript": "^5.4.5"
+		"typescript": "^5.4.5",
+		"vitest": "^4.1.11"
 	}
 }

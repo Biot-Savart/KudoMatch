@@ -2,7 +2,16 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 export function createClient() {
-	const cookieStore = cookies();
+	// Bypass next/headers request scope check during Vitest unit testing
+	const cookieStore =
+		typeof process !== 'undefined' && process.env.VITEST === 'true'
+			? {
+					getAll: () => [],
+					set: () => {},
+					delete: () => {},
+				}
+			: cookies();
+
 	const url =
 		process.env.NEXT_PUBLIC_SUPABASE_URL ||
 		'https://placeholder-project-id.supabase.co';
