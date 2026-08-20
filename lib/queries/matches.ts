@@ -1,15 +1,15 @@
 import { createClient } from '@/lib/supabase/client';
 import { Match } from '@/types';
 
-// Beautiful fallback matches for offline/unseeded states
+// Beautiful fallback matches with valid UUID formats to prevent syntax errors
 const fallbackMatches: Match[] = [
 	{
-		id: 'm1',
-		tournament_id: 't1',
+		id: '11111111-1111-4111-a111-111111111111',
+		tournament_id: '00000000-0000-4000-a000-000000000000',
 		matchday: 12,
 		round: 'Regular Season - 12',
-		home_team_id: 'home1',
-		away_team_id: 'away1',
+		home_team_id: '22222222-2222-4222-a222-222222222222',
+		away_team_id: '33333333-3333-4333-a333-333333333333',
 		kickoff_time: new Date(Date.now() + 24 * 3600 * 1000).toISOString(), // Tomorrow
 		home_score: null,
 		away_score: null,
@@ -18,8 +18,8 @@ const fallbackMatches: Match[] = [
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString(),
 		home_team: {
-			id: 'home1',
-			tournament_id: 't1',
+			id: '22222222-2222-4222-a222-222222222222',
+			tournament_id: '00000000-0000-4000-a000-000000000000',
 			name: 'Chelsea',
 			short_name: 'CHE',
 			logo_url: 'https://media.api-sports.io/football/teams/49.png',
@@ -27,8 +27,8 @@ const fallbackMatches: Match[] = [
 			created_at: '',
 		},
 		away_team: {
-			id: 'away1',
-			tournament_id: 't1',
+			id: '33333333-3333-4333-a333-333333333333',
+			tournament_id: '00000000-0000-4000-a000-000000000000',
 			name: 'Arsenal',
 			short_name: 'ARS',
 			logo_url: 'https://media.api-sports.io/football/teams/42.png',
@@ -37,12 +37,12 @@ const fallbackMatches: Match[] = [
 		},
 	},
 	{
-		id: 'm2',
-		tournament_id: 't1',
+		id: '22222222-2222-4222-a222-422222222222',
+		tournament_id: '00000000-0000-4000-a000-000000000000',
 		matchday: 12,
 		round: 'Regular Season - 12',
-		home_team_id: 'home2',
-		away_team_id: 'away2',
+		home_team_id: '44444444-4444-4444-a444-444444444444',
+		away_team_id: '55555555-5555-4555-a555-555555555555',
 		kickoff_time: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(), // 2 days
 		home_score: null,
 		away_score: null,
@@ -51,8 +51,8 @@ const fallbackMatches: Match[] = [
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString(),
 		home_team: {
-			id: 'home2',
-			tournament_id: 't1',
+			id: '44444444-4444-4444-a444-444444444444',
+			tournament_id: '00000000-0000-4000-a000-000000000000',
 			name: 'Manchester City',
 			short_name: 'MCI',
 			logo_url: 'https://media.api-sports.io/football/teams/50.png',
@@ -60,8 +60,8 @@ const fallbackMatches: Match[] = [
 			created_at: '',
 		},
 		away_team: {
-			id: 'away2',
-			tournament_id: 't1',
+			id: '55555555-5555-4555-a555-555555555555',
+			tournament_id: '00000000-0000-4000-a000-000000000000',
 			name: 'Tottenham Hotspur',
 			short_name: 'TOT',
 			logo_url: 'https://media.api-sports.io/football/teams/47.png',
@@ -70,12 +70,12 @@ const fallbackMatches: Match[] = [
 		},
 	},
 	{
-		id: 'm3',
-		tournament_id: 't1',
+		id: '33333333-3333-4333-a333-433333333333',
+		tournament_id: '00000000-0000-4000-a000-000000000000',
 		matchday: 12,
 		round: 'Regular Season - 12',
-		home_team_id: 'home3',
-		away_team_id: 'away3',
+		home_team_id: '66666666-6666-4666-a666-666666666666',
+		away_team_id: '77777777-7777-4777-a777-777777777777',
 		kickoff_time: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(), // 3 days
 		home_score: null,
 		away_score: null,
@@ -84,8 +84,8 @@ const fallbackMatches: Match[] = [
 		created_at: new Date().toISOString(),
 		updated_at: new Date().toISOString(),
 		home_team: {
-			id: 'home3',
-			tournament_id: 't1',
+			id: '66666666-6666-4666-a666-666666666666',
+			tournament_id: '00000000-0000-4000-a000-000000000000',
 			name: 'Liverpool',
 			short_name: 'LIV',
 			logo_url: 'https://media.api-sports.io/football/teams/40.png',
@@ -93,8 +93,8 @@ const fallbackMatches: Match[] = [
 			created_at: '',
 		},
 		away_team: {
-			id: 'away3',
-			tournament_id: 't1',
+			id: '77777777-7777-4777-a777-777777777777',
+			tournament_id: '00000000-0000-4000-a000-000000000000',
 			name: 'Aston Villa',
 			short_name: 'AVL',
 			logo_url: 'https://media.api-sports.io/football/teams/66.png',
