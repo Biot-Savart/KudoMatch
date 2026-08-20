@@ -1,54 +1,39 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardHeader
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { fetchMatches } from '@/lib/queries/matches';
 import { createClient } from '@/lib/supabase/client';
+import { Match } from '@/types';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
-    ArrowRight,
-    Award,
-    CheckCircle2,
-    ShieldAlert,
-    Zap
+	ArrowRight,
+	Award,
+	CheckCircle2,
+	Loader2,
+	ShieldAlert,
+	Zap
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-
-// Mock upcoming matches for visualization in Phase 1
-const mockMatches = [
-	{
-		id: 1,
-		homeTeam: { name: 'Chelsea', logo: '🔵', shortName: 'CHE' },
-		awayTeam: { name: 'Arsenal', logo: '🔴', shortName: 'ARS' },
-		kickoffTime: 'Tomorrow, 15:00',
-		prediction: null,
-	},
-	{
-		id: 2,
-		homeTeam: { name: 'Manchester City', logo: '🩵', shortName: 'MCI' },
-		awayTeam: { name: 'Tottenham', logo: '⚪', shortName: 'TOT' },
-		kickoffTime: 'Saturday, 17:30',
-		prediction: 'home',
-	},
-	{
-		id: 3,
-		homeTeam: { name: 'Liverpool', logo: '❤️', shortName: 'LIV' },
-		awayTeam: { name: 'Aston Villa', logo: '🦁', shortName: 'AVL' },
-		kickoffTime: 'Sunday, 16:00',
-		prediction: 'draw',
-	},
-];
 
 export default function Dashboard() {
 	const supabase = createClient();
 	const [user, setUser] = useState<any>(null);
 	const [profile, setProfile] = useState<any>(null);
-	const [loading, setLoading] = useState(true);
-	const [matches, setMatches] = useState(mockMatches);
+	const [userLoading, setUserLoading] = useState(true);
+
+	// Fetch active matches using TanStack Query
+	const { data: matches, isLoading: matchesLoading } = useQuery<Match[]>({
+		queryKey: ['matches', 12], // Matchweek 12
+		queryFn: () => fetchMatches(12),
+	});
+
+	// State to track quick selections on the client
+	const [quickPicks, setQuickPicks] = useState<
+		Record<string, 'home' | 'draw' | 'away'>
+	>({});
 
 	useEffect(() => {
 		const getSession = async () => {
@@ -64,23 +49,22 @@ export default function Dashboard() {
 					.single();
 				setProfile(data);
 			}
-			setLoading(false);
+			setUserLoading(false);
 		};
 		getSession();
 	}, [supabase]);
 
 	const handleQuickPredict = (
-		matchId: number,
+		matchId: string,
 		option: 'home' | 'draw' | 'away',
 	) => {
-		setMatches((prev) =>
-			prev.map((m) =>
-				m.id === matchId
-					? { ...m, prediction: m.prediction === option ? null : option }
-					: m,
-			),
-		);
+		setQuickPicks((prev) => ({
+			...prev,
+			[matchId]: prev[matchId] === option ? (null as any) : option,
+		}));
 	};
+
+	const isLoading = userLoading || matchesLoading;
 
 	return (
 		<main className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto space-y-8">
@@ -185,83 +169,115 @@ export default function Dashboard() {
 					</Button>
 				</div>
 
-				<div className="grid md:grid-cols-3 gap-4">
-					{matches.map((match, idx) => (
-						<motion.div
-							key={match.id}
-							initial={{ opacity: 0, y: 10 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ delay: idx * 0.1, duration: 0.3 }}
-						>
-							<Card className="bg-white/[0.02] border-white/5 hover:border-white/10 transition-all duration-300 rounded-2xl overflow-hidden shadow-lg">
-								<CardHeader className="p-4 pb-2 border-b border-white/5 bg-black/20 flex flex-row justify-between items-center">
-									<span className="text-xs text-slate-400 font-semibold tracking-wide">
-										English Premier League
-									</span>
-									<span className="text-[10px] text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-full">
-										{match.kickoffTime}
-									</span>
-								</CardHeader>
-								<CardContent className="p-5 space-y-6">
-									{/* Team vs Team Display */}
-									<div className="flex items-center justify-between text-center">
-										<div className="flex flex-col items-center gap-1.5 w-24">
-											<span className="text-3xl">{match.homeTeam.logo}</span>
-											<span className="font-extrabold text-sm text-white truncate w-full">
-												{match.homeTeam.name}
+				{isLoading ? (
+					<div className="w-full flex items-center justify-center py-16">
+						<Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
+					</div>
+				) : (
+					<div className="grid md:grid-cols-3 gap-4">
+						{matches?.map((match, idx) => {
+							const selectedOption = quickPicks[match.id];
+							const kickoffDate = new Date(match.kickoff_time);
+							const formattedTime = kickoffDate.toLocaleDateString(undefined, {
+								weekday: 'short',
+								hour: '2-digit',
+								minute: '2-digit',
+							});
+
+							return (
+								<motion.div
+									key={match.id}
+									initial={{ opacity: 0, y: 10 }}
+									animate={{ opacity: 1, y: 0 }}
+									transition={{ delay: idx * 0.05, duration: 0.3 }}
+								>
+									<Card className="bg-white/[0.02] border-white/5 hover:border-white/10 transition-all duration-300 rounded-2xl overflow-hidden shadow-lg">
+										<CardHeader className="p-4 pb-2 border-b border-white/5 bg-black/20 flex flex-row justify-between items-center">
+											<span className="text-xs text-slate-400 font-semibold tracking-wide">
+												English Premier League
 											</span>
-										</div>
-
-										<span className="text-xs font-black text-slate-500 bg-white/5 px-2.5 py-1 rounded-md">
-											VS
-										</span>
-
-										<div className="flex flex-col items-center gap-1.5 w-24">
-											<span className="text-3xl">{match.awayTeam.logo}</span>
-											<span className="font-extrabold text-sm text-white truncate w-full">
-												{match.awayTeam.name}
+											<span className="text-[10px] text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-full">
+												{formattedTime}
 											</span>
-										</div>
-									</div>
+										</CardHeader>
+										<CardContent className="p-5 space-y-6">
+											{/* Team vs Team Display */}
+											<div className="flex items-center justify-between text-center">
+												<div className="flex flex-col items-center gap-1.5 w-24">
+													{match.home_team?.logo_url ? (
+														<img
+															src={match.home_team.logo_url}
+															alt={match.home_team.name}
+															className="h-10 w-10 object-contain"
+														/>
+													) : (
+														<span className="text-3xl">🔵</span>
+													)}
+													<span className="font-extrabold text-sm text-white truncate w-full">
+														{match.home_team?.name}
+													</span>
+												</div>
 
-									{/* 1 / X / 2 Toggles */}
-									<div className="grid grid-cols-3 gap-2">
-										<button
-											onClick={() => handleQuickPredict(match.id, 'home')}
-											className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
-												match.prediction === 'home'
-													? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-													: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white'
-											}`}
-										>
-											1
-										</button>
-										<button
-											onClick={() => handleQuickPredict(match.id, 'draw')}
-											className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
-												match.prediction === 'draw'
-													? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-													: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white'
-											}`}
-										>
-											X
-										</button>
-										<button
-											onClick={() => handleQuickPredict(match.id, 'away')}
-											className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
-												match.prediction === 'away'
-													? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-													: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white'
-											}`}
-										>
-											2
-										</button>
-									</div>
-								</CardContent>
-							</Card>
-						</motion.div>
-					))}
-				</div>
+												<span className="text-xs font-black text-slate-500 bg-white/5 px-2.5 py-1 rounded-md">
+													VS
+												</span>
+
+												<div className="flex flex-col items-center gap-1.5 w-24">
+													{match.away_team?.logo_url ? (
+														<img
+															src={match.away_team.logo_url}
+															alt={match.away_team.name}
+															className="h-10 w-10 object-contain"
+														/>
+													) : (
+														<span className="text-3xl">🔴</span>
+													)}
+													<span className="font-extrabold text-sm text-white truncate w-full">
+														{match.away_team?.name}
+													</span>
+												</div>
+											</div>
+
+											{/* 1 / X / 2 Toggles */}
+											<div className="grid grid-cols-3 gap-2">
+												<button
+													onClick={() => handleQuickPredict(match.id, 'home')}
+													className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
+														selectedOption === 'home'
+															? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
+															: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white'
+													}`}
+												>
+													1
+												</button>
+												<button
+													onClick={() => handleQuickPredict(match.id, 'draw')}
+													className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
+														selectedOption === 'draw'
+															? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
+															: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white'
+													}`}
+												>
+													X
+												</button>
+												<button
+													onClick={() => handleQuickPredict(match.id, 'away')}
+													className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
+														selectedOption === 'away'
+															? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
+															: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white'
+													}`}
+												>
+													2
+												</button>
+											</div>
+										</CardContent>
+									</Card>
+								</motion.div>
+							);
+						})}
+					</div>
+				)}
 			</div>
 
 			{/* FOOTER-STYLE INFO ON REAL-TIME LEAGUES */}
