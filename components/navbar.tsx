@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-    Compass,
-    LogOut,
-    Menu,
-    Trophy,
-    User as UserIcon,
-    Users,
-    X
+	Compass,
+	LogOut,
+	Menu,
+	Trophy,
+	User as UserIcon,
+	Users,
+	X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -29,6 +29,32 @@ export function Navbar() {
 	const [dropdownOpen, setDropdownOpen] = useState(false);
 
 	useEffect(() => {
+		let profileChannel: any = null;
+
+		const setupProfileSubscription = (userId: string) => {
+			if (profileChannel) {
+				supabase.removeChannel(profileChannel);
+			}
+
+			profileChannel = supabase
+				.channel(`public:profiles:id=eq.${userId}`)
+				.on(
+					'postgres_changes',
+					{
+						event: 'UPDATE',
+						schema: 'public',
+						table: 'profiles',
+						filter: `id=eq.${userId}`,
+					},
+					(payload) => {
+						if (payload.new) {
+							setProfile(payload.new);
+						}
+					},
+				)
+				.subscribe();
+		};
+
 		const getAuthUser = async () => {
 			const {
 				data: { user },
@@ -43,6 +69,7 @@ export function Navbar() {
 					.eq('id', user.id)
 					.single();
 				setProfile(data);
+				setupProfileSubscription(user.id);
 			}
 			setLoading(false);
 		};
@@ -63,14 +90,22 @@ export function Navbar() {
 					.eq('id', currentUser.id)
 					.single();
 				setProfile(data);
+				setupProfileSubscription(currentUser.id);
 			} else {
 				setProfile(null);
+				if (profileChannel) {
+					supabase.removeChannel(profileChannel);
+					profileChannel = null;
+				}
 			}
 			setLoading(false);
 		});
 
 		return () => {
 			subscription.unsubscribe();
+			if (profileChannel) {
+				supabase.removeChannel(profileChannel);
+			}
 		};
 	}, [supabase]);
 

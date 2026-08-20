@@ -19,7 +19,7 @@ import {
 	CheckCircle2,
 	Loader2,
 	ShieldAlert,
-	Zap
+	Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -90,6 +90,52 @@ export default function Dashboard() {
 		};
 		getSession();
 	}, [supabase]);
+
+	// Setup Realtime Subscriptions for Matches and Predictions
+	useEffect(() => {
+		const matchesChannel = supabase
+			.channel('public:matches')
+			.on(
+				'postgres_changes',
+				{
+					event: '*',
+					schema: 'public',
+					table: 'matches',
+				},
+				() => {
+					queryClient.invalidateQueries({ queryKey: ['matches'] });
+				},
+			)
+			.subscribe();
+
+		let predictionsChannel: any = null;
+		if (user?.id) {
+			predictionsChannel = supabase
+				.channel(`public:predictions:user_id=eq.${user.id}`)
+				.on(
+					'postgres_changes',
+					{
+						event: '*',
+						schema: 'public',
+						table: 'predictions',
+						filter: `user_id=eq.${user.id}`,
+					},
+					() => {
+						queryClient.invalidateQueries({
+							queryKey: ['predictions', user.id],
+						});
+					},
+				)
+				.subscribe();
+		}
+
+		return () => {
+			supabase.removeChannel(matchesChannel);
+			if (predictionsChannel) {
+				supabase.removeChannel(predictionsChannel);
+			}
+		};
+	}, [supabase, queryClient, user?.id]);
 
 	const handlePredictClick = (match: Match) => {
 		if (!user) {

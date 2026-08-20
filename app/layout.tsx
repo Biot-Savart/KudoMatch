@@ -1,8 +1,10 @@
+import { BottomNav } from '@/components/bottom-nav';
 import { Navbar } from '@/components/navbar';
 import { QueryProvider } from '@/components/query-provider';
 import { ThemeProvider } from '@/components/theme-provider';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { Toaster } from 'sonner';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -35,8 +37,15 @@ export default function RootLayout({
 						<div className="flex flex-col min-h-screen relative">
 							<Navbar />
 							{/* Padding top is 16 to account for the fixed header of height 16 (h-16) */}
-							<div className="flex-grow pt-16">{children}</div>
+							<div className="flex-grow pt-16 pb-20 md:pb-0">{children}</div>
+							<BottomNav />
 						</div>
+						<Toaster
+							richColors
+							theme="dark"
+							position="top-right"
+							closeButton
+						/>
 					</QueryProvider>
 				</ThemeProvider>
 			</body>
