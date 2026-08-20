@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
-import { Prediction } from '@/types';
+import { Prediction, PredictionWithMatch } from '@/types';
 
 export async function fetchUserPredictions(
 	userId: string,
@@ -16,6 +16,37 @@ export async function fetchUserPredictions(
 		return (data || []) as Prediction[];
 	} catch (err) {
 		console.error('⚠️ Failed to fetch user predictions from Supabase:', err);
+		return [];
+	}
+}
+
+export async function fetchUserPredictionsWithMatches(
+	userId: string,
+): Promise<PredictionWithMatch[]> {
+	const supabase = createClient();
+
+	try {
+		const { data, error } = await supabase
+			.from('predictions')
+			.select(
+				`
+				*,
+				match:matches (
+					*,
+					home_team:teams!matches_home_team_id_fkey(*),
+					away_team:teams!matches_away_team_id_fkey(*)
+				)
+			`,
+			)
+			.eq('user_id', userId);
+
+		if (error) throw error;
+		return (data || []) as PredictionWithMatch[];
+	} catch (err) {
+		console.error(
+			'⚠️ Failed to fetch user predictions with matches from Supabase:',
+			err,
+		);
 		return [];
 	}
 }

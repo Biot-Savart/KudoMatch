@@ -5,8 +5,8 @@ import { PredictionDrawer } from '@/components/prediction-drawer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { fetchMatches } from '@/lib/queries/matches';
 import {
-    fetchUserPredictions,
-    upsertPrediction,
+	fetchUserPredictions,
+	upsertPrediction,
 } from '@/lib/queries/predictions';
 import { createClient } from '@/lib/supabase/client';
 import { Match, Prediction } from '@/types';
@@ -105,6 +105,28 @@ export default function PredictPage() {
 		matches?.filter((m) => predictionMap.has(m.id)) || [];
 	const unpredictedMatches =
 		matches?.filter((m) => !predictionMap.has(m.id)) || [];
+	const finishedMatches = matches?.filter((m) => m.status === 'finished') || [];
+
+	// Calculate Matchweek Performance Summary statistics
+	const totalMwPoints = finishedMatches.reduce((sum, m) => {
+		const pred = predictionMap.get(m.id);
+		return sum + (pred?.points_earned || 0);
+	}, 0);
+
+	const exactHitsCount = finishedMatches.filter((m) => {
+		const pred = predictionMap.get(m.id);
+		return pred?.points_earned === 3;
+	}).length;
+
+	const outcomeDiffCount = finishedMatches.filter((m) => {
+		const pred = predictionMap.get(m.id);
+		return pred?.points_earned === 2;
+	}).length;
+
+	const winnerOnlyCount = finishedMatches.filter((m) => {
+		const pred = predictionMap.get(m.id);
+		return pred?.points_earned === 1;
+	}).length;
 
 	// Calculate overall locking countdown (earliest match kickoff time)
 	const getRoundLockText = () => {
@@ -173,6 +195,73 @@ export default function PredictPage() {
 				</div>
 			)}
 
+			{/* MATCHWEEK PERFORMANCE SUMMARY */}
+			{user && finishedMatches.length > 0 && (
+				<div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-5 rounded-2xl glass-card border-white/10 bg-indigo-500/5 relative overflow-hidden">
+					<div className="absolute -top-12 -left-12 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
+
+					{/* Stat 1: Total Points */}
+					<div className="flex items-center gap-3">
+						<div className="p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500">
+							<Trophy className="h-5 w-5" />
+						</div>
+						<div className="text-left">
+							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+								Round Points
+							</span>
+							<span className="text-xl font-black text-white">
+								{totalMwPoints} PTS
+							</span>
+						</div>
+					</div>
+
+					{/* Stat 2: Exact Scores */}
+					<div className="flex items-center gap-3">
+						<div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+							<span className="font-bold text-sm">🎯</span>
+						</div>
+						<div className="text-left">
+							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+								Exact Scores
+							</span>
+							<span className="text-xl font-black text-white">
+								{exactHitsCount}
+							</span>
+						</div>
+					</div>
+
+					{/* Stat 3: Goal Difference Matches */}
+					<div className="flex items-center gap-3">
+						<div className="p-2.5 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400">
+							<span className="font-bold text-sm">↔️</span>
+						</div>
+						<div className="text-left">
+							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+								Outcome & Diff
+							</span>
+							<span className="text-xl font-black text-white">
+								{outcomeDiffCount}
+							</span>
+						</div>
+					</div>
+
+					{/* Stat 4: Winner Only */}
+					<div className="flex items-center gap-3">
+						<div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+							<span className="font-bold text-sm">👍</span>
+						</div>
+						<div className="text-left">
+							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+								Winner Only
+							</span>
+							<span className="text-xl font-black text-white">
+								{winnerOnlyCount}
+							</span>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* FILTER TABS */}
 			<Tabs
 				defaultValue="all"
@@ -197,6 +286,12 @@ export default function PredictPage() {
 							className="rounded-lg font-bold text-xs tracking-wide"
 						>
 							Predicted ({predictedMatches.length})
+						</TabsTrigger>
+						<TabsTrigger
+							value="finished"
+							className="rounded-lg font-bold text-xs tracking-wide"
+						>
+							Finished ({finishedMatches.length})
 						</TabsTrigger>
 					</TabsList>
 				</div>
@@ -261,6 +356,33 @@ export default function PredictPage() {
 					) : (
 						<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
 							{predictedMatches.map((match) => (
+								<MatchCard
+									key={match.id}
+									match={match}
+									userId={user?.id || null}
+									existingPrediction={predictionMap.get(match.id)}
+									onPredict={handlePredictClick}
+									onQuickPredict={handleQuickPredictSave}
+								/>
+							))}
+						</div>
+					)}
+				</TabsContent>
+
+				<TabsContent
+					value="finished"
+					className="mt-0"
+				>
+					{finishedMatches.length === 0 ? (
+						<div className="py-16 text-center text-slate-500 flex flex-col items-center gap-3">
+							<Clock className="h-8 w-8 text-indigo-500/30" />
+							<p className="font-semibold text-sm">
+								No matches are finished yet in this round.
+							</p>
+						</div>
+					) : (
+						<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+							{finishedMatches.map((match) => (
 								<MatchCard
 									key={match.id}
 									match={match}

@@ -8,6 +8,9 @@
 		"start": "next start",
 		"lint": "next lint",
 		"seed": "tsx scripts/seed-fixtures.ts",
+		"score:simulate": "tsx scripts/score-match.ts --simulate",
+		"score:resolve": "tsx scripts/score-match.ts --resolve",
+		"score:recalc": "tsx scripts/score-match.ts --recalc",
 		"db:login": "supabase login",
 		"db:link": "supabase link --project-ref gcjbnkcpasoamflbggfx",
 		"db:push": "supabase db push"

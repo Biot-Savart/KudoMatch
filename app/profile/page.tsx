@@ -3,69 +3,38 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { fetchUserPredictionsWithMatches } from '@/lib/queries/predictions';
 import { createClient } from '@/lib/supabase/client';
+import { PredictionWithMatch } from '@/types';
 import { motion } from 'framer-motion';
 import {
-    AlertCircle,
-    Award,
-    Calendar,
-    Check,
-    Edit2,
-    Flame,
-    Loader2,
-    Trophy,
-    Zap,
+	AlertCircle,
+	Award,
+	Calendar,
+	Check,
+	Edit2,
+	Flame,
+	Loader2,
+	Trophy,
+	Zap,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-
-// Mock Badges for visual completeness
-const mockBadges = [
-	{
-		id: 'b1',
-		name: 'Genesis Predictor',
-		description: 'Joined during Phase 1 launch',
-		icon: '🌱',
-		color:
-			'from-emerald-500/10 to-emerald-500/20 text-emerald-400 border-emerald-500/20',
-	},
-	{
-		id: 'b2',
-		name: '5-match win streak',
-		description: 'Got 5 correct outcomes in a row',
-		icon: '🔥',
-		color:
-			'from-orange-500/10 to-orange-500/20 text-orange-400 border-orange-500/20',
-	},
-	{
-		id: 'b3',
-		name: 'First Grand Slam',
-		description: 'Guessed all outcomes in Matchweek 12',
-		icon: '👑',
-		color:
-			'from-yellow-500/10 to-yellow-500/20 text-yellow-400 border-yellow-500/20',
-	},
-	{
-		id: 'b4',
-		name: 'Exact Score Whisperer',
-		description: 'Predicted exact scores 3 times',
-		icon: '🎯',
-		color:
-			'from-indigo-500/10 to-indigo-500/20 text-indigo-400 border-indigo-500/20',
-	},
-];
 
 export default function ProfilePage() {
 	const supabase = createClient();
 	const [user, setUser] = useState<any>(null);
 	const [profile, setProfile] = useState<any>(null);
+	const [predictionsWithMatches, setPredictionsWithMatches] = useState<
+		PredictionWithMatch[]
+	>([]);
 	const [loading, setLoading] = useState(true);
 	const [updating, setUpdating] = useState(false);
 	const [isEditing, setIsEditing] = useState(false);
@@ -94,6 +63,9 @@ export default function ProfilePage() {
 					setFullName(data.full_name || '');
 					setUsername(data.username || '');
 				}
+
+				const preds = await fetchUserPredictionsWithMatches(user.id);
+				setPredictionsWithMatches(preds);
 			}
 			setLoading(false);
 		};
@@ -146,6 +118,58 @@ export default function ProfilePage() {
 			</div>
 		);
 	}
+
+	const exactCount = predictionsWithMatches.filter(
+		(p) => p.points_earned === 3,
+	).length;
+	const correctCount = predictionsWithMatches.filter(
+		(p) => p.points_earned >= 1,
+	).length;
+
+	const badges = [
+		{
+			id: 'b1',
+			name: 'Genesis Predictor',
+			description: 'Joined during Phase 1 launch',
+			icon: '🌱',
+			color:
+				'from-emerald-500/10 to-emerald-500/20 text-emerald-400 border-emerald-500/20',
+		},
+		{
+			id: 'b2',
+			name: 'Exact Score Whisperer',
+			description: `Predicted exact scores ${exactCount} times`,
+			icon: '🎯',
+			color:
+				exactCount > 0
+					? 'from-indigo-500/10 to-indigo-500/20 text-indigo-400 border-indigo-500/20'
+					: 'from-slate-500/5 to-slate-500/10 text-slate-500 border-slate-500/10 opacity-50',
+		},
+		{
+			id: 'b3',
+			name: 'Outcome Wizard',
+			description: `Guessed correct winner/draw ${correctCount} times`,
+			icon: '🧙‍♂️',
+			color:
+				correctCount > 0
+					? 'from-purple-500/10 to-purple-500/20 text-purple-400 border-purple-500/20'
+					: 'from-slate-500/5 to-slate-500/10 text-slate-500 border-slate-500/10 opacity-50',
+		},
+		{
+			id: 'b4',
+			name: 'Points Champion',
+			description: `Accumulated ${profile?.total_points || 0} global points`,
+			icon: '👑',
+			color:
+				(profile?.total_points || 0) > 0
+					? 'from-yellow-500/10 to-yellow-500/20 text-yellow-400 border-yellow-500/20'
+					: 'from-slate-500/5 to-slate-500/10 text-slate-500 border-slate-500/10 opacity-50',
+		},
+	];
+
+	const finishedPredictions = predictionsWithMatches
+		.filter((p) => p.match?.status === 'finished')
+		.slice(0, 5);
 
 	const initials = (profile?.full_name || profile?.username || 'U')
 		.substring(0, 2)
@@ -325,7 +349,7 @@ export default function ProfilePage() {
 						</CardHeader>
 						<CardContent className="p-6 pt-0">
 							<div className="grid sm:grid-cols-2 gap-4">
-								{mockBadges.map((badge, idx) => (
+								{badges.map((badge, idx) => (
 									<motion.div
 										key={badge.id}
 										initial={{ opacity: 0, scale: 0.95 }}
@@ -359,15 +383,94 @@ export default function ProfilePage() {
 								Your latest match prediction history
 							</CardDescription>
 						</CardHeader>
-						<CardContent className="p-6 pt-0 text-center">
-							<div className="py-8 text-slate-500 font-medium text-sm flex flex-col items-center gap-3">
-								<Zap className="h-8 w-8 text-indigo-500/40 animate-bounce" />
-								<p>No processed predictions found in this round.</p>
-								<p className="text-xs text-slate-600 max-w-xs">
-									Once match predictions open, your active scores and
-									calculations will display here.
-								</p>
-							</div>
+						<CardContent className="p-6 pt-0">
+							{finishedPredictions.length === 0 ? (
+								<div className="py-8 text-slate-500 font-medium text-sm flex flex-col items-center gap-3 text-center">
+									<Zap className="h-8 w-8 text-indigo-500/40 animate-bounce" />
+									<p>No processed predictions found in this round.</p>
+									<p className="text-xs text-slate-600 max-w-xs">
+										Once match predictions open, your active scores and
+										calculations will display here.
+									</p>
+								</div>
+							) : (
+								<div className="space-y-4">
+									{finishedPredictions.map((p) => {
+										const match = p.match!;
+										const homeTeam = match.home_team;
+										const awayTeam = match.away_team;
+										return (
+											<div
+												key={p.id}
+												className="p-4 rounded-xl border border-white/5 bg-white/[0.01] flex flex-col sm:flex-row sm:items-center justify-between text-left gap-3 sm:gap-0"
+											>
+												<div className="flex items-center gap-3">
+													<div className="flex items-center gap-1.5 min-w-[200px]">
+														{homeTeam?.logo_url && (
+															<img
+																src={homeTeam.logo_url}
+																alt={homeTeam.name}
+																className="h-5 w-5 object-contain"
+															/>
+														)}
+														<span className="text-xs font-black text-white truncate max-w-[80px]">
+															{homeTeam?.short_name || homeTeam?.name}
+														</span>
+														<span className="text-[10px] font-bold text-slate-500">
+															vs
+														</span>
+														<span className="text-xs font-black text-white truncate max-w-[80px]">
+															{awayTeam?.short_name || awayTeam?.name}
+														</span>
+														{awayTeam?.logo_url && (
+															<img
+																src={awayTeam.logo_url}
+																alt={awayTeam.name}
+																className="h-5 w-5 object-contain"
+															/>
+														)}
+													</div>
+												</div>
+
+												<div className="flex items-center justify-between sm:justify-end gap-6">
+													<div className="text-xs">
+														<span className="text-slate-500 block text-[9px] font-bold uppercase tracking-wider">
+															Final Score
+														</span>
+														<span className="font-extrabold text-white text-right block">
+															{match.home_score} - {match.away_score}
+														</span>
+													</div>
+
+													<div className="text-xs">
+														<span className="text-slate-500 block text-[9px] font-bold uppercase tracking-wider">
+															Your Pick
+														</span>
+														<span className="font-extrabold text-slate-300 text-right block">
+															{p.predicted_home_score} -{' '}
+															{p.predicted_away_score}
+														</span>
+													</div>
+
+													<div
+														className={`px-2.5 py-1 rounded-lg border text-[10px] font-black tracking-wider ${
+															p.points_earned === 3
+																? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+																: p.points_earned === 2
+																	? 'bg-teal-500/10 border-teal-500/20 text-teal-400'
+																	: p.points_earned === 1
+																		? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+																		: 'bg-slate-500/10 border-slate-500/20 text-slate-400'
+														}`}
+													>
+														+{p.points_earned} PTS
+													</div>
+												</div>
+											</div>
+										);
+									})}
+								</div>
+							)}
 						</CardContent>
 					</Card>
 				</div>
