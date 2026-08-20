@@ -1,5 +1,11 @@
 import { createClient } from '@/lib/supabase/client';
-import { Pool, PoolLeaderboardEntry, PoolMember } from '@/types';
+import {
+	Match,
+	Pool,
+	PoolLeaderboardEntry,
+	PoolMember,
+	Prediction,
+} from '@/types';
 
 export async function fetchUserPools(
 	userId: string,
@@ -203,5 +209,74 @@ export async function leavePool(
 	} catch (err) {
 		console.error(`⚠️ Failed to leave pool ${poolId}:`, err);
 		return false;
+	}
+}
+
+export async function fetchPoolPicksMatrix(
+	poolId: string,
+	matchday: number = 12,
+): Promise<{
+	matches: Match[];
+	predictions: { [userId: string]: { [matchId: string]: Prediction } };
+}> {
+	const supabase = createClient();
+
+	try {
+		// 1. Fetch matches of this matchweek
+		const { data: matches, error: mError } = await supabase
+			.from('matches')
+			.select(
+				'*, home_team:teams!matches_home_team_id_fkey(*), away_team:teams!matches_away_team_id_fkey(*)',
+			)
+			.eq('matchday', matchday)
+			.order('kickoff_time', { ascending: true });
+
+		if (mError) throw mError;
+
+		// 2. Fetch all members in this pool
+		const { data: members, error: memError } = await supabase
+			.from('pool_members')
+			.select('user_id')
+			.eq('pool_id', poolId);
+
+		if (memError) throw memError;
+		const memberIds = (members || []).map((m) => m.user_id);
+
+		if (memberIds.length === 0 || !matches || matches.length === 0) {
+			return { matches: matches || [], predictions: {} };
+		}
+
+		// 3. Fetch predictions for these members for these matches
+		const matchIds = matches.map((m) => m.id);
+		const { data: predictions, error: pError } = await supabase
+			.from('predictions')
+			.select('*')
+			.in('user_id', memberIds)
+			.in('match_id', matchIds);
+
+		if (pError) throw pError;
+
+		// Map predictions into a lookup table of structure: predictions[userId][matchId] = Prediction
+		const predictionsMap: {
+			[userId: string]: { [matchId: string]: Prediction };
+		} = {};
+		memberIds.forEach((uid) => {
+			predictionsMap[uid] = {};
+		});
+
+		predictions?.forEach((pred) => {
+			if (predictionsMap[pred.user_id]) {
+				predictionsMap[pred.user_id][pred.match_id] =
+					pred as unknown as Prediction;
+			}
+		});
+
+		return {
+			matches: (matches || []) as unknown as Match[],
+			predictions: predictionsMap,
+		};
+	} catch (err) {
+		console.error(`⚠️ Failed to fetch picks matrix for pool ${poolId}:`, err);
+		return { matches: [], predictions: {} };
 	}
 }
