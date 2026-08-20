@@ -6,34 +6,48 @@ export async function updateSession(request: NextRequest) {
 		request,
 	});
 
-	const supabase = createServerClient(
-		process.env.NEXT_PUBLIC_SUPABASE_URL!,
-		process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-		{
-			cookies: {
-				getAll() {
-					return request.cookies.getAll();
-				},
-				setAll(cookiesToSet) {
-					cookiesToSet.forEach(({ name, value, options }) =>
-						request.cookies.set(name, value),
-					);
-					supabaseResponse = NextResponse.next({
-						request,
-					});
-					cookiesToSet.forEach(({ name, value, options }) =>
-						supabaseResponse.cookies.set(name, value, options),
-					);
-				},
+	const urlStr =
+		process.env.NEXT_PUBLIC_SUPABASE_URL ||
+		'https://placeholder-project-id.supabase.co';
+	const anonKey =
+		process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+		'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder';
+
+	const supabase = createServerClient(urlStr, anonKey, {
+		cookies: {
+			getAll() {
+				return request.cookies.getAll();
+			},
+			setAll(cookiesToSet) {
+				cookiesToSet.forEach(({ name, value, options }) =>
+					request.cookies.set(name, value),
+				);
+				supabaseResponse = NextResponse.next({
+					request,
+				});
+				cookiesToSet.forEach(({ name, value, options }) =>
+					supabaseResponse.cookies.set(name, value, options),
+				);
 			},
 		},
-	);
+	});
 
 	// This will refresh session if expired - required for Server Components
 	// and Route Handlers to get the correct user.
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
+	let user = null;
+	try {
+		if (
+			process.env.NEXT_PUBLIC_SUPABASE_URL &&
+			process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+		) {
+			const {
+				data: { user: authUser },
+			} = await supabase.auth.getUser();
+			user = authUser;
+		}
+	} catch (err) {
+		console.error('Supabase middleware error:', err);
+	}
 
 	const url = request.nextUrl.clone();
 
