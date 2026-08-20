@@ -1,11 +1,17 @@
 'use client';
 
+import { MatchCard } from '@/components/match-card';
+import { PredictionDrawer } from '@/components/prediction-drawer';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { fetchMatches } from '@/lib/queries/matches';
+import {
+	fetchUserPredictions,
+	upsertPrediction,
+} from '@/lib/queries/predictions';
 import { createClient } from '@/lib/supabase/client';
-import { Match } from '@/types';
-import { useQuery } from '@tanstack/react-query';
+import { Match, Prediction } from '@/types';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
 	ArrowRight,
@@ -17,12 +23,16 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
 	const supabase = createClient();
+	const queryClient = useQueryClient();
 	const [user, setUser] = useState<any>(null);
 	const [profile, setProfile] = useState<any>(null);
 	const [userLoading, setUserLoading] = useState(true);
+	const [activeMatch, setActiveMatch] = useState<Match | null>(null);
+	const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
 	// Fetch active matches using TanStack Query
 	const { data: matches, isLoading: matchesLoading } = useQuery<Match[]>({
@@ -30,10 +40,37 @@ export default function Dashboard() {
 		queryFn: () => fetchMatches(12),
 	});
 
-	// State to track quick selections on the client
-	const [quickPicks, setQuickPicks] = useState<
-		Record<string, 'home' | 'draw' | 'away'>
-	>({});
+	// Fetch active user predictions
+	const { data: predictions, isLoading: predictionsLoading } = useQuery<
+		Prediction[]
+	>({
+		queryKey: ['predictions', user?.id],
+		queryFn: () => fetchUserPredictions(user?.id!),
+		enabled: !!user?.id,
+	});
+
+	// Mutation for quick outcome predictions
+	const saveMutation = useMutation({
+		mutationFn: ({
+			matchId,
+			homeScore,
+			awayScore,
+		}: {
+			matchId: string;
+			homeScore: number;
+			awayScore: number;
+		}) => {
+			if (!user?.id) throw new Error('Auth required');
+			return upsertPrediction(user.id, matchId, homeScore, awayScore);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['predictions', user?.id] });
+			toast.success('Quick pick saved!');
+		},
+		onError: (err: any) => {
+			toast.error(err.message || 'Failed to save quick pick.');
+		},
+	});
 
 	useEffect(() => {
 		const getSession = async () => {
@@ -54,17 +91,34 @@ export default function Dashboard() {
 		getSession();
 	}, [supabase]);
 
-	const handleQuickPredict = (
-		matchId: string,
-		option: 'home' | 'draw' | 'away',
-	) => {
-		setQuickPicks((prev) => ({
-			...prev,
-			[matchId]: prev[matchId] === option ? (null as any) : option,
-		}));
+	const handlePredictClick = (match: Match) => {
+		if (!user) {
+			toast.error('Please sign in to make predictions!');
+			return;
+		}
+		setActiveMatch(match);
+		setIsDrawerOpen(true);
 	};
 
-	const isLoading = userLoading || matchesLoading;
+	const handleQuickPredictSave = (
+		matchId: string,
+		homeScore: number,
+		awayScore: number,
+	) => {
+		saveMutation.mutate({ matchId, homeScore, awayScore });
+	};
+
+	const isLoading =
+		userLoading || matchesLoading || (user?.id && predictionsLoading);
+
+	// Map predictions to matches for easy lookup
+	const predictionMap = new Map<string, Prediction>();
+	predictions?.forEach((p) => {
+		predictionMap.set(p.match_id, p);
+	});
+
+	// Only show first 3 matches on dashboard for quick picks
+	const quickPickMatches = matches?.slice(0, 3) || [];
 
 	return (
 		<main className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto space-y-8">
@@ -175,107 +229,16 @@ export default function Dashboard() {
 					</div>
 				) : (
 					<div className="grid md:grid-cols-3 gap-4">
-						{matches?.map((match, idx) => {
-							const selectedOption = quickPicks[match.id];
-							const kickoffDate = new Date(match.kickoff_time);
-							const formattedTime = kickoffDate.toLocaleDateString(undefined, {
-								weekday: 'short',
-								hour: '2-digit',
-								minute: '2-digit',
-							});
-
-							return (
-								<motion.div
-									key={match.id}
-									initial={{ opacity: 0, y: 10 }}
-									animate={{ opacity: 1, y: 0 }}
-									transition={{ delay: idx * 0.05, duration: 0.3 }}
-								>
-									<Card className="bg-white/[0.02] border-white/5 hover:border-white/10 transition-all duration-300 rounded-2xl overflow-hidden shadow-lg">
-										<CardHeader className="p-4 pb-2 border-b border-white/5 bg-black/20 flex flex-row justify-between items-center">
-											<span className="text-xs text-slate-400 font-semibold tracking-wide">
-												English Premier League
-											</span>
-											<span className="text-[10px] text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-full">
-												{formattedTime}
-											</span>
-										</CardHeader>
-										<CardContent className="p-5 space-y-6">
-											{/* Team vs Team Display */}
-											<div className="flex items-center justify-between text-center">
-												<div className="flex flex-col items-center gap-1.5 w-24">
-													{match.home_team?.logo_url ? (
-														<img
-															src={match.home_team.logo_url}
-															alt={match.home_team.name}
-															className="h-10 w-10 object-contain"
-														/>
-													) : (
-														<span className="text-3xl">🔵</span>
-													)}
-													<span className="font-extrabold text-sm text-white truncate w-full">
-														{match.home_team?.name}
-													</span>
-												</div>
-
-												<span className="text-xs font-black text-slate-500 bg-white/5 px-2.5 py-1 rounded-md">
-													VS
-												</span>
-
-												<div className="flex flex-col items-center gap-1.5 w-24">
-													{match.away_team?.logo_url ? (
-														<img
-															src={match.away_team.logo_url}
-															alt={match.away_team.name}
-															className="h-10 w-10 object-contain"
-														/>
-													) : (
-														<span className="text-3xl">🔴</span>
-													)}
-													<span className="font-extrabold text-sm text-white truncate w-full">
-														{match.away_team?.name}
-													</span>
-												</div>
-											</div>
-
-											{/* 1 / X / 2 Toggles */}
-											<div className="grid grid-cols-3 gap-2">
-												<button
-													onClick={() => handleQuickPredict(match.id, 'home')}
-													className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
-														selectedOption === 'home'
-															? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-															: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white'
-													}`}
-												>
-													1
-												</button>
-												<button
-													onClick={() => handleQuickPredict(match.id, 'draw')}
-													className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
-														selectedOption === 'draw'
-															? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-															: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white'
-													}`}
-												>
-													X
-												</button>
-												<button
-													onClick={() => handleQuickPredict(match.id, 'away')}
-													className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
-														selectedOption === 'away'
-															? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-															: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white'
-													}`}
-												>
-													2
-												</button>
-											</div>
-										</CardContent>
-									</Card>
-								</motion.div>
-							);
-						})}
+						{quickPickMatches.map((match) => (
+							<MatchCard
+								key={match.id}
+								match={match}
+								userId={user?.id || null}
+								existingPrediction={predictionMap.get(match.id)}
+								onPredict={handlePredictClick}
+								onQuickPredict={handleQuickPredictSave}
+							/>
+						))}
 					</div>
 				)}
 			</div>
@@ -319,6 +282,20 @@ export default function Dashboard() {
 					</div>
 				</Card>
 			</div>
+
+			{/* Slide-over prediction editor drawer */}
+			<PredictionDrawer
+				isOpen={isDrawerOpen}
+				onClose={() => {
+					setIsDrawerOpen(false);
+					setActiveMatch(null);
+				}}
+				match={activeMatch}
+				userId={user?.id || null}
+				existingPrediction={
+					activeMatch ? predictionMap.get(activeMatch.id) : null
+				}
+			/>
 		</main>
 	);
 }
