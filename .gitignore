@@ -10,6 +10,11 @@ node_modules
 /.next/
 /out/
 
+# Supabase CLI
+.supabase/
+supabase/.temp/
+supabase/.branches/
+
 # Production
 /build
 
