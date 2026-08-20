@@ -155,12 +155,13 @@ begin
 
   -- 2. Recalculate total_points for all profiles
   update public.profiles prof
-  set 
+  set
     total_points = coalesce((
       select sum(points_earned)
       from public.predictions
       where user_id = prof.id
     ), 0),
-    updated_at = timezone('utc'::text, now());
+    updated_at = timezone('utc'::text, now())
+  where prof.id is not null;
 end;
 $$ language plpgsql security definer set search_path = public, pg_temp;

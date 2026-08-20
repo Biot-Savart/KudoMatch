@@ -8,6 +8,7 @@
 		"start": "next start",
 		"lint": "next lint",
 		"seed": "tsx scripts/seed-fixtures.ts",
+		"seed:historic": "tsx scripts/seed-historic-data.ts",
 		"score:simulate": "tsx scripts/score-match.ts --simulate",
 		"score:resolve": "tsx scripts/score-match.ts --resolve",
 		"score:recalc": "tsx scripts/score-match.ts --recalc",
