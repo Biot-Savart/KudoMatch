@@ -68,15 +68,19 @@ export interface PredictionWithMatch extends Prediction {
 export interface Pool {
 	id: string; // UUID
 	name: string;
+	description: string | null;
 	invite_code: string;
 	creator_id: string; // UUID references public.profiles(id)
 	is_public: boolean;
 	created_at: string;
+	creator?: Profile;
+	member_count?: number;
 }
 
 export interface PoolMember {
 	pool_id: string; // UUID REFERENCES pools(id)
 	user_id: string; // UUID REFERENCES profiles(id)
+	role: 'creator' | 'admin' | 'member';
 	joined_at: string;
 	profile?: Profile;
 }
@@ -88,4 +92,16 @@ export interface PoolStanding {
 	wins: number;
 	rank: number | null;
 	profile?: Profile;
+}
+
+export interface PoolLeaderboardEntry {
+	rank: number;
+	user_id: string;
+	username: string | null;
+	full_name: string | null;
+	avatar_url: string | null;
+	total_points: number;
+	exact_count: number;
+	predictions_count: number;
+	joined_at: string;
 }
