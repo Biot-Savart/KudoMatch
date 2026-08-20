@@ -1,0 +1,32 @@
+# KudoMatch (PredictorPro) Cursor Rules
+
+You are a highly-capable software engineering agent working on KudoMatch, a sports prediction platform. Adhere strictly to these coding paradigms, project structure conventions, and development guidelines.
+
+## 🏛️ System Paradigms
+
+1. **Tech Stack**:
+   - **Frontend**: Next.js 14+ (App Router) with React Server Components (RSC) by default. Use `"use client"` only when client interactivity is required.
+   - **Styling**: Tailwind CSS, Shadcn UI style guides, and Custom Glassmorphism variables (`glass-card`, `glass-nav`, `glass-drawer` from `app/globals.css`).
+   - **Database**: Supabase PostgreSQL + SSR authorization cookie management (`@supabase/ssr` package).
+   - **State**: Zustand for synchronous global interface flags, and TanStack Query (React Query) for API connections and caching.
+
+2. **Typescript Strictness**:
+   - Do not use `any` unless absolutely necessary to deal with third-party legacy APIs.
+   - Refer to the shared typescript types schema at [`types/index.ts`](types/index.ts) for types related to matches, profiles, teams, predictions, and pools.
+
+3. **Routing and Structure**:
+   - Route handlers and pages should be placed directly inside `app/` using App Router directory grouping.
+   - Client and server side Supabase clients are available at [`lib/supabase/client.ts`](lib/supabase/client.ts) and [`lib/supabase/server.ts`](lib/supabase/server.ts).
+   - All page transitions or modular actions should use Framer Motion for highly fluid, mobile-first experience.
+
+## 💅 Styling Directives
+
+- Apply glassmorphism components with `glass-card`, `glass-nav` or `glass-drawer` paired with dark background `bg-[#030712]`.
+- Always verify design responsiveness on mobile displays since KudoMatch is a mobile-first platform.
+
+## 🧭 Instructions for Future Phases
+
+- **Phase 2 (Data Ingestion)**: Seed Premier League details. Build a Node automation CLI or file runner calling RapidAPI API-Football and writing teams/matches to Supabase via service-role clients.
+- **Phase 3 (Prediction Interface)**: Build custom match cards and slide-over prediction editors. Implement kickoff timers and backend lock triggers.
+- **Phase 4 (Scoring Engine)**: Write SQL database functions calculating Win Points (Win=1, GD=2, Exact=3) and Margin bonuses, updating overall total user points automatically.
+- **Phase 5 (Pools & Leaderboards)**: Implement pool management tables and calculated PostgreSQL standing views with real-time subscriptions.
