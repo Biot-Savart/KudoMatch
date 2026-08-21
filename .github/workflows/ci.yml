@@ -1,0 +1,77 @@
+name: KudoMatch CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-typecheck:
+    name: 1. Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run ESLint Linter
+        run: npm run lint
+
+      - name: Run TypeScript Compiler Check
+        run: npm run typecheck
+
+  test-and-coverage:
+    name: 2. Vitest Suite & Coverage Gates (>= 60%)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Tests with V8 Coverage
+        run: npm run test:coverage
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://placeholder-project-id.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder"
+          SUPABASE_SERVICE_ROLE_KEY: "placeholder-service-role-key"
+
+  build-verification:
+    name: 3. Production Build Validation
+    runs-on: ubuntu-latest
+    needs: [lint-and-typecheck, test-and-coverage]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Next.js Production Bundle
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://placeholder-project-id.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder"
+          SUPABASE_SERVICE_ROLE_KEY: "placeholder-service-role-key"

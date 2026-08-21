@@ -396,7 +396,7 @@ export default function PredictPage() {
 						<div className="py-16 text-center text-slate-500 flex flex-col items-center gap-3">
 							<Trophy className="h-8 w-8 text-indigo-500/30" />
 							<p className="font-semibold text-sm">
-								You haven't placed any predictions yet. Get picking!
+								You haven&apos;t placed any predictions yet. Get picking!
 							</p>
 						</div>
 					) : (
