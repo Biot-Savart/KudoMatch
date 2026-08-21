@@ -1,9 +1,15 @@
 'use client';
 
+import { ErrorBoundary } from '@/components/error-boundary';
 import { MatchCard } from '@/components/match-card';
 import { PredictionDrawer } from '@/components/prediction-drawer';
+import { MatchCardSkeleton } from '@/components/ui/match-card-skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { fetchMatches } from '@/lib/queries/matches';
+import {
+	fetchActiveMatchday,
+	fetchAvailableMatchdays,
+	fetchMatches,
+} from '@/lib/queries/matches';
 import {
 	fetchUserPredictions,
 	upsertPrediction,
@@ -11,19 +17,23 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { Match, Prediction } from '@/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Clock, Compass, Loader2, Trophy } from 'lucide-react';
+import { AlertCircle, Clock, Compass, Trophy } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-export default function PredictPage() {
+function PredictContent() {
 	const supabase = createClient();
 	const queryClient = useQueryClient();
+	const router = useRouter();
+	const searchParams = useSearchParams();
+
 	const [user, setUser] = useState<any>(null);
 	const [userLoading, setUserLoading] = useState(true);
 	const [activeMatch, setActiveMatch] = useState<Match | null>(null);
 	const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-	const [matchday, setMatchday] = useState(12); // Matchweek 12 by default
+	const [matchday, setMatchday] = useState<number>(12);
 
 	// Get active session
 	useEffect(() => {
@@ -36,6 +46,33 @@ export default function PredictPage() {
 		};
 		getSession();
 	}, [supabase]);
+
+	// Fetch available and active matchday
+	const { data: availableMatchdays = [12] } = useQuery({
+		queryKey: ['available-matchdays'],
+		queryFn: fetchAvailableMatchdays,
+	});
+
+	const { data: activeMatchday } = useQuery({
+		queryKey: ['active-matchday'],
+		queryFn: fetchActiveMatchday,
+	});
+
+	// Sync matchday state from query parameter or activeMatchday query
+	useEffect(() => {
+		const paramMatchday =
+			searchParams.get('matchday') || searchParams.get('round');
+		if (paramMatchday) {
+			const parsed = parseInt(paramMatchday, 10);
+			if (!isNaN(parsed)) {
+				setMatchday(parsed);
+				return;
+			}
+		}
+		if (activeMatchday !== undefined) {
+			setMatchday(activeMatchday);
+		}
+	}, [searchParams, activeMatchday]);
 
 	// Setup Realtime Subscriptions for Matches and Predictions
 	useEffect(() => {
@@ -140,6 +177,28 @@ export default function PredictPage() {
 	const isLoading =
 		userLoading || matchesLoading || (user?.id && predictionsLoading);
 
+	if (isLoading) {
+		return (
+			<main className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto space-y-8">
+				{/* Page Header Skeleton */}
+				<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
+					<div className="space-y-2">
+						<div className="h-8 w-48 bg-slate-800 rounded animate-pulse" />
+						<div className="h-4 w-72 bg-slate-800/65 rounded animate-pulse" />
+					</div>
+					<div className="h-10 w-36 bg-slate-800/40 rounded-xl animate-pulse" />
+				</div>
+
+				{/* Match Cards Skeleton Array */}
+				<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+					{[...Array(6)].map((_, i) => (
+						<MatchCardSkeleton key={i} />
+					))}
+				</div>
+			</main>
+		);
+	}
+
 	// Map predictions to matches for easy lookup
 	const predictionMap = new Map<string, Prediction>();
 	predictions?.forEach((p) => {
@@ -192,22 +251,21 @@ export default function PredictPage() {
 		return `Round locks in ${hours} hours`;
 	};
 
-	if (isLoading) {
-		return (
-			<div className="min-h-[85vh] w-full flex items-center justify-center">
-				<Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
-			</div>
-		);
-	}
-
 	const selectedExistingPrediction = activeMatch
 		? predictionMap.get(activeMatch.id)
 		: null;
 
+	const handleMatchdayChange = (newDay: number) => {
+		setMatchday(newDay);
+		const params = new URLSearchParams(window.location.search);
+		params.set('matchday', newDay.toString());
+		router.push(`${window.location.pathname}?${params.toString()}`);
+	};
+
 	return (
 		<main className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto space-y-8">
 			{/* Page Header */}
-			<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
+			<div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-6">
 				<div className="space-y-1">
 					<h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
 						<Trophy className="h-7 w-7 text-yellow-500" />
@@ -218,10 +276,36 @@ export default function PredictPage() {
 					</p>
 				</div>
 
-				{/* Locking Countdown banner */}
-				<div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs shadow-inner">
-					<Clock className="h-4 w-4 animate-pulse" />
-					<span>{getRoundLockText()}</span>
+				<div className="flex flex-wrap items-center gap-3">
+					{/* Matchday Selector */}
+					<div className="flex items-center gap-2">
+						<span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+							Round:
+						</span>
+						<select
+							value={matchday}
+							onChange={(e) =>
+								handleMatchdayChange(parseInt(e.target.value, 10))
+							}
+							className="bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm font-extrabold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer hover:bg-white/[0.08] transition"
+						>
+							{availableMatchdays.map((day) => (
+								<option
+									key={day}
+									value={day}
+									className="bg-slate-950 text-white font-bold"
+								>
+									Matchweek {day} {day === activeMatchday ? '(Current)' : ''}
+								</option>
+							))}
+						</select>
+					</div>
+
+					{/* Locking Countdown banner */}
+					<div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs shadow-inner">
+						<Clock className="h-4 w-4 animate-pulse" />
+						<span>{getRoundLockText()}</span>
+					</div>
 				</div>
 			</div>
 
@@ -455,5 +539,32 @@ export default function PredictPage() {
 				existingPrediction={selectedExistingPrediction}
 			/>
 		</main>
+	);
+}
+
+export default function PredictPage() {
+	return (
+		<ErrorBoundary>
+			<Suspense
+				fallback={
+					<main className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto space-y-8 animate-pulse">
+						<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
+							<div className="space-y-2">
+								<div className="h-8 w-48 bg-slate-800 rounded" />
+								<div className="h-4 w-72 bg-slate-800/65 rounded" />
+							</div>
+							<div className="h-10 w-36 bg-slate-800/40 rounded-xl" />
+						</div>
+						<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+							{[...Array(6)].map((_, i) => (
+								<MatchCardSkeleton key={i} />
+							))}
+						</div>
+					</main>
+				}
+			>
+				<PredictContent />
+			</Suspense>
+		</ErrorBoundary>
 	);
 }

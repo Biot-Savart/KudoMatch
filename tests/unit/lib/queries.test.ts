@@ -2,7 +2,11 @@ vi.mock('@/lib/supabase/client', () => ({
 	createClient: vi.fn(() => (globalThis as any).mockSupabaseClient),
 }));
 
-import { fetchMatches } from '@/lib/queries/matches';
+import {
+	fetchActiveMatchday,
+	fetchAvailableMatchdays,
+	fetchMatches,
+} from '@/lib/queries/matches';
 import {
 	createPool,
 	fetchPoolDetails,
@@ -56,6 +60,28 @@ describe('lib/queries/matches', () => {
 
 		const matches = await fetchMatches(12);
 		expect(matches).toHaveLength(3); // returns fallback matches
+	});
+
+	it('should fetch available matchdays successfully', async () => {
+		const mockData = [{ matchday: 12 }, { matchday: 13 }, { matchday: 12 }];
+		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+			return new MockQueryBuilder(mockData);
+		});
+
+		const matchdays = await fetchAvailableMatchdays();
+		expect(matchdays).toEqual([12, 13]);
+	});
+
+	it('should fetch active matchday successfully based on upcoming match', async () => {
+		const mockUpcoming = [
+			{ matchday: 13, kickoff_time: '2026-08-22T12:00:00Z' },
+		];
+		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+			return new MockQueryBuilder(mockUpcoming);
+		});
+
+		const active = await fetchActiveMatchday();
+		expect(active).toBe(13);
 	});
 });
 

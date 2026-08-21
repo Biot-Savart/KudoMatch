@@ -237,6 +237,7 @@ export function MatchCard({
 						<button
 							onClick={() => handleQuickSelection('home')}
 							disabled={isLocked || !userId}
+							aria-label={`Predict Home Win: ${match.home_team?.name || 'Home team'}`}
 							className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
 								activeOption === 'home'
 									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
@@ -248,6 +249,7 @@ export function MatchCard({
 						<button
 							onClick={() => handleQuickSelection('draw')}
 							disabled={isLocked || !userId}
+							aria-label="Predict Draw Match"
 							className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
 								activeOption === 'draw'
 									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
@@ -259,6 +261,7 @@ export function MatchCard({
 						<button
 							onClick={() => handleQuickSelection('away')}
 							disabled={isLocked || !userId}
+							aria-label={`Predict Away Win: ${match.away_team?.name || 'Away team'}`}
 							className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
 								activeOption === 'away'
 									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
