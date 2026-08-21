@@ -135,3 +135,63 @@ export async function fetchMatches(matchday: number = 12): Promise<Match[]> {
 		return fallbackMatches;
 	}
 }
+
+export async function fetchAvailableMatchdays(): Promise<number[]> {
+	const supabase = createClient();
+
+	try {
+		const { data, error } = await supabase.from('matches').select('matchday');
+
+		if (error) throw error;
+
+		if (!data || data.length === 0) {
+			return [12]; // Fallback to matchday 12
+		}
+
+		const matchdays = data
+			.map((m) => m.matchday)
+			.filter((val, index, self) => val !== null && self.indexOf(val) === index)
+			.sort((a, b) => a - b);
+
+		return matchdays.length > 0 ? matchdays : [12];
+	} catch (err) {
+		console.error('⚠️ Failed to fetch available matchdays:', err);
+		return [12];
+	}
+}
+
+export async function fetchActiveMatchday(): Promise<number> {
+	const supabase = createClient();
+
+	try {
+		// Try to find the next scheduled or live match
+		const { data: upcoming, error: upcomingError } = await supabase
+			.from('matches')
+			.select('matchday, kickoff_time')
+			.in('status', ['scheduled', 'live'])
+			.order('kickoff_time', { ascending: true })
+			.limit(1);
+
+		if (!upcomingError && upcoming && upcoming.length > 0) {
+			return upcoming[0].matchday;
+		}
+
+		// If no upcoming matches, find the latest finished matchday
+		const { data: finished, error: finishedError } = await supabase
+			.from('matches')
+			.select('matchday')
+			.eq('status', 'finished')
+			.order('kickoff_time', { ascending: false })
+			.limit(1);
+
+		if (!finishedError && finished && finished.length > 0) {
+			return finished[0].matchday;
+		}
+
+		// Default fallback
+		return 12;
+	} catch (err) {
+		console.error('⚠️ Failed to fetch active matchday:', err);
+		return 12;
+	}
+}

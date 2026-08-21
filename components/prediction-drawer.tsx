@@ -39,6 +39,17 @@ export function PredictionDrawer({
 		}
 	}, [match, existingPrediction]);
 
+	// Close drawer on Escape key down
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === 'Escape' && isOpen) {
+				onClose();
+			}
+		};
+		window.addEventListener('keydown', handleKeyDown);
+		return () => window.removeEventListener('keydown', handleKeyDown);
+	}, [isOpen, onClose]);
+
 	const saveMutation = useMutation({
 		mutationFn: () => {
 			if (!userId || !match) throw new Error('Authentication required');
@@ -158,6 +169,7 @@ export function PredictionDrawer({
 										<Button
 											variant="ghost"
 											size="icon"
+											aria-label={`Decrease ${match.home_team?.name || 'home team'} goals`}
 											className="h-10 w-10 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl"
 											onClick={() =>
 												setHomeScore((prev) => Math.max(0, prev - 1))
@@ -165,12 +177,16 @@ export function PredictionDrawer({
 										>
 											<Minus className="h-4 w-4" />
 										</Button>
-										<span className="text-3xl font-black text-white w-12 text-center">
+										<span
+											className="text-3xl font-black text-white w-12 text-center"
+											aria-live="polite"
+										>
 											{homeScore}
 										</span>
 										<Button
 											variant="ghost"
 											size="icon"
+											aria-label={`Increase ${match.home_team?.name || 'home team'} goals`}
 											className="h-10 w-10 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl"
 											onClick={() => setHomeScore((prev) => prev + 1)}
 										>
@@ -188,6 +204,7 @@ export function PredictionDrawer({
 										<Button
 											variant="ghost"
 											size="icon"
+											aria-label={`Decrease ${match.away_team?.name || 'away team'} goals`}
 											className="h-10 w-10 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl"
 											onClick={() =>
 												setAwayScore((prev) => Math.max(0, prev - 1))
@@ -195,12 +212,16 @@ export function PredictionDrawer({
 										>
 											<Minus className="h-4 w-4" />
 										</Button>
-										<span className="text-3xl font-black text-white w-12 text-center">
+										<span
+											className="text-3xl font-black text-white w-12 text-center"
+											aria-live="polite"
+										>
 											{awayScore}
 										</span>
 										<Button
 											variant="ghost"
 											size="icon"
+											aria-label={`Increase ${match.away_team?.name || 'away team'} goals`}
 											className="h-10 w-10 hover:bg-white/5 text-slate-400 hover:text-white rounded-xl"
 											onClick={() => setAwayScore((prev) => prev + 1)}
 										>
