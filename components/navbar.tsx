@@ -55,27 +55,6 @@ export function Navbar() {
 				.subscribe();
 		};
 
-		const getAuthUser = async () => {
-			const {
-				data: { user },
-			} = await supabase.auth.getUser();
-			setUser(user);
-
-			if (user) {
-				// Fetch public profile data
-				const { data } = await supabase
-					.from('profiles')
-					.select('*')
-					.eq('id', user.id)
-					.single();
-				setProfile(data);
-				setupProfileSubscription(user.id);
-			}
-			setLoading(false);
-		};
-
-		getAuthUser();
-
 		// Listen for auth changes
 		const {
 			data: { subscription },

@@ -1,5 +1,7 @@
 'use client';
 
+import HeadToHead from '@/components/head-to-head';
+import PoolChat from '@/components/pool-chat';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -21,7 +23,8 @@ import {
 	Loader2,
 	LogOut,
 	MessageCircle,
-	Users
+	Sword,
+	Users,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -38,6 +41,10 @@ export default function PoolDetailPage() {
 	const [user, setUser] = useState<any>(null);
 	const [userLoading, setUserLoading] = useState(true);
 	const [copying, setCopying] = useState(false);
+	const [activeTab, setActiveTab] = useState('standings');
+	const [selectedOpponentId, setSelectedOpponentId] = useState<
+		string | undefined
+	>(undefined);
 
 	// Get active session
 	useEffect(() => {
@@ -332,10 +339,11 @@ export default function PoolDetailPage() {
 
 				{/* Detail Tabs */}
 				<Tabs
-					defaultValue="standings"
+					value={activeTab}
+					onValueChange={setActiveTab}
 					className="w-full space-y-4"
 				>
-					<TabsList className="bg-slate-900 border border-white/5 p-1 rounded-xl w-full sm:w-auto flex">
+					<TabsList className="bg-slate-900 border border-white/5 p-1 rounded-xl w-full sm:w-auto flex flex-wrap gap-1">
 						<TabsTrigger
 							value="standings"
 							className="flex-1 sm:flex-none py-2.5 font-bold rounded-lg text-xs uppercase tracking-wider"
@@ -347,6 +355,18 @@ export default function PoolDetailPage() {
 							className="flex-1 sm:flex-none py-2.5 font-bold rounded-lg text-xs uppercase tracking-wider"
 						>
 							🔍 Picks Matrix
+						</TabsTrigger>
+						<TabsTrigger
+							value="chat"
+							className="flex-1 sm:flex-none py-2.5 font-bold rounded-lg text-xs uppercase tracking-wider"
+						>
+							💬 Banter Chat
+						</TabsTrigger>
+						<TabsTrigger
+							value="h2h"
+							className="flex-1 sm:flex-none py-2.5 font-bold rounded-lg text-xs uppercase tracking-wider"
+						>
+							⚔️ Head-to-Head
 						</TabsTrigger>
 						<TabsTrigger
 							value="members"
@@ -466,8 +486,11 @@ export default function PoolDetailPage() {
 											<th className="py-4 px-4 text-center">
 												3-Pointers (Exact)
 											</th>
-											<th className="py-4 px-5 text-right w-32">
+											<th className="py-4 px-4 text-right w-32">
 												Total Points
+											</th>
+											<th className="py-4 px-5 text-center w-24">
+												H2H Compare
 											</th>
 										</tr>
 									</thead>
@@ -541,10 +564,29 @@ export default function PoolDetailPage() {
 																🎯 {row.exact_count}
 															</span>
 														</td>
-														<td className="py-4 px-5 text-right">
+														<td className="py-4 px-4 text-right">
 															<span className="text-sm font-black text-white">
 																{row.total_points} pts
 															</span>
+														</td>
+														<td className="py-4 px-5 text-center">
+															{!isCurrentUser ? (
+																<Button
+																	variant="ghost"
+																	className="h-8 w-8 p-0 text-indigo-400 hover:text-indigo-300 hover:bg-white/5 rounded-lg"
+																	onClick={() => {
+																		setSelectedOpponentId(row.user_id);
+																		setActiveTab('h2h');
+																	}}
+																	title={`Compare H2H with @${row.username}`}
+																>
+																	<Sword className="h-4 w-4" />
+																</Button>
+															) : (
+																<span className="text-slate-600 font-bold text-xs">
+																	-
+																</span>
+															)}
 														</td>
 													</motion.tr>
 												);
@@ -831,6 +873,42 @@ export default function PoolDetailPage() {
 								</table>
 							</div>
 						</div>
+					</TabsContent>
+
+					{/* 💬 BANTER CHAT TAB */}
+					<TabsContent
+						value="chat"
+						className="outline-none"
+					>
+						{user && (
+							<PoolChat
+								poolId={poolId}
+								userId={user.id}
+								username={
+									user.user_metadata?.username ||
+									user.email?.split('@')[0] ||
+									'user'
+								}
+								isCreator={isCreator}
+							/>
+						)}
+					</TabsContent>
+
+					{/* ⚔️ HEAD-TO-HEAD TAB */}
+					<TabsContent
+						value="h2h"
+						className="outline-none"
+					>
+						{leaderboard && members && (
+							<HeadToHead
+								poolId={poolId}
+								currentUserId={user?.id}
+								leaderboard={leaderboard}
+								members={members}
+								matrixData={matrixData || null}
+								defaultOpponentId={selectedOpponentId}
+							/>
+						)}
 					</TabsContent>
 				</Tabs>
 			</div>
