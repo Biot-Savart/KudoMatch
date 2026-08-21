@@ -157,4 +157,51 @@ describe('scripts automation and seeding', () => {
 			expect(mockInsert).toHaveBeenCalled();
 		});
 	});
+
+	describe('fetch-live-scores.ts', () => {
+		it('executes live score synchronization on matches in need of updates', async () => {
+			const { fetchLiveScores } = await import('@/scripts/fetch-live-scores');
+			mockSelect.mockResolvedValueOnce({
+				data: [
+					{
+						id: 'match-1',
+						external_id: 12001,
+						status: 'scheduled',
+						home_score: null,
+						away_score: null,
+						home_team: { name: 'Arsenal' },
+						away_team: { name: 'Chelsea' },
+					},
+				],
+				error: null,
+			});
+			mockUpsert.mockResolvedValue({ data: [], error: null });
+
+			const result = await fetchLiveScores({ simulate: true });
+			expect(result.success).toBe(true);
+			expect(mockSelect).toHaveBeenCalled();
+		});
+	});
+
+	describe('db-backup.ts', () => {
+		it('safely runs the backup and restore database operations', async () => {
+			const { backupDatabase, restoreDatabase } =
+				await import('@/scripts/db-backup');
+			mockSelect.mockResolvedValue({ data: [], error: null });
+			mockUpsert.mockResolvedValue({ data: [], error: null });
+
+			const tempBackupFile = 'backups/test_backup_temp.json';
+			const backupRes = await backupDatabase(tempBackupFile);
+			expect(backupRes.success).toBe(true);
+
+			const restoreRes = await restoreDatabase(tempBackupFile);
+			expect(restoreRes.success).toBe(true);
+
+			// Clean up temp test backup file
+			const fs = await import('fs');
+			if (fs.existsSync(tempBackupFile)) {
+				fs.unlinkSync(tempBackupFile);
+			}
+		});
+	});
 });

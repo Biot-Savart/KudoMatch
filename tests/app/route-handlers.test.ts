@@ -1,5 +1,9 @@
 import { GET } from '@/app/auth/callback/route';
 
+vi.mock('@/scripts/fetch-live-scores', () => ({
+	fetchLiveScores: vi.fn().mockResolvedValue({ success: true, updated: 5 }),
+}));
+
 const { mockSupabaseClient } = globalThis as any;
 
 describe('app/auth/callback/route', () => {
@@ -65,5 +69,21 @@ describe('app/auth/callback/route', () => {
 		expect(response.headers.get('location')).toBe(
 			'https://kudomatch.com/login?error=Could%20not%20authenticate%20user',
 		);
+	});
+});
+
+describe('app/api/cron/fetch-live-scores/route', () => {
+	it('executes fetchLiveScores successfully when triggered', async () => {
+		const { GET: cronGET } =
+			await import('@/app/api/cron/fetch-live-scores/route');
+		const request = new Request(
+			'https://kudomatch.com/api/cron/fetch-live-scores?simulate=true',
+		);
+		const response = await cronGET(request as any);
+
+		expect(response.status).toBe(200);
+		const json = await response.json();
+		expect(json.success).toBe(true);
+		expect(json.updated).toBe(5);
 	});
 });

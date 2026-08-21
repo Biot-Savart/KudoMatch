@@ -128,9 +128,9 @@ Automate real-time updates of pool standings and profiles leaderboards whenever 
 
 ### 🚀 Phase 8.2: Database & Automation
 
-- [ ] Setup `pg_cron` pipeline for automated fixture completion checks.
-- [ ] Integrate real-time trigger for pool standings recalculation on match score resolution.
-- [ ] Establish standard DB backup routines.
+- [x] Setup `pg_cron` pipeline for automated fixture completion checks.
+- [x] Integrate real-time trigger for pool standings recalculation on match score resolution.
+- [x] Establish standard DB backup routines.
 
 ### 🚀 Phase 8.3: Social & Banter System
 
