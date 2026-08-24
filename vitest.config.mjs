@@ -36,6 +36,7 @@ export default defineConfig({
 				'tests/**',
 				'types/**',
 				'supabase/**',
+				'scripts/**',
 				'.agents/**',
 				'.claude/**',
 			],
