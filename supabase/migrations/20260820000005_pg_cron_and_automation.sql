@@ -56,7 +56,9 @@ create or replace function public.setup_automated_score_checks(
 returns void as $$
 begin
   -- Unschedule existing job if it exists to prevent duplication
-  perform cron.unschedule('fetch-live-scores-job');
+  if exists (select 1 from cron.job where jobname = 'fetch-live-scores-job') then
+    perform cron.unschedule('fetch-live-scores-job');
+  end if;
   
   -- Schedule HTTP POST job calling the edge function / endpoint
   perform cron.schedule(

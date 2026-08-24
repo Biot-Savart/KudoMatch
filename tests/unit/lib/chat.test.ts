@@ -35,6 +35,16 @@ describe('lib/queries/chat', () => {
 		expect(result).toEqual(mockMessagesList);
 	});
 
+	it('should handle error when fetching pool messages fails', async () => {
+		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+			return new MockQueryBuilder(null, new Error('Failed to load chat'));
+		});
+
+		await expect(fetchPoolMessages('pool-123')).rejects.toThrow(
+			'Failed to load chat',
+		);
+	});
+
 	it('should send a pool message successfully', async () => {
 		const mockInsertedMessage = {
 			id: 'msg-1',
@@ -56,6 +66,16 @@ describe('lib/queries/chat', () => {
 		expect(result).toEqual(mockInsertedMessage);
 	});
 
+	it('should handle error when sending pool message fails', async () => {
+		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+			return new MockQueryBuilder(null, new Error('Failed to send'));
+		});
+
+		await expect(
+			sendPoolMessage('pool-123', 'user-456', 'New banter text!'),
+		).rejects.toThrow('Failed to send');
+	});
+
 	it('should delete a pool message successfully', async () => {
 		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
 			return new MockQueryBuilder({ id: 'msg-1' });
@@ -63,5 +83,15 @@ describe('lib/queries/chat', () => {
 
 		const result = await deletePoolMessage('msg-1');
 		expect(result).toBe(true);
+	});
+
+	it('should handle error when deleting pool message fails', async () => {
+		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+			return new MockQueryBuilder(null, new Error('Failed to delete'));
+		});
+
+		await expect(deletePoolMessage('msg-1')).rejects.toThrow(
+			'Failed to delete',
+		);
 	});
 });
