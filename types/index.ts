@@ -105,3 +105,23 @@ export interface PoolLeaderboardEntry {
 	predictions_count: number;
 	joined_at: string;
 }
+
+export interface PoolMessage {
+	id: string;
+	pool_id: string;
+	user_id: string;
+	message: string;
+	created_at: string;
+	profile?: Profile;
+}
+
+export interface HeadToHeadStats {
+	matches_compared: number;
+	wins_a: number;
+	wins_b: number;
+	draws: number;
+	exacts_a: number;
+	exacts_b: number;
+	points_a: number;
+	points_b: number;
+}
