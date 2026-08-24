@@ -1,8 +1,13 @@
 'use client';
 
 import { ErrorBoundary } from '@/components/error-boundary';
+import { GameweekPerformanceSummary } from '@/components/gameweek-performance-summary';
 import { MatchCard } from '@/components/match-card';
+import { MatchPoolInsightsModal } from '@/components/match-pool-insights-modal';
 import { PredictionDrawer } from '@/components/prediction-drawer';
+import { ScoreBreakdownModal } from '@/components/score-breakdown-modal';
+import { ScoringRulesModal } from '@/components/scoring-rules-modal';
+import { Button } from '@/components/ui/button';
 import { MatchCardSkeleton } from '@/components/ui/match-card-skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -17,7 +22,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { Match, Prediction } from '@/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Clock, Compass, Trophy } from 'lucide-react';
+import { AlertCircle, BookOpen, Clock, Compass, Trophy } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
@@ -34,6 +39,17 @@ function PredictContent() {
 	const [activeMatch, setActiveMatch] = useState<Match | null>(null);
 	const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 	const [matchday, setMatchday] = useState<number>(12);
+
+	// Modal States for Phase 9
+	const [breakdownMatch, setBreakdownMatch] = useState<Match | null>(null);
+	const [breakdownPrediction, setBreakdownPrediction] =
+		useState<Prediction | null>(null);
+	const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+
+	const [insightsMatch, setInsightsMatch] = useState<Match | null>(null);
+	const [isInsightsOpen, setIsInsightsOpen] = useState(false);
+
+	const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
 	// Get active session
 	useEffect(() => {
@@ -174,6 +190,20 @@ function PredictContent() {
 		saveMutation.mutate({ matchId, homeScore, awayScore });
 	};
 
+	const handleOpenBreakdown = (
+		match: Match,
+		prediction?: Prediction | null,
+	) => {
+		setBreakdownMatch(match);
+		setBreakdownPrediction(prediction || null);
+		setIsBreakdownOpen(true);
+	};
+
+	const handleOpenInsights = (match: Match) => {
+		setInsightsMatch(match);
+		setIsInsightsOpen(true);
+	};
+
 	const isLoading =
 		userLoading || matchesLoading || (user?.id && predictionsLoading);
 
@@ -211,27 +241,7 @@ function PredictContent() {
 	const unpredictedMatches =
 		matches?.filter((m) => !predictionMap.has(m.id)) || [];
 	const finishedMatches = matches?.filter((m) => m.status === 'finished') || [];
-
-	// Calculate Matchweek Performance Summary statistics
-	const totalMwPoints = finishedMatches.reduce((sum, m) => {
-		const pred = predictionMap.get(m.id);
-		return sum + (pred?.points_earned || 0);
-	}, 0);
-
-	const exactHitsCount = finishedMatches.filter((m) => {
-		const pred = predictionMap.get(m.id);
-		return pred?.points_earned === 3;
-	}).length;
-
-	const outcomeDiffCount = finishedMatches.filter((m) => {
-		const pred = predictionMap.get(m.id);
-		return pred?.points_earned === 2;
-	}).length;
-
-	const winnerOnlyCount = finishedMatches.filter((m) => {
-		const pred = predictionMap.get(m.id);
-		return pred?.points_earned === 1;
-	}).length;
+	const liveMatches = matches?.filter((m) => m.status === 'live') || [];
 
 	// Calculate overall locking countdown (earliest match kickoff time)
 	const getRoundLockText = () => {
@@ -277,6 +287,16 @@ function PredictContent() {
 				</div>
 
 				<div className="flex flex-wrap items-center gap-3">
+					{/* Rules Helper Trigger */}
+					<Button
+						variant="outline"
+						onClick={() => setIsRulesModalOpen(true)}
+						className="border-white/10 hover:bg-white/5 text-slate-300 text-xs font-bold gap-1.5 rounded-xl h-10"
+					>
+						<BookOpen className="h-4 w-4 text-indigo-400" />
+						<span>Point Rules</span>
+					</Button>
+
 					{/* Matchday Selector */}
 					<div className="flex items-center gap-2">
 						<span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -326,70 +346,13 @@ function PredictContent() {
 			)}
 
 			{/* MATCHWEEK PERFORMANCE SUMMARY */}
-			{user && finishedMatches.length > 0 && (
-				<div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-5 rounded-2xl glass-card border-white/10 bg-indigo-500/5 relative overflow-hidden">
-					<div className="absolute -top-12 -left-12 w-24 h-24 bg-indigo-500/10 rounded-full blur-xl pointer-events-none" />
-
-					{/* Stat 1: Total Points */}
-					<div className="flex items-center gap-3">
-						<div className="p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500">
-							<Trophy className="h-5 w-5" />
-						</div>
-						<div className="text-left">
-							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-								Round Points
-							</span>
-							<span className="text-xl font-black text-white">
-								{totalMwPoints} PTS
-							</span>
-						</div>
-					</div>
-
-					{/* Stat 2: Exact Scores */}
-					<div className="flex items-center gap-3">
-						<div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-							<span className="font-bold text-sm">🎯</span>
-						</div>
-						<div className="text-left">
-							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-								Exact Scores
-							</span>
-							<span className="text-xl font-black text-white">
-								{exactHitsCount}
-							</span>
-						</div>
-					</div>
-
-					{/* Stat 3: Goal Difference Matches */}
-					<div className="flex items-center gap-3">
-						<div className="p-2.5 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400">
-							<span className="font-bold text-sm">↔️</span>
-						</div>
-						<div className="text-left">
-							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-								Outcome & Diff
-							</span>
-							<span className="text-xl font-black text-white">
-								{outcomeDiffCount}
-							</span>
-						</div>
-					</div>
-
-					{/* Stat 4: Winner Only */}
-					<div className="flex items-center gap-3">
-						<div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
-							<span className="font-bold text-sm">👍</span>
-						</div>
-						<div className="text-left">
-							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-								Winner Only
-							</span>
-							<span className="text-xl font-black text-white">
-								{winnerOnlyCount}
-							</span>
-						</div>
-					</div>
-				</div>
+			{user && matches && matches.length > 0 && (
+				<GameweekPerformanceSummary
+					matches={matches}
+					predictionsMap={predictionMap}
+					matchday={matchday}
+					onOpenRulesModal={() => setIsRulesModalOpen(true)}
+				/>
 			)}
 
 			{/* FILTER TABS */}
@@ -405,6 +368,14 @@ function PredictContent() {
 						>
 							All Matches ({matches?.length || 0})
 						</TabsTrigger>
+						{liveMatches.length > 0 && (
+							<TabsTrigger
+								value="live"
+								className="rounded-lg font-bold text-xs tracking-wide text-red-400"
+							>
+								Live In-Play ({liveMatches.length})
+							</TabsTrigger>
+						)}
 						<TabsTrigger
 							value="unpredicted"
 							className="rounded-lg font-bold text-xs tracking-wide"
@@ -440,10 +411,34 @@ function PredictContent() {
 								existingPrediction={predictionMap.get(match.id)}
 								onPredict={handlePredictClick}
 								onQuickPredict={handleQuickPredictSave}
+								onBreakdownClick={handleOpenBreakdown}
+								onInsightsClick={handleOpenInsights}
 							/>
 						))}
 					</div>
 				</TabsContent>
+
+				{liveMatches.length > 0 && (
+					<TabsContent
+						value="live"
+						className="mt-0"
+					>
+						<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+							{liveMatches.map((match) => (
+								<MatchCard
+									key={match.id}
+									match={match}
+									userId={user?.id || null}
+									existingPrediction={predictionMap.get(match.id)}
+									onPredict={handlePredictClick}
+									onQuickPredict={handleQuickPredictSave}
+									onBreakdownClick={handleOpenBreakdown}
+									onInsightsClick={handleOpenInsights}
+								/>
+							))}
+						</div>
+					</TabsContent>
+				)}
 
 				<TabsContent
 					value="unpredicted"
@@ -466,6 +461,8 @@ function PredictContent() {
 									existingPrediction={undefined}
 									onPredict={handlePredictClick}
 									onQuickPredict={handleQuickPredictSave}
+									onBreakdownClick={handleOpenBreakdown}
+									onInsightsClick={handleOpenInsights}
 								/>
 							))}
 						</div>
@@ -493,6 +490,8 @@ function PredictContent() {
 									existingPrediction={predictionMap.get(match.id)}
 									onPredict={handlePredictClick}
 									onQuickPredict={handleQuickPredictSave}
+									onBreakdownClick={handleOpenBreakdown}
+									onInsightsClick={handleOpenInsights}
 								/>
 							))}
 						</div>
@@ -520,6 +519,8 @@ function PredictContent() {
 									existingPrediction={predictionMap.get(match.id)}
 									onPredict={handlePredictClick}
 									onQuickPredict={handleQuickPredictSave}
+									onBreakdownClick={handleOpenBreakdown}
+									onInsightsClick={handleOpenInsights}
 								/>
 							))}
 						</div>
@@ -537,6 +538,28 @@ function PredictContent() {
 				match={activeMatch}
 				userId={user?.id || null}
 				existingPrediction={selectedExistingPrediction}
+			/>
+
+			{/* Phase 9: Scoring Breakdown Modal */}
+			<ScoreBreakdownModal
+				isOpen={isBreakdownOpen}
+				onClose={() => setIsBreakdownOpen(false)}
+				match={breakdownMatch}
+				prediction={breakdownPrediction}
+				username={user?.user_metadata?.username}
+			/>
+
+			{/* Phase 9: Community / Pool Insights Modal */}
+			<MatchPoolInsightsModal
+				isOpen={isInsightsOpen}
+				onClose={() => setIsInsightsOpen(false)}
+				match={insightsMatch}
+			/>
+
+			{/* Phase 9: Universal Scoring Rules Modal */}
+			<ScoringRulesModal
+				isOpen={isRulesModalOpen}
+				onClose={() => setIsRulesModalOpen(false)}
 			/>
 		</main>
 	);

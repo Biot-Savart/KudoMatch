@@ -2,8 +2,12 @@
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+	calculatePredictionPoints,
+	getScoringExplanation,
+} from '@/lib/utils/scoring';
 import { Match, Prediction } from '@/types';
-import { ChevronRight, Lock, Timer } from 'lucide-react';
+import { ChevronRight, Info, Lock, Timer, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface MatchCardProps {
@@ -16,6 +20,8 @@ interface MatchCardProps {
 		homeScore: number,
 		awayScore: number,
 	) => void;
+	onBreakdownClick?: (match: Match, prediction?: Prediction | null) => void;
+	onInsightsClick?: (match: Match) => void;
 }
 
 export function MatchCard({
@@ -24,6 +30,8 @@ export function MatchCard({
 	existingPrediction,
 	onPredict,
 	onQuickPredict,
+	onBreakdownClick,
+	onInsightsClick,
 }: MatchCardProps) {
 	const [timeLeft, setTimeLeft] = useState<string>('');
 	const [isLocked, setIsLocked] = useState<boolean>(false);
@@ -41,7 +49,7 @@ export function MatchCard({
 					match.status === 'finished'
 						? 'FINISHED'
 						: match.status === 'live'
-							? 'LIVE'
+							? 'LIVE IN-PLAY'
 							: 'LOCKED',
 				);
 				return;
@@ -90,24 +98,102 @@ export function MatchCard({
 		else onQuickPredict(match.id, 1, 1);
 	};
 
+	const isLive = match.status === 'live';
+	const isFinished = match.status === 'finished';
+	const isResolvedOrLive = isLive || isFinished;
+
+	// Compute live in-play or final scoring explanation
+	const scoringExplanation =
+		isResolvedOrLive && existingPrediction
+			? getScoringExplanation(
+					existingPrediction.predicted_home_score,
+					existingPrediction.predicted_away_score,
+					match.home_score,
+					match.away_score,
+					match.status,
+				)
+			: null;
+
+	const livePoints =
+		isLive && existingPrediction
+			? calculatePredictionPoints(
+					existingPrediction.predicted_home_score,
+					existingPrediction.predicted_away_score,
+					match.home_score,
+					match.away_score,
+				)
+			: (existingPrediction?.points_earned ?? 0);
+
+	const kickoffFormatted = new Date(match.kickoff_time).toLocaleDateString(
+		undefined,
+		{
+			weekday: 'short',
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+		},
+	);
+
 	return (
 		<Card
 			className={`relative overflow-hidden transition-all duration-300 rounded-2xl border-white/5 bg-white/[0.02] shadow-xl ${
-				isLocked ? 'opacity-65' : 'hover:border-white/10 hover:bg-white/[0.03]'
+				isLive
+					? 'ring-1 ring-red-500/30 bg-red-500/[0.02]'
+					: isLocked
+						? 'opacity-85'
+						: 'hover:border-white/10 hover:bg-white/[0.03]'
 			}`}
 		>
 			{/* Top Details / Time-Lock Row */}
 			<div className="px-4 py-2 bg-black/20 border-b border-white/5 flex justify-between items-center text-xs font-semibold">
 				<span className="text-slate-400">Matchweek {match.matchday}</span>
 				<div
-					className={`flex items-center gap-1 ${isLocked ? 'text-red-400' : 'text-indigo-300'}`}
+					className={`flex items-center gap-1.5 ${
+						isLive
+							? 'text-red-400 font-extrabold'
+							: isLocked
+								? 'text-slate-400'
+								: 'text-indigo-300'
+					}`}
 				>
-					{isLocked ? (
-						<Lock className="h-3 w-3" />
+					{isLive ? (
+						<>
+							<span className="relative flex h-2 w-2">
+								<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+								<span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+							</span>
+							<span className="tracking-wide">LIVE</span>
+						</>
+					) : isLocked ? (
+						<div
+							className="relative flex items-center gap-1 group/lock cursor-help"
+							title={`Match ${isFinished ? 'Finished' : 'Locked'} • ${kickoffFormatted}`}
+						>
+							<Lock className="h-3 w-3" />
+							<span className="tracking-wide group-hover/lock:text-slate-200 transition">
+								{timeLeft}
+							</span>
+
+							{/* Hover Tooltip displaying exact date and time */}
+							<div className="absolute right-0 top-full mt-1.5 hidden group-hover/lock:flex flex-col z-30 px-3 py-2 rounded-xl bg-slate-900/95 border border-white/10 text-[10px] text-slate-200 shadow-2xl backdrop-blur-md whitespace-nowrap pointer-events-none transition-all">
+								<span className="font-bold text-white flex items-center gap-1">
+									<span>
+										{isFinished ? '🏁 Final Result' : '🔒 Predictions Locked'}
+									</span>
+								</span>
+								<span className="text-slate-400 text-[9px] mt-0.5">
+									Kickoff: {kickoffFormatted}
+								</span>
+							</div>
+						</div>
 					) : (
-						<Timer className="h-3 w-3 animate-pulse" />
+						<>
+							<Timer className="h-3 w-3 animate-pulse" />
+							<span className="tracking-wide">{timeLeft}</span>
+						</>
 					)}
-					<span className="tracking-wide">{timeLeft}</span>
 				</div>
 			</div>
 
@@ -132,44 +218,49 @@ export function MatchCard({
 
 					{/* Scores or Prediction Middle Selector */}
 					<div className="flex flex-col items-center justify-center gap-1">
-						{match.status === 'finished' ? (
-							// Actual result if finished
+						{isResolvedOrLive ? (
+							// Actual result if finished or in-play
 							<div className="flex flex-col items-center gap-1.5">
-								<div className="flex items-center gap-2 bg-black/45 px-3 py-1.5 rounded-xl border border-white/5">
-									<span className="text-lg font-black text-white">
-										{match.home_score}
+								<div
+									className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border ${
+										isLive
+											? 'bg-red-500/10 border-red-500/30 ring-1 ring-red-500/20'
+											: 'bg-black/45 border-white/5'
+									}`}
+								>
+									<span className="text-xl font-black text-white">
+										{match.home_score ?? 0}
 									</span>
 									<span className="text-xs font-bold text-slate-500">:</span>
-									<span className="text-lg font-black text-white">
-										{match.away_score}
+									<span className="text-xl font-black text-white">
+										{match.away_score ?? 0}
 									</span>
 								</div>
 
-								{existingPrediction && (
-									<div className="flex flex-col items-center mt-1">
+								{existingPrediction && scoringExplanation && (
+									<button
+										onClick={() =>
+											onBreakdownClick?.(match, existingPrediction)
+										}
+										title="Click to view full scoring breakdown"
+										className="flex flex-col items-center mt-1 group cursor-pointer"
+									>
 										<div
-											className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase border ${
-												existingPrediction.points_earned === 3
-													? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30'
-													: existingPrediction.points_earned === 2
-														? 'bg-teal-500/10 border-teal-500/20 text-teal-400'
-														: existingPrediction.points_earned === 1
-															? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-															: 'bg-slate-500/10 border-slate-500/20 text-slate-400'
-											}`}
+											className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border flex items-center gap-1 transition group-hover:scale-105 ${scoringExplanation.badgeBg} ${scoringExplanation.badgeBorder} ${scoringExplanation.colorClass}`}
 										>
-											+{existingPrediction.points_earned} PTS
+											{isLive && (
+												<span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+											)}
+											<span>
+												{isLive ? 'In-Play: ' : '+'}
+												{livePoints} PTS
+											</span>
+											<Info className="h-2.5 w-2.5 opacity-70" />
 										</div>
-										<span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">
-											{existingPrediction.points_earned === 3
-												? 'Exact Score'
-												: existingPrediction.points_earned === 2
-													? 'Outcome & Diff'
-													: existingPrediction.points_earned === 1
-														? 'Winner Only'
-														: 'Miss'}
+										<span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 flex items-center gap-0.5">
+											<span>{scoringExplanation.tierLabel}</span>
 										</span>
-									</div>
+									</button>
 								)}
 							</div>
 						) : (
@@ -217,20 +308,35 @@ export function MatchCard({
 				</div>
 
 				{/* Bottom Section */}
-				{match.status === 'finished' ? (
-					existingPrediction ? (
-						<div className="flex items-center justify-center gap-2 border-t border-white/5 pt-4 text-xs font-bold text-slate-400">
-							<span>Your Pick:</span>
-							<span className="text-white font-black bg-white/5 px-2 py-0.5 rounded-md">
-								{existingPrediction.predicted_home_score} -{' '}
-								{existingPrediction.predicted_away_score}
+				{isResolvedOrLive ? (
+					<div className="border-t border-white/5 pt-3 flex items-center justify-between text-xs">
+						{existingPrediction ? (
+							<button
+								onClick={() => onBreakdownClick?.(match, existingPrediction)}
+								className="flex items-center gap-1.5 text-slate-400 hover:text-white transition group text-[11px]"
+							>
+								<span className="font-bold">Your Pick:</span>
+								<span className="text-white font-black bg-white/5 px-2 py-0.5 rounded-md border border-white/5 group-hover:border-indigo-500/30">
+									{existingPrediction.predicted_home_score} -{' '}
+									{existingPrediction.predicted_away_score}
+								</span>
+							</button>
+						) : (
+							<span className="text-slate-500 text-[11px] font-medium">
+								No pick submitted
 							</span>
-						</div>
-					) : (
-						<div className="text-center border-t border-white/5 pt-4 text-xs font-bold text-slate-500">
-							No prediction submitted
-						</div>
-					)
+						)}
+
+						{onInsightsClick && (
+							<button
+								onClick={() => onInsightsClick(match)}
+								className="flex items-center gap-1 text-[11px] font-bold text-indigo-400 hover:text-indigo-300 hover:underline transition"
+							>
+								<Users className="h-3 w-3" />
+								<span>Pool Picks</span>
+							</button>
+						)}
+					</div>
 				) : (
 					/* Quick outcome 1 / X / 2 pills selector */
 					<div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-4">

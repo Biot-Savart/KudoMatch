@@ -5,6 +5,7 @@ vi.mock('@/lib/supabase/client', () => ({
 import {
 	fetchActiveMatchday,
 	fetchAvailableMatchdays,
+	fetchMatchCommunityInsights,
 	fetchMatches,
 } from '@/lib/queries/matches';
 import {
@@ -82,6 +83,62 @@ describe('lib/queries/matches', () => {
 
 		const active = await fetchActiveMatchday();
 		expect(active).toBe(13);
+	});
+
+	it('should fetch active matchday fallback to finished matches when no upcoming', async () => {
+		(mockSupabaseClient.from as any)
+			.mockImplementationOnce(() => {
+				return new MockQueryBuilder([]); // no upcoming
+			})
+			.mockImplementationOnce(() => {
+				return new MockQueryBuilder([{ matchday: 11 }]); // finished matchday 11
+			});
+
+		const active = await fetchActiveMatchday();
+		expect(active).toBe(11);
+	});
+
+	it('should fetch match community insights via rpc', async () => {
+		const mockInsights = {
+			match_id: 'm-1',
+			is_locked: true,
+			total_predictions: 10,
+			outcome_distribution: {
+				home_win_count: 5,
+				draw_count: 3,
+				away_win_count: 2,
+				home_win_pct: 50,
+				draw_pct: 30,
+				away_win_pct: 20,
+			},
+			points_distribution: {
+				exact_3pts: 2,
+				diff_2pts: 3,
+				winner_1pt: 3,
+				miss_0pts: 2,
+			},
+			top_scores: [{ scoreline: '2 - 1', count: 4, percentage: 40 }],
+			participants: [],
+		};
+
+		vi.spyOn(mockSupabaseClient, 'rpc').mockResolvedValueOnce({
+			data: mockInsights,
+			error: null,
+		});
+
+		const insights = await fetchMatchCommunityInsights('m-1', 'pool-1');
+		expect(insights).toEqual(mockInsights);
+	});
+
+	it('should fallback to graceful default insights when rpc fails', async () => {
+		vi.spyOn(mockSupabaseClient, 'rpc').mockResolvedValueOnce({
+			data: null,
+			error: new Error('RPC unavailable'),
+		});
+
+		const insights = await fetchMatchCommunityInsights('m-1');
+		expect(insights?.total_predictions).toBe(18);
+		expect(insights?.outcome_distribution.home_win_pct).toBe(56);
 	});
 });
 

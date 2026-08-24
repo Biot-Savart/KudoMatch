@@ -1,10 +1,14 @@
 'use client';
 
 import HeadToHead from '@/components/head-to-head';
+import { MatchPoolInsightsModal } from '@/components/match-pool-insights-modal';
 import PoolChat from '@/components/pool-chat';
+import { ScoreBreakdownModal } from '@/components/score-breakdown-modal';
+import { ScoringRulesModal } from '@/components/scoring-rules-modal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { WhatIfScenarioSimulator } from '@/components/what-if-simulator';
 import {
 	fetchPoolDetails,
 	fetchPoolLeaderboard,
@@ -13,10 +17,13 @@ import {
 	leavePool,
 } from '@/lib/queries/pools';
 import { createClient } from '@/lib/supabase/client';
+import { Match, Prediction } from '@/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
 	ArrowLeft,
+	BookOpen,
+	Calculator,
 	Copy,
 	Crown,
 	Info,
@@ -45,6 +52,21 @@ export default function PoolDetailPage() {
 	const [selectedOpponentId, setSelectedOpponentId] = useState<
 		string | undefined
 	>(undefined);
+
+	// Phase 9 Modals State
+	const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+	const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
+
+	const [breakdownMatch, setBreakdownMatch] = useState<Match | null>(null);
+	const [breakdownPrediction, setBreakdownPrediction] =
+		useState<Prediction | null>(null);
+	const [breakdownUsername, setBreakdownUsername] = useState<
+		string | undefined
+	>(undefined);
+	const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
+
+	const [insightsMatch, setInsightsMatch] = useState<Match | null>(null);
+	const [isInsightsOpen, setIsInsightsOpen] = useState(false);
 
 	// Get active session
 	useEffect(() => {
@@ -194,6 +216,22 @@ export default function PoolDetailPage() {
 		}
 	};
 
+	const handleOpenCellBreakdown = (
+		match: Match,
+		pred?: Prediction | null,
+		username?: string,
+	) => {
+		setBreakdownMatch(match);
+		setBreakdownPrediction(pred || null);
+		setBreakdownUsername(username);
+		setIsBreakdownOpen(true);
+	};
+
+	const handleOpenMatchInsights = (match: Match) => {
+		setInsightsMatch(match);
+		setIsInsightsOpen(true);
+	};
+
 	const isCreator = pool?.creator_id === user?.id;
 	const isMember = members?.some((m) => m.user_id === user?.id);
 
@@ -237,7 +275,6 @@ export default function PoolDetailPage() {
 
 	// Separate podium vs others
 	const podium = leaderboard ? leaderboard.slice(0, 3) : [];
-	const rest = leaderboard ? leaderboard.slice(3) : [];
 
 	return (
 		<div className="min-h-screen bg-slate-950 text-white pt-24 pb-12 px-4 md:px-8">
@@ -297,6 +334,30 @@ export default function PoolDetailPage() {
 
 					{/* Invite / Action tools */}
 					<div className="flex flex-col sm:flex-row md:flex-col gap-3 md:items-end">
+						<div className="flex flex-wrap gap-2">
+							{/* Phase 9: What-If Simulator trigger */}
+							{matrixData && leaderboard && (
+								<Button
+									variant="outline"
+									onClick={() => setIsSimulatorOpen(true)}
+									className="border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 text-purple-200 text-xs font-bold gap-1.5 rounded-xl h-10"
+								>
+									<Calculator className="h-4 w-4 text-purple-400" />
+									<span>&quot;What-If&quot; Simulator</span>
+								</Button>
+							)}
+
+							{/* Phase 9: Point Rules trigger */}
+							<Button
+								variant="outline"
+								onClick={() => setIsRulesModalOpen(true)}
+								className="border-white/10 hover:bg-white/5 text-slate-300 text-xs font-bold gap-1.5 rounded-xl h-10"
+							>
+								<BookOpen className="h-4 w-4 text-indigo-400" />
+								<span>Point Rules</span>
+							</Button>
+						</div>
+
 						{isMember && (
 							<div className="flex items-center gap-2 bg-white/5 border border-white/5 p-2 rounded-xl">
 								<div className="text-left px-2">
@@ -482,6 +543,7 @@ export default function PoolDetailPage() {
 										<tr className="border-b border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-wider text-slate-400">
 											<th className="py-4 px-5 text-center w-16">Rank</th>
 											<th className="py-4 px-4">Predictor</th>
+											<th className="py-4 px-4 text-center">Recent Form</th>
 											<th className="py-4 px-4 text-center">Picks Made</th>
 											<th className="py-4 px-4 text-center">
 												3-Pointers (Exact)
@@ -498,6 +560,17 @@ export default function PoolDetailPage() {
 										{leaderboard &&
 											leaderboard.map((row, idx) => {
 												const isCurrentUser = row.user_id === user?.id;
+
+												// Derive recent form pills from matrixData if available
+												const memberRecentPicks =
+													matrixData?.matches
+														?.filter((m) => m.status === 'finished')
+														.slice(-4)
+														.map((m) => {
+															const p =
+																matrixData.predictions[row.user_id]?.[m.id];
+															return p?.points_earned ?? null;
+														}) || [];
 
 												return (
 													<motion.tr
@@ -556,6 +629,42 @@ export default function PoolDetailPage() {
 																</div>
 															</div>
 														</td>
+
+														{/* Phase 9: Recent Form Mini Badges */}
+														<td className="py-4 px-4 text-center">
+															<div className="flex items-center justify-center gap-1">
+																{memberRecentPicks.length > 0 ? (
+																	memberRecentPicks.map((pts, i) => (
+																		<span
+																			key={i}
+																			title={
+																				pts !== null
+																					? `${pts} points earned`
+																					: 'No prediction'
+																			}
+																			className={`h-4.5 w-4.5 rounded-full flex items-center justify-center text-[9px] font-black ${
+																				pts === 3
+																					? 'bg-emerald-500 text-slate-950'
+																					: pts === 2
+																						? 'bg-teal-500 text-slate-950'
+																						: pts === 1
+																							? 'bg-blue-500 text-white'
+																							: pts === 0
+																								? 'bg-slate-700 text-slate-400'
+																								: 'bg-white/5 text-slate-600'
+																			}`}
+																		>
+																			{pts !== null ? pts : '-'}
+																		</span>
+																	))
+																) : (
+																	<span className="text-slate-600 text-xs">
+																		-
+																	</span>
+																)}
+															</div>
+														</td>
+
 														<td className="py-4 px-4 text-center text-sm text-slate-300">
 															{row.predictions_count}
 														</td>
@@ -595,7 +704,7 @@ export default function PoolDetailPage() {
 										{(!leaderboard || leaderboard.length === 0) && (
 											<tr>
 												<td
-													colSpan={5}
+													colSpan={7}
 													className="py-12 text-center text-slate-400 text-sm"
 												>
 													No standings available. Join and get predicted!
@@ -693,11 +802,16 @@ export default function PoolDetailPage() {
 						className="outline-none"
 					>
 						<div className="overflow-hidden rounded-2xl glass-card border border-white/10 shadow-xl p-6 space-y-4">
-							<div className="flex items-center gap-2 text-sm text-slate-400 bg-white/5 p-3 rounded-xl border border-white/5">
-								<Info className="h-4 w-4 text-indigo-400 shrink-0" />
-								<span>
-									Predictions are hidden (🔒) until kickoff to prevent copying.
-									Hover or tap cells for detailed prediction outcomes.
+							<div className="flex items-center justify-between gap-2 text-sm text-slate-400 bg-white/5 p-3 rounded-xl border border-white/5 flex-wrap">
+								<div className="flex items-center gap-2">
+									<Info className="h-4 w-4 text-indigo-400 shrink-0" />
+									<span>
+										Predictions are hidden (🔒) until kickoff. Tap any cell to
+										view scoring breakdown.
+									</span>
+								</div>
+								<span className="text-xs text-indigo-300 font-bold">
+									Tap column headers for Community Stats 📊
 								</span>
 							</div>
 
@@ -716,10 +830,12 @@ export default function PoolDetailPage() {
 												return (
 													<th
 														key={match.id}
-														className="py-4 px-3 text-center min-w-[100px] border-l border-white/5"
+														onClick={() => handleOpenMatchInsights(match)}
+														className="py-4 px-3 text-center min-w-[105px] border-l border-white/5 cursor-pointer hover:bg-white/5 transition group"
+														title="Click to view match prediction insights"
 													>
 														<div className="flex flex-col items-center justify-center space-y-1">
-															<span className="text-white text-xs font-black">
+															<span className="text-white text-xs font-black group-hover:text-indigo-300 transition">
 																{homeName} vs {awayName}
 															</span>
 															{match.status === 'finished' ? (
@@ -728,7 +844,8 @@ export default function PoolDetailPage() {
 																</span>
 															) : match.status === 'live' ? (
 																<span className="text-[9px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded-full font-bold animate-pulse">
-																	Live
+																	{match.home_score ?? 0} -{' '}
+																	{match.away_score ?? 0} Live
 																</span>
 															) : (
 																<span className="text-[9px] text-slate-500 font-bold">
@@ -786,7 +903,8 @@ export default function PoolDetailPage() {
 																matrixData.predictions[row.user_id]?.[match.id];
 															const isMatchLocked =
 																new Date(match.kickoff_time) <= new Date() ||
-																match.status === 'finished';
+																match.status === 'finished' ||
+																match.status === 'live';
 															const isCurrentUserCell =
 																row.user_id === user?.id;
 
@@ -834,7 +952,16 @@ export default function PoolDetailPage() {
 															return (
 																<td
 																	key={match.id}
-																	className={`py-4 px-3 text-center border-l border-white/5 transition duration-150 ${cellBg}`}
+																	onClick={() => {
+																		if (pred && canReveal) {
+																			handleOpenCellBreakdown(
+																				match,
+																				pred,
+																				row.username || undefined,
+																			);
+																		}
+																	}}
+																	className={`py-4 px-3 text-center border-l border-white/5 transition duration-150 ${cellBg} ${pred && canReveal ? 'cursor-pointer hover:opacity-80' : ''}`}
 																>
 																	<div className="flex flex-col items-center justify-center">
 																		<span className={`text-xs ${cellText}`}>
@@ -912,6 +1039,43 @@ export default function PoolDetailPage() {
 					</TabsContent>
 				</Tabs>
 			</div>
+
+			{/* Phase 9: Scoring Breakdown Modal */}
+			<ScoreBreakdownModal
+				isOpen={isBreakdownOpen}
+				onClose={() => setIsBreakdownOpen(false)}
+				match={breakdownMatch}
+				prediction={breakdownPrediction}
+				username={breakdownUsername}
+			/>
+
+			{/* Phase 9: Match Pool Insights Modal */}
+			<MatchPoolInsightsModal
+				isOpen={isInsightsOpen}
+				onClose={() => setIsInsightsOpen(false)}
+				match={insightsMatch}
+				poolId={poolId}
+				poolName={pool.name}
+			/>
+
+			{/* Phase 9: Universal Scoring Rules Modal */}
+			<ScoringRulesModal
+				isOpen={isRulesModalOpen}
+				onClose={() => setIsRulesModalOpen(false)}
+			/>
+
+			{/* Phase 9: What-If Simulator */}
+			{matrixData && leaderboard && (
+				<WhatIfScenarioSimulator
+					isOpen={isSimulatorOpen}
+					onClose={() => setIsSimulatorOpen(false)}
+					matches={matrixData.matches}
+					leaderboard={leaderboard}
+					predictionsByMember={matrixData.predictions}
+					currentUserId={user?.id}
+					poolName={pool.name}
+				/>
+			)}
 		</div>
 	);
 }
