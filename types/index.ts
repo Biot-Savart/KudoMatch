@@ -125,3 +125,60 @@ export interface HeadToHeadStats {
 	points_a: number;
 	points_b: number;
 }
+
+export interface PushSubscriptionData {
+	endpoint: string;
+	p256dh: string;
+	auth: string;
+}
+
+export interface PushSubscriptionRecord extends PushSubscriptionData {
+	id: string;
+	user_id: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface NotificationPreferences {
+	user_id: string;
+	kickoff_warnings: boolean;
+	match_results: boolean;
+	weekly_digest: boolean;
+	email_notifications: boolean;
+	push_notifications: boolean;
+	created_at?: string;
+	updated_at?: string;
+}
+
+export interface NotificationPayload {
+	title: string;
+	body: string;
+	icon?: string;
+	badge?: string;
+	url?: string;
+	data?: Record<string, any>;
+}
+
+export interface KickoffReminderMatch {
+	matchId: string;
+	homeTeamName: string;
+	awayTeamName: string;
+	homeTeamLogo?: string | null;
+	awayTeamLogo?: string | null;
+	kickoffTime: string;
+	gameweek?: number | null;
+}
+
+export interface WeeklyDigestSummary {
+	userId: string;
+	username: string;
+	fullName?: string | null;
+	email?: string | null;
+	totalPoints: number;
+	pointsEarnedThisWeek: number;
+	exactPredictionsThisWeek: number;
+	totalPredictionsThisWeek: number;
+	topPoolName?: string | null;
+	topPoolRank?: number | null;
+	upcomingMatchesCount: number;
+}

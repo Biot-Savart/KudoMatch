@@ -140,5 +140,5 @@ Automate real-time updates of pool standings and profiles leaderboards whenever 
 
 ### 🚀 Phase 8.4: Notifications & Engagement
 
-- [ ] Set up Web Push notifications for matchday kickoff warnings.
-- [ ] Implement automated weekly summary emails using Resend/SendGrid.
+- [x] Set up Web Push notifications for matchday kickoff warnings.
+- [x] Implement automated weekly summary emails using Resend/SendGrid.
