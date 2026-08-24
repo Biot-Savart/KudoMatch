@@ -1,7 +1,9 @@
 import HeadToHead from '@/components/head-to-head';
 import PoolChat from '@/components/pool-chat';
 import { QueryProvider } from '@/components/query-provider';
-import { render, screen } from '@testing-library/react';
+import * as chatQueries from '@/lib/queries/chat';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 // Mock Supabase client
 vi.mock('@/lib/supabase/client', () => ({
@@ -140,19 +142,64 @@ describe('components/head-to-head', () => {
 });
 
 describe('components/pool-chat', () => {
+	const mockMessages = [
+		{
+			id: 'msg-1',
+			pool_id: 'pool-1',
+			user_id: 'user-me',
+			message: 'Arsenal will win 3-0!',
+			created_at: new Date().toISOString(),
+			profile: {
+				id: 'user-me',
+				username: 'me_user',
+				full_name: 'Me',
+				avatar_url: null,
+				total_points: 10,
+				created_at: '',
+				updated_at: '',
+			},
+		},
+		{
+			id: 'msg-2',
+			pool_id: 'pool-1',
+			user_id: 'user-other',
+			message: 'No way, Chelsea is winning!',
+			created_at: new Date().toISOString(),
+			profile: {
+				id: 'user-other',
+				username: 'other_user',
+				full_name: 'Other',
+				avatar_url: null,
+				total_points: 5,
+				created_at: '',
+				updated_at: '',
+			},
+		},
+	];
+
 	beforeEach(() => {
+		vi.restoreAllMocks();
+		vi.clearAllMocks();
+
+		vi.spyOn(chatQueries, 'fetchPoolMessages').mockResolvedValue(mockMessages);
+		vi.spyOn(chatQueries, 'sendPoolMessage').mockResolvedValue(mockMessages[0]);
+		vi.spyOn(chatQueries, 'deletePoolMessage').mockResolvedValue(true);
+
 		(globalThis as any).mockSupabaseClient.channel = vi
 			.fn()
 			.mockImplementation(() => ({
 				on: vi.fn().mockReturnThis(),
-				subscribe: vi.fn().mockReturnThis(),
+				subscribe: vi.fn().mockImplementation((cb) => {
+					if (cb) cb('SUBSCRIBED');
+					return { unsubscribe: vi.fn() };
+				}),
 			}));
 		(globalThis as any).mockSupabaseClient.removeChannel = vi
 			.fn()
 			.mockReturnValue(true);
 	});
 
-	it('renders pool banter room and displays loading state initially', () => {
+	it('renders pool banter room and displays messages once loaded', async () => {
 		render(
 			<QueryProvider>
 				<PoolChat
@@ -164,6 +211,70 @@ describe('components/pool-chat', () => {
 			</QueryProvider>,
 		);
 
-		expect(screen.getByText(/loading banter chat/i)).toBeInTheDocument();
+		await waitFor(() => {
+			expect(screen.getByText('Live Pool Banter Room')).toBeInTheDocument();
+		});
+
+		expect(screen.getByText('Arsenal will win 3-0!')).toBeInTheDocument();
+		expect(screen.getByText('No way, Chelsea is winning!')).toBeInTheDocument();
+		expect(screen.getByText('@me_user')).toBeInTheDocument();
+		expect(screen.getByText('@other_user')).toBeInTheDocument();
+	});
+
+	it('allows user to type and send a chat message', async () => {
+		const user = userEvent.setup();
+
+		render(
+			<QueryProvider>
+				<PoolChat
+					poolId="pool-1"
+					userId="user-me"
+					username="me_user"
+					isCreator={false}
+				/>
+			</QueryProvider>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText('Live Pool Banter Room')).toBeInTheDocument();
+		});
+
+		const input = screen.getByPlaceholderText('Throw some banter...');
+		await user.type(input, 'My new prediction pick!');
+
+		const submitBtn = screen.getByRole('button', { name: '' });
+		await user.click(submitBtn);
+
+		expect(chatQueries.sendPoolMessage).toHaveBeenCalledWith(
+			'pool-1',
+			'user-me',
+			'My new prediction pick!',
+		);
+	});
+
+	it('allows deleting messages when user is creator or owner', async () => {
+		window.confirm = vi.fn().mockReturnValue(true);
+		const user = userEvent.setup();
+
+		render(
+			<QueryProvider>
+				<PoolChat
+					poolId="pool-1"
+					userId="user-me"
+					username="me_user"
+					isCreator={true}
+				/>
+			</QueryProvider>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText('Live Pool Banter Room')).toBeInTheDocument();
+		});
+
+		const deleteButtons = screen.getAllByTitle('Delete message');
+		expect(deleteButtons.length).toBeGreaterThanOrEqual(1);
+
+		await user.click(deleteButtons[0]);
+		expect(chatQueries.deletePoolMessage).toHaveBeenCalledWith('msg-1');
 	});
 });

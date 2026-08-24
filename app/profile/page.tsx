@@ -1,5 +1,6 @@
 'use client';
 
+import { NotificationSettings } from '@/components/notification-settings';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -333,6 +334,8 @@ export default function ProfilePage() {
 							</form>
 						</CardContent>
 					</Card>
+
+					{user && <NotificationSettings userId={user.id} />}
 				</div>
 
 				{/* RIGHT COLUMN: BADGES & ACCOMPLISHMENTS */}
