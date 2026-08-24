@@ -70,4 +70,29 @@ describe('components/notification-settings', () => {
 			{ kickoff_warnings: false },
 		);
 	});
+
+	it('handles toggle errors gracefully', async () => {
+		const user = userEvent.setup();
+		vi.spyOn(
+			notifQueries,
+			'updateNotificationPreferences',
+		).mockRejectedValueOnce(new Error('Update failed'));
+
+		render(
+			<QueryProvider>
+				<NotificationSettings userId="user-1" />
+			</QueryProvider>,
+		);
+
+		await waitFor(() => {
+			expect(screen.getByText('Notification Alerts')).toBeInTheDocument();
+		});
+
+		const switches = screen.getAllByRole('switch');
+		await user.click(switches[0]);
+
+		await waitFor(() => {
+			expect(screen.getByText('Update failed')).toBeInTheDocument();
+		});
+	});
 });

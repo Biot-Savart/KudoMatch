@@ -37,9 +37,10 @@ export interface WeeklyDigestResult {
  */
 export async function sendWeeklyDigest(
 	options: WeeklyDigestOptions = {},
+	client?: any,
 ): Promise<WeeklyDigestResult> {
 	const { simulate = false } = options;
-	const supabase = getSupabaseClient();
+	const supabase = client || getSupabaseClient();
 
 	try {
 		console.log(
@@ -61,7 +62,7 @@ export async function sendWeeklyDigest(
 			.from('notification_preferences')
 			.select('*');
 
-		const preferencesMap = new Map(
+		const preferencesMap = new Map<string, any>(
 			(preferencesList || []).map((p: any) => [p.user_id, p]),
 		);
 

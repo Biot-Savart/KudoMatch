@@ -131,6 +131,60 @@ describe('lib/queries/notifications', () => {
 		const result = await fetchUserPushSubscriptions('user-1');
 		expect(result).toEqual(mockSubs);
 	});
+
+	it('should handle errors in fetchNotificationPreferences', async () => {
+		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+			return new MockQueryBuilder(null, new Error('Database query error'));
+		});
+
+		await expect(fetchNotificationPreferences('user-1')).rejects.toThrow(
+			'Database query error',
+		);
+	});
+
+	it('should handle errors in updateNotificationPreferences', async () => {
+		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+			return new MockQueryBuilder(null, new Error('Update failed'));
+		});
+
+		await expect(
+			updateNotificationPreferences('user-1', { kickoff_warnings: false }),
+		).rejects.toThrow('Update failed');
+	});
+
+	it('should handle errors in savePushSubscription', async () => {
+		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+			return new MockQueryBuilder(null, new Error('Save sub failed'));
+		});
+
+		await expect(
+			savePushSubscription('user-1', {
+				endpoint: 'https://push.example.com',
+				p256dh: 'p',
+				auth: 'a',
+			}),
+		).rejects.toThrow('Save sub failed');
+	});
+
+	it('should handle errors in deletePushSubscription', async () => {
+		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+			return new MockQueryBuilder(null, new Error('Delete sub failed'));
+		});
+
+		await expect(
+			deletePushSubscription('user-1', 'https://push.example.com'),
+		).rejects.toThrow('Delete sub failed');
+	});
+
+	it('should handle errors in fetchUserPushSubscriptions', async () => {
+		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+			return new MockQueryBuilder(null, new Error('Fetch subs failed'));
+		});
+
+		await expect(fetchUserPushSubscriptions('user-1')).rejects.toThrow(
+			'Fetch subs failed',
+		);
+	});
 });
 
 describe('lib/notifications/email-service', () => {
@@ -234,6 +288,43 @@ describe('lib/notifications/email-service', () => {
 		expect(res.success).toBe(true);
 		expect(res.provider).toBe('sendgrid');
 	});
+
+	it('should handle Resend API error responses', async () => {
+		process.env.RESEND_API_KEY = 're_test_invalid';
+		globalThis.fetch = vi.fn().mockResolvedValue({
+			ok: false,
+			status: 403,
+			json: vi.fn().mockResolvedValue({ message: 'Forbidden' }),
+		}) as any;
+
+		const res = await sendEmail({
+			to: 'test@example.com',
+			subject: 'Fail Resend',
+			html: '<p>Fail</p>',
+		});
+
+		expect(res.success).toBe(false);
+		expect(res.error).toBeDefined();
+	});
+
+	it('should handle SendGrid API error responses', async () => {
+		delete process.env.RESEND_API_KEY;
+		process.env.SENDGRID_API_KEY = 'SG.invalid';
+		globalThis.fetch = vi.fn().mockResolvedValue({
+			ok: false,
+			status: 401,
+			text: vi.fn().mockResolvedValue('Unauthorized'),
+		}) as any;
+
+		const res = await sendEmail({
+			to: 'test@example.com',
+			subject: 'Fail SendGrid',
+			html: '<p>Fail</p>',
+		});
+
+		expect(res.success).toBe(false);
+		expect(res.error).toBeDefined();
+	});
 });
 
 describe('lib/notifications/push-service', () => {
@@ -289,6 +380,29 @@ describe('lib/notifications/push-service', () => {
 
 		expect(result.success).toBe(false);
 		expect(result.isExpired).toBe(true);
+	});
+
+	it('should handle general push service rejection error response', async () => {
+		process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = 'test-public-key';
+		process.env.VAPID_PRIVATE_KEY = 'test-private-key';
+
+		globalThis.fetch = vi.fn().mockResolvedValue({
+			ok: false,
+			status: 500,
+			text: vi.fn().mockResolvedValue('Server Error'),
+		}) as any;
+
+		const result = await sendWebPushNotification(
+			{
+				endpoint: 'https://push.example.com/fail',
+				p256dh: 'p256dh',
+				auth: 'auth',
+			},
+			{ title: 'Server error test', body: 'Error' },
+		);
+
+		expect(result.success).toBe(false);
+		expect(result.error).toContain('500');
 	});
 
 	it('should send push notifications to user and prune expired ones', async () => {

@@ -253,9 +253,10 @@ describe('Notification Cron Routes & Scripts', () => {
 				return new MockQueryBuilder();
 			});
 
-			const result = await kickoffScript.sendKickoffReminders({
-				simulate: true,
-			});
+			const result = await kickoffScript.sendKickoffReminders(
+				{ simulate: true },
+				mockSupabaseJsClient,
+			);
 			expect(result.success).toBe(true);
 			expect(result.matchesFound).toBeGreaterThanOrEqual(1);
 		});
@@ -293,7 +294,10 @@ describe('Notification Cron Routes & Scripts', () => {
 				return new MockQueryBuilder();
 			});
 
-			const result = await digestScript.sendWeeklyDigest({ simulate: true });
+			const result = await digestScript.sendWeeklyDigest(
+				{ simulate: true },
+				mockSupabaseJsClient,
+			);
 			expect(result.success).toBe(true);
 			expect(result.digestsSent).toBeGreaterThanOrEqual(1);
 		});
