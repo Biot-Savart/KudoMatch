@@ -24,6 +24,61 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 	},
 });
 
+// Helper to find real-world API fixture matching a database match
+function findMatchingFootballDataFixture(dbMatch: any, apiMatches: any[]) {
+	// 1. Direct fixture ID match
+	if (dbMatch.external_id) {
+		const direct = apiMatches.find((m) => m.id === dbMatch.external_id);
+		if (direct) return direct;
+	}
+
+	const homeName = (dbMatch.home_team?.name || '').toLowerCase();
+	const awayName = (dbMatch.away_team?.name || '').toLowerCase();
+	const homeExtId = dbMatch.home_team?.external_id;
+	const awayExtId = dbMatch.away_team?.external_id;
+
+	// 2. Team external_id match
+	if (homeExtId && awayExtId) {
+		const byTeamIds = apiMatches.find(
+			(m) =>
+				m.homeTeam?.id === homeExtId &&
+				m.awayTeam?.id === awayExtId &&
+				(!dbMatch.matchday || m.matchday === dbMatch.matchday),
+		);
+		if (byTeamIds) return byTeamIds;
+	}
+
+	// 3. Normalized team name match
+	return apiMatches.find((m) => {
+		const apiHome = (m.homeTeam?.name || '').toLowerCase();
+		const apiAway = (m.awayTeam?.name || '').toLowerCase();
+		const isHomeMatch =
+			apiHome.includes(homeName) ||
+			homeName.includes(apiHome) ||
+			(homeName.includes('chelsea') && apiHome.includes('chelsea')) ||
+			(homeName.includes('arsenal') && apiHome.includes('arsenal')) ||
+			(homeName.includes('liverpool') && apiHome.includes('liverpool')) ||
+			(homeName.includes('manchester city') &&
+				apiHome.includes('manchester city')) ||
+			(homeName.includes('manchester united') &&
+				apiHome.includes('manchester united'));
+		const isAwayMatch =
+			apiAway.includes(awayName) ||
+			awayName.includes(apiAway) ||
+			(awayName.includes('chelsea') && apiAway.includes('chelsea')) ||
+			(awayName.includes('arsenal') && apiAway.includes('arsenal')) ||
+			(awayName.includes('liverpool') && apiAway.includes('liverpool')) ||
+			(awayName.includes('manchester city') &&
+				apiAway.includes('manchester city')) ||
+			(awayName.includes('manchester united') &&
+				apiAway.includes('manchester united'));
+
+		const matchdayMatches =
+			!dbMatch.matchday || m.matchday === dbMatch.matchday;
+		return isHomeMatch && isAwayMatch && matchdayMatches;
+	});
+}
+
 export async function fetchLiveScores(options: { simulate?: boolean } = {}) {
 	console.log('📡 Starting Live Score Ingestion...');
 
@@ -32,7 +87,7 @@ export async function fetchLiveScores(options: { simulate?: boolean } = {}) {
 	const { data: matches, error: fetchErr } = await supabase
 		.from('matches')
 		.select(
-			'id, external_id, status, home_score, away_score, kickoff_time, home_team:teams!matches_home_team_id_fkey(name), away_team:teams!matches_away_team_id_fkey(name)',
+			'id, external_id, status, matchday, home_score, away_score, kickoff_time, home_team:teams!matches_home_team_id_fkey(name, external_id, short_name), away_team:teams!matches_away_team_id_fkey(name, external_id, short_name)',
 		)
 		.or(`status.eq.live,status.eq.scheduled`)
 		.lte('kickoff_time', now.toISOString());
@@ -71,14 +126,11 @@ export async function fetchLiveScores(options: { simulate?: boolean } = {}) {
 					const apiMatches = json.matches || [];
 					usingLiveApi = true;
 
-					const apiMatchesMap = new Map();
-					apiMatches.forEach((m: any) => {
-						apiMatchesMap.set(m.id, m);
-					});
-
 					for (const dbMatch of matches) {
-						if (!dbMatch.external_id) continue;
-						const apiMatch = apiMatchesMap.get(dbMatch.external_id);
+						const apiMatch = findMatchingFootballDataFixture(
+							dbMatch,
+							apiMatches,
+						);
 						if (!apiMatch) continue;
 
 						const isFinished = apiMatch.status === 'FINISHED';
@@ -105,6 +157,7 @@ export async function fetchLiveScores(options: { simulate?: boolean } = {}) {
 									home_score: homeScore,
 									away_score: awayScore,
 									status: statusStr,
+									external_id: apiMatch.id || dbMatch.external_id,
 									updated_at: new Date().toISOString(),
 								})
 								.eq('id', dbMatch.id);
@@ -115,7 +168,7 @@ export async function fetchLiveScores(options: { simulate?: boolean } = {}) {
 								const awayName =
 									(dbMatch.away_team as any)?.name || 'Away Team';
 								console.log(
-									`   ✅ Synced: ${homeName} vs ${awayName} ➔ ${homeScore}-${awayScore} (${statusStr})`,
+									`   ✅ Synced REAL API score: ${homeName} vs ${awayName} ➔ ${homeScore}-${awayScore} (${statusStr})`,
 								);
 								updatedCount++;
 							}
@@ -210,9 +263,15 @@ export async function fetchLiveScores(options: { simulate?: boolean } = {}) {
 		}
 	}
 
-	// Option B: Fallback / Mock Simulation
-	if (!usingLiveApi || options.simulate) {
-		console.log('🎲 Running fallback simulation for score ingestion...');
+	// Option B: Fallback / Mock Simulation (if API didn't find matching live fixtures or simulate requested)
+	if (!usingLiveApi || options.simulate || updatedCount === 0) {
+		if (usingLiveApi && updatedCount === 0 && !options.simulate) {
+			console.log(
+				'ℹ️ Live API found 0 matching fixture results for current DB match IDs. Falling back to simulation...',
+			);
+		} else {
+			console.log('🎲 Running fallback simulation for score ingestion...');
+		}
 		// For simulation, resolve half of the matches as live (in progress) and half as finished (FT) with typical scorelines
 		const typicalScores = [
 			[1, 0],

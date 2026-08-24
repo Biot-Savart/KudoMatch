@@ -182,3 +182,39 @@ export interface WeeklyDigestSummary {
 	topPoolRank?: number | null;
 	upcomingMatchesCount: number;
 }
+
+export interface MatchParticipantPick {
+	user_id: string;
+	username: string;
+	avatar_url?: string | null;
+	full_name?: string | null;
+	predicted_home_score: number;
+	predicted_away_score: number;
+	points_earned: number;
+}
+
+export interface MatchCommunityInsights {
+	match_id: string;
+	is_locked: boolean;
+	total_predictions: number;
+	outcome_distribution: {
+		home_win_count: number;
+		draw_count: number;
+		away_win_count: number;
+		home_win_pct: number;
+		draw_pct: number;
+		away_win_pct: number;
+	};
+	points_distribution: {
+		exact_3pts: number;
+		diff_2pts: number;
+		winner_1pt: number;
+		miss_0pts: number;
+	};
+	top_scores: {
+		scoreline: string;
+		count: number;
+		percentage: number;
+	}[];
+	participants: MatchParticipantPick[];
+}

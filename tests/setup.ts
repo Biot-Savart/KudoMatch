@@ -2,9 +2,25 @@ import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
 // Mock dotenv globally
-vi.mock('dotenv', () => ({
-	config: vi.fn(),
-}));
+vi.mock('dotenv', () => {
+	const configFn = vi.fn();
+	return {
+		config: configFn,
+		default: {
+			config: configFn,
+		},
+	};
+});
+
+// Mock canvas-confetti globally
+vi.mock('canvas-confetti', () => {
+	const confettiMock = vi.fn();
+	return {
+		default: confettiMock,
+		create: () => confettiMock,
+		reset: vi.fn(),
+	};
+});
 
 // Mock next/headers
 vi.mock('next/headers', () => ({
