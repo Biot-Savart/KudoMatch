@@ -141,6 +141,127 @@ export interface IngestionQuarantine {
 	updated_at: string;
 }
 
+// Phase 12: Prediction Markets, Rulesets, Settlement & Scoped Pools Domain Models
+
+export interface ScoringRuleset {
+	id: string; // bigint mapped to string
+	sport_slug: string;
+	market_kind: 'team_scoreline';
+	evaluator_key: string;
+	version: number;
+	max_raw_points: number;
+	evaluator_config: Record<string, any>;
+	ui_config: Record<string, any>;
+	is_active: boolean;
+	created_at: string;
+	updated_at: string;
+	tiers?: ScoringRuleTier[];
+}
+
+export interface ScoringRuleTier {
+	ruleset_id: string; // bigint mapped to string
+	tier_code:
+		| 'exact_score'
+		| 'exact_margin'
+		| 'close_margin'
+		| 'outcome'
+		| 'miss';
+	raw_points: number;
+	rank_order: number;
+	label: string;
+	description: string;
+	example: string | null;
+}
+
+export interface EventMarket {
+	id: string; // bigint mapped to string
+	event_id: string; // bigint mapped to string
+	market_kind: 'team_scoreline';
+	payload_schema_version: number;
+	ruleset_id: string; // bigint mapped to string
+	sequence_no: number;
+	is_current: boolean;
+	opens_at: string;
+	locks_at: string;
+	status: 'draft' | 'open' | 'locked' | 'settled' | 'void';
+	created_at: string;
+	updated_at: string;
+	event?: SportEvent;
+	ruleset?: ScoringRuleset;
+}
+
+export interface MarketSelection {
+	kind: 'team_scoreline';
+	version: number;
+	home: number;
+	away: number;
+}
+
+export interface MarketPrediction {
+	id: string; // bigint mapped to string
+	user_id: string; // UUID
+	event_market_id: string; // bigint mapped to string
+	selection: MarketSelection;
+	settlement_status: 'pending' | 'settled' | 'void';
+	ruleset_id: string | null;
+	result_revision: number | null;
+	tier_code:
+		| 'exact_score'
+		| 'exact_margin'
+		| 'close_margin'
+		| 'outcome'
+		| 'miss'
+		| null;
+	raw_points: number | null;
+	normalized_basis_points: number | null;
+	settled_at: string | null;
+	created_at: string;
+	updated_at: string;
+	market?: EventMarket;
+	profile?: Profile;
+}
+
+export interface MarketResult {
+	event_market_id: string; // bigint mapped to string
+	result: MarketSelection;
+	revision: number;
+	status: 'provisional' | 'final' | 'void';
+	source_kind: 'provider' | 'manual';
+	source_ref: string | null;
+	source_priority: number;
+	finalized_at: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface ScopedPool {
+	id: string; // UUID
+	name: string;
+	created_by: string; // UUID
+	invite_code: string;
+	scope_kind: 'all_sports' | 'sport' | 'competition' | 'edition';
+	sport_slug: string | null;
+	competition_id: string | null;
+	edition_id: string | null;
+	scoring_mode: 'raw' | 'normalized';
+	scoring_starts_at: string;
+	is_private: boolean;
+	created_at: string;
+	updated_at: string;
+	creator?: Profile;
+}
+
+export interface PoolMembershipEpisode {
+	id: string; // bigint mapped to string
+	pool_id: string; // UUID
+	user_id: string; // UUID
+	role: 'admin' | 'member';
+	joined_at: string;
+	left_at: string | null;
+	created_at: string;
+	profile?: Profile;
+}
+
 // Legacy Application Types (Retained for application stability until Phase 13 Refactor)
 
 export interface Profile {
