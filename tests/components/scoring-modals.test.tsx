@@ -114,6 +114,7 @@ describe('Phase 9 Visual Scoring Components', () => {
 			expect(screen.getByText('Scoring Breakdown')).toBeInTheDocument();
 			expect(screen.getByText('+3 PTS')).toBeInTheDocument();
 			expect(screen.getByText('Exact Score')).toBeInTheDocument();
+			expect(screen.getAllByText('HIT (+1)').length).toBe(3);
 			expect(
 				screen.getByText(
 					/You correctly predicted 2 home goals and 1 away goals/,
@@ -122,6 +123,29 @@ describe('Phase 9 Visual Scoring Components', () => {
 
 			fireEvent.click(screen.getByRole('button', { name: /Close Breakdown/i }));
 			expect(handleClose).toHaveBeenCalledTimes(1);
+		});
+
+		it('renders HIT and MISS appropriately for partially correct predictions', () => {
+			const partialPrediction: Prediction = {
+				...mockPrediction,
+				predicted_home_score: 3,
+				predicted_away_score: 0, // Actual is 2-1: Outcome is Home Win (HIT), Goal Diff is 3 vs 1 (MISS), Exact is 3-0 vs 2-1 (MISS)
+				points_earned: 1,
+			};
+
+			render(
+				<ScoreBreakdownModal
+					isOpen={true}
+					onClose={vi.fn()}
+					match={mockMatch}
+					prediction={partialPrediction}
+				/>,
+			);
+
+			expect(screen.getByText('+1 PTS')).toBeInTheDocument();
+			expect(screen.getByText('Winner Only')).toBeInTheDocument();
+			expect(screen.getAllByText('HIT (+1)').length).toBe(1);
+			expect(screen.getAllByText('MISS').length).toBe(2);
 		});
 
 		it('toggles universal rules accordion inside breakdown modal', () => {
