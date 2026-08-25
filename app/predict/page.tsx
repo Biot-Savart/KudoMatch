@@ -1,37 +1,35 @@
 'use client';
 
 import { ErrorBoundary } from '@/components/error-boundary';
+import { EventCard } from '@/components/event-card';
 import { GameweekPerformanceSummary } from '@/components/gameweek-performance-summary';
-import { MatchCard } from '@/components/match-card';
 import { MatchPoolInsightsModal } from '@/components/match-pool-insights-modal';
 import { PredictionDrawer } from '@/components/prediction-drawer';
 import { ScoreBreakdownModal } from '@/components/score-breakdown-modal';
 import { ScoringRulesModal } from '@/components/scoring-rules-modal';
 import { Button } from '@/components/ui/button';
 import { MatchCardSkeleton } from '@/components/ui/match-card-skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-	fetchActiveMatchday,
-	fetchAvailableMatchdays,
-	fetchMatches,
-} from '@/lib/queries/matches';
-import {
-	fetchUserPredictions,
-	upsertPrediction,
-} from '@/lib/queries/predictions';
+	fetchActiveCompetitionEditions,
+	fetchEditionRounds
+} from '@/lib/queries/competitions';
+import { eventsQueryKeys, fetchEvents } from '@/lib/queries/events';
+import { submitPrediction } from '@/lib/queries/predictions';
+import { fetchActiveSports } from '@/lib/queries/sports';
 import { createClient } from '@/lib/supabase/client';
-import { Match, Prediction } from '@/types';
+import {
+	MarketPrediction,
+	Sport,
+	SportEvent,
+	TeamScorelineSelection,
+} from '@/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-	AlertCircle,
 	BookOpen,
 	ChevronLeft,
 	ChevronRight,
-	Clock,
-	Compass,
-	Trophy,
+	Clock
 } from 'lucide-react';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -45,9 +43,13 @@ function PredictContent() {
 
 	const [user, setUser] = useState<any>(null);
 	const [userLoading, setUserLoading] = useState(true);
-	const [activeMatch, setActiveMatch] = useState<Match | null>(null);
+	const [activeEvent, setActiveEvent] = useState<SportEvent | null>(null);
 	const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-	const [matchday, setMatchday] = useState<number>(12);
+
+	// URL-backed Filter Dimensions
+	const sportParam = searchParams.get('sport') || 'football';
+	const editionParam = searchParams.get('edition') || '';
+	const roundParam = searchParams.get('round') || '';
 
 	const scrollRail = (direction: 'left' | 'right') => {
 		if (railRef.current) {
@@ -58,13 +60,13 @@ function PredictContent() {
 		}
 	};
 
-	// Modal States for Phase 9
-	const [breakdownMatch, setBreakdownMatch] = useState<Match | null>(null);
+	// Modals State
+	const [breakdownEvent, setBreakdownEvent] = useState<SportEvent | null>(null);
 	const [breakdownPrediction, setBreakdownPrediction] =
-		useState<Prediction | null>(null);
+		useState<MarketPrediction | null>(null);
 	const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
 
-	const [insightsMatch, setInsightsMatch] = useState<Match | null>(null);
+	const [insightsEvent, setInsightsEvent] = useState<SportEvent | null>(null);
 	const [isInsightsOpen, setIsInsightsOpen] = useState(false);
 
 	const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
@@ -81,605 +83,346 @@ function PredictContent() {
 		getSession();
 	}, [supabase]);
 
-	// Fetch available and active matchday
-	const { data: availableMatchdays = [12] } = useQuery({
-		queryKey: ['available-matchdays'],
-		queryFn: fetchAvailableMatchdays,
+	// Fetch active sports
+	const { data: sports = [] } = useQuery<Sport[]>({
+		queryKey: ['sports', 'active'],
+		queryFn: fetchActiveSports,
 	});
 
-	const { data: activeMatchday } = useQuery({
-		queryKey: ['active-matchday'],
-		queryFn: fetchActiveMatchday,
+	// Fetch active editions for selected sport
+	const { data: editions = [] } = useQuery({
+		queryKey: ['competition_editions', sportParam],
+		queryFn: () => fetchActiveCompetitionEditions(),
 	});
 
-	// Sync matchday state from query parameter or activeMatchday query
-	useEffect(() => {
-		const paramMatchday =
-			searchParams.get('matchday') || searchParams.get('round');
-		if (paramMatchday) {
-			const parsed = parseInt(paramMatchday, 10);
-			if (!isNaN(parsed)) {
-				setMatchday(parsed);
-				return;
-			}
-		}
-		if (activeMatchday !== undefined) {
-			setMatchday(activeMatchday);
-		}
-	}, [searchParams, activeMatchday]);
+	const activeEdition =
+		editions.find((ed) => ed.id === editionParam) ??
+		editions.find((ed) => ed.competition?.sport_slug === sportParam) ??
+		editions[0];
 
-	// Setup Realtime Subscriptions for Matches and Predictions
+	const activeEditionId = activeEdition?.id;
+
+	// Fetch rounds for active edition
+	const { data: availableRounds = [] } = useQuery<string[]>({
+		queryKey: ['edition_rounds', activeEditionId ?? 'none'],
+		queryFn: () =>
+			activeEditionId
+				? fetchEditionRounds(activeEditionId)
+				: Promise.resolve([]),
+		enabled: !!activeEditionId,
+	});
+
+	const activeRound =
+		roundParam && availableRounds.includes(roundParam)
+			? roundParam
+			: availableRounds[0] || 'Round 1';
+
+	// Update URL when dimension changes
+	const updateFilters = (sport: string, editionId?: string, round?: string) => {
+		const params = new URLSearchParams();
+		params.set('sport', sport);
+		if (editionId) params.set('edition', editionId);
+		if (round) params.set('round', round);
+		router.push(`/predict?${params.toString()}`);
+	};
+
+	// Setup Realtime Subscriptions
 	useEffect(() => {
-		const matchesChannel = supabase
-			.channel('public:matches')
+		const channel = supabase
+			.channel('public:events_realtime')
 			.on(
 				'postgres_changes',
 				{
 					event: '*',
 					schema: 'public',
-					table: 'matches',
+					table: 'events',
 				},
 				() => {
-					queryClient.invalidateQueries({ queryKey: ['matches'] });
+					queryClient.invalidateQueries({ queryKey: eventsQueryKeys.all });
+				},
+			)
+			.on(
+				'postgres_changes',
+				{
+					event: '*',
+					schema: 'public',
+					table: 'market_results',
+				},
+				() => {
+					queryClient.invalidateQueries({ queryKey: eventsQueryKeys.all });
 				},
 			)
 			.subscribe();
 
-		let predictionsChannel: any = null;
-		if (user?.id) {
-			predictionsChannel = supabase
-				.channel(`public:predictions:user_id=eq.${user.id}`)
-				.on(
-					'postgres_changes',
-					{
-						event: '*',
-						schema: 'public',
-						table: 'predictions',
-						filter: `user_id=eq.${user.id}`,
-					},
-					() => {
-						queryClient.invalidateQueries({
-							queryKey: ['predictions', user.id],
-						});
-					},
-				)
-				.subscribe();
-		}
-
 		return () => {
-			supabase.removeChannel(matchesChannel);
-			if (predictionsChannel) {
-				supabase.removeChannel(predictionsChannel);
-			}
+			supabase.removeChannel(channel);
 		};
-	}, [supabase, queryClient, user?.id]);
+	}, [supabase, queryClient]);
 
-	// Query Matches
-	const { data: matches, isLoading: matchesLoading } = useQuery<Match[]>({
-		queryKey: ['matches', matchday],
-		queryFn: () => fetchMatches(matchday),
+	// Fetch Events
+	const {
+		data: events = [],
+		isLoading: eventsLoading,
+		error: eventsError,
+	} = useQuery({
+		queryKey: eventsQueryKeys.list({
+			sportSlug: sportParam,
+			editionId: activeEditionId,
+			roundLabel: activeRound,
+			userId: user?.id,
+		}),
+		queryFn: () =>
+			fetchEvents({
+				sportSlug: sportParam,
+				editionId: activeEditionId,
+				roundLabel: activeRound,
+				userId: user?.id,
+			}),
+		enabled: !userLoading,
 	});
 
-	// Query User Predictions
-	const { data: predictions, isLoading: predictionsLoading } = useQuery<
-		Prediction[]
-	>({
-		queryKey: ['predictions', user?.id],
-		queryFn: () => fetchUserPredictions(user?.id!),
-		enabled: !!user?.id,
-	});
-
-	const saveMutation = useMutation({
-		mutationFn: ({
-			matchId,
-			homeScore,
-			awayScore,
+	// Quick predict mutation
+	const quickPredictMutation = useMutation({
+		mutationFn: async ({
+			marketId,
+			home,
+			away,
 		}: {
-			matchId: string;
-			homeScore: number;
-			awayScore: number;
+			marketId: string;
+			home: number;
+			away: number;
 		}) => {
-			if (!user?.id) throw new Error('Auth required');
-			return upsertPrediction(user.id, matchId, homeScore, awayScore);
+			if (!user?.id) throw new Error('Authentication required');
+			const selection: TeamScorelineSelection = {
+				kind: 'team_scoreline',
+				version: 1,
+				home,
+				away,
+			};
+			return submitPrediction(user.id, marketId, selection);
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ['predictions', user?.id] });
-			toast.success('Quick pick saved!');
+			queryClient.invalidateQueries({ queryKey: eventsQueryKeys.all });
+			toast.success('Quick pick submitted!');
 		},
 		onError: (err: any) => {
-			toast.error(err.message || 'Failed to save quick pick.');
+			toast.error(err.message || 'Failed to submit quick prediction.');
 		},
 	});
 
-	const handlePredictClick = (match: Match) => {
-		if (!user) {
-			toast.error('Please sign in to make predictions!');
-			return;
-		}
-		setActiveMatch(match);
+	const handleOpenPredictDrawer = (event: SportEvent) => {
+		setActiveEvent(event);
 		setIsDrawerOpen(true);
 	};
 
-	const handleQuickPredictSave = (
-		matchId: string,
-		homeScore: number,
-		awayScore: number,
-	) => {
-		saveMutation.mutate({ matchId, homeScore, awayScore });
+	const handleQuickPredict = (marketId: string, home: number, away: number) => {
+		if (!user) {
+			toast.error('Please sign in to make predictions!');
+			router.push('/login');
+			return;
+		}
+		quickPredictMutation.mutate({ marketId, home, away });
 	};
 
 	const handleOpenBreakdown = (
-		match: Match,
-		prediction?: Prediction | null,
+		event: SportEvent,
+		prediction?: MarketPrediction | null,
 	) => {
-		setBreakdownMatch(match);
-		setBreakdownPrediction(prediction || null);
+		setBreakdownEvent(event);
+		setBreakdownPrediction(prediction ?? null);
 		setIsBreakdownOpen(true);
 	};
 
-	const handleOpenInsights = (match: Match) => {
-		setInsightsMatch(match);
+	const handleOpenInsights = (event: SportEvent) => {
+		setInsightsEvent(event);
 		setIsInsightsOpen(true);
 	};
 
-	const isLoading =
-		userLoading || matchesLoading || (user?.id && predictionsLoading);
-
-	if (isLoading) {
-		return (
-			<main className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto space-y-8">
-				{/* Page Header Skeleton */}
-				<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
-					<div className="space-y-2">
-						<div className="h-8 w-48 bg-slate-800 rounded animate-pulse" />
-						<div className="h-4 w-72 bg-slate-800/65 rounded animate-pulse" />
-					</div>
-					<div className="h-10 w-36 bg-slate-800/40 rounded-xl animate-pulse" />
-				</div>
-
-				{/* Match Cards Skeleton Array */}
-				<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-					{[...Array(6)].map((_, i) => (
-						<MatchCardSkeleton key={i} />
-					))}
-				</div>
-			</main>
-		);
+	// Map of predictions for summary calculations
+	const predictionsMap = new Map<string, MarketPrediction>();
+	for (const ev of events) {
+		const pred = ev.current_market?.user_prediction;
+		if (pred) {
+			predictionsMap.set(ev.id, pred);
+			if (ev.current_market) {
+				predictionsMap.set(ev.current_market.id, pred);
+			}
+		}
 	}
 
-	// Map predictions to matches for easy lookup
-	const predictionMap = new Map<string, Prediction>();
-	predictions?.forEach((p) => {
-		predictionMap.set(p.match_id, p);
-	});
-
-	// Grouping predictions status
-	const predictedMatches =
-		matches?.filter((m) => predictionMap.has(m.id)) || [];
-	const unpredictedMatches =
-		matches?.filter((m) => !predictionMap.has(m.id)) || [];
-	const finishedMatches = matches?.filter((m) => m.status === 'finished') || [];
-	const liveMatches = matches?.filter((m) => m.status === 'live') || [];
-
-	// Calculate overall locking countdown (earliest match kickoff time)
-	const getRoundLockText = () => {
-		if (!matches || matches.length === 0) return '';
-		const earliest = [...matches].sort(
-			(a, b) =>
-				new Date(a.kickoff_time).getTime() - new Date(b.kickoff_time).getTime(),
-		)[0];
-		const diff = new Date(earliest.kickoff_time).getTime() - Date.now();
-
-		if (diff <= 0) return 'Predictions Locked';
-
-		const hours = Math.floor(diff / (1000 * 60 * 60));
-		const days = Math.floor(hours / 24);
-
-		if (days > 0) return `Round locks in ${days} days`;
-		return `Round locks in ${hours} hours`;
-	};
-
-	const selectedExistingPrediction = activeMatch
-		? predictionMap.get(activeMatch.id)
-		: null;
-
-	const handleMatchdayChange = (newDay: number) => {
-		setMatchday(newDay);
-		const params = new URLSearchParams(window.location.search);
-		params.set('matchday', newDay.toString());
-		router.push(`${window.location.pathname}?${params.toString()}`);
-	};
+	const scheduledEvents = events.filter((e) => e.status === 'scheduled');
+	const inPlayEvents = events.filter((e) => e.status === 'live');
+	const completedEvents = events.filter((e) => e.status === 'completed');
 
 	return (
-		<main className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto space-y-8">
-			{/* Page Header */}
-			<div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/10 pb-6">
-				<div className="space-y-1">
-					<h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-3">
-						<div className="p-2 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 shadow-lg shadow-amber-500/20 text-white">
-							<Trophy className="h-6 w-6" />
-						</div>
-						<span>Predictions Hub</span>
+		<div className="min-h-screen bg-slate-950 text-white pt-20 pb-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
+			{/* Top Hero Banner */}
+			<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-6 sm:p-8 rounded-3xl glass-card border border-white/10 bg-gradient-to-r from-indigo-950/40 via-slate-900/60 to-purple-950/40 shadow-2xl">
+				<div className="space-y-2">
+					<div className="flex items-center gap-2">
+						<span className="px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+							{activeEdition?.name ?? 'Premier League'}
+						</span>
+						<span className="text-xs text-slate-400 font-medium">
+							{activeRound}
+						</span>
+					</div>
+					<h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+						Prediction Arena
 					</h1>
-					<p className="text-sm text-slate-400">
-						Lock in your exact scorelines to climb the global leaderboard and
-						win pool honors!
+					<p className="text-xs sm:text-sm text-slate-400 max-w-xl">
+						Dial in exact scorelines before kickoff locks to climb private pool
+						leaderboards and global ranks.
 					</p>
 				</div>
 
-				<div className="flex flex-wrap items-center gap-3">
-					{/* Rules Helper Trigger */}
+				{/* Sport & Edition Selectors */}
+				<div className="flex items-center gap-2 flex-wrap">
+					{sports.map((sp) => (
+						<button
+							key={sp.slug}
+							onClick={() => updateFilters(sp.slug, undefined, undefined)}
+							className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+								sportParam === sp.slug
+									? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
+									: 'bg-white/5 text-slate-400 hover:bg-white/10'
+							}`}
+						>
+							<span>{sp.slug === 'rugby_union' ? '🏉' : '⚽'}</span>
+							<span>{sp.name}</span>
+						</button>
+					))}
+
 					<Button
 						variant="outline"
+						size="sm"
 						onClick={() => setIsRulesModalOpen(true)}
-						className="border-white/10 hover:bg-white/10 text-slate-300 text-xs font-bold gap-1.5 rounded-xl h-10 shadow-sm"
+						className="border-white/10 hover:bg-white/5 text-slate-300 text-xs font-semibold rounded-xl h-10 gap-1.5 ml-2"
 					>
 						<BookOpen className="h-4 w-4 text-indigo-400" />
-						<span>Point Rules</span>
+						<span>Scoring Rules</span>
 					</Button>
-
-					{/* Matchday Select Dropdown for Keyboard/Screen-reader accessibility */}
-					<div className="flex items-center gap-2">
-						<span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
-							Round:
-						</span>
-						<select
-							value={matchday}
-							aria-label="Select Matchweek"
-							onChange={(e) =>
-								handleMatchdayChange(parseInt(e.target.value, 10))
-							}
-							className="bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 text-sm font-extrabold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer hover:bg-white/[0.08] transition"
-						>
-							{availableMatchdays.map((day) => (
-								<option
-									key={day}
-									value={day}
-									className="bg-slate-950 text-white font-bold"
-								>
-									Matchweek {day} {day === activeMatchday ? '(Current)' : ''}
-								</option>
-							))}
-						</select>
-					</div>
-
-					{/* Locking Countdown banner */}
-					<div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 font-bold text-xs shadow-inner">
-						<Clock className="h-4 w-4 animate-pulse" />
-						<span>{getRoundLockText()}</span>
-					</div>
 				</div>
 			</div>
 
-			{/* Horizontal Gameweek Rail with Quick Scroll Controls */}
-			<div className="relative flex items-center gap-1.5">
-				<button
-					type="button"
-					onClick={() => scrollRail('left')}
-					aria-label="Scroll matchweeks left"
-					title="Scroll matchweeks left"
-					className="h-9 w-9 shrink-0 rounded-xl glass-card border border-white/10 flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition active:scale-90 shadow-md"
-				>
-					<ChevronLeft className="h-4 w-4" />
-				</button>
+			{/* Round Navigation Pill Rail */}
+			{availableRounds.length > 1 && (
+				<div className="relative flex items-center">
+					<button
+						onClick={() => scrollRail('left')}
+						className="hidden sm:flex absolute -left-4 z-10 h-8 w-8 rounded-full bg-slate-900/90 border border-white/10 items-center justify-center text-slate-300 hover:text-white shadow-lg"
+					>
+						<ChevronLeft className="h-4 w-4" />
+					</button>
 
-				<div
-					ref={railRef}
-					className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none no-scrollbar flex-1 scroll-smooth"
-				>
-					{availableMatchdays.map((day) => {
-						const isSelected = day === matchday;
-						const isCurrent = day === activeMatchday;
-						return (
+					<div
+						ref={railRef}
+						className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-1 w-full"
+					>
+						{availableRounds.map((r) => (
 							<button
-								key={day}
-								onClick={() => handleMatchdayChange(day)}
-								className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black transition-all duration-200 active:scale-95 ${
-									isSelected
-										? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40'
-										: 'glass-pill text-slate-400 hover:text-white hover:bg-white/10 hover:border-white/20'
+								key={r}
+								onClick={() => updateFilters(sportParam, activeEditionId, r)}
+								className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition ${
+									activeRound === r
+										? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 border border-indigo-500'
+										: 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5'
 								}`}
 							>
-								<span>GW {day}</span>
-								{isCurrent && (
-									<span
-										className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${isSelected ? 'bg-white/20 text-white' : 'bg-indigo-500/20 text-indigo-300'}`}
-									>
-										Active
-									</span>
-								)}
+								{r}
 							</button>
-						);
-					})}
-				</div>
-
-				<button
-					type="button"
-					onClick={() => scrollRail('right')}
-					aria-label="Scroll matchweeks right"
-					title="Scroll matchweeks right"
-					className="h-9 w-9 shrink-0 rounded-xl glass-card border border-white/10 flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition active:scale-90 shadow-md"
-				>
-					<ChevronRight className="h-4 w-4" />
-				</button>
-			</div>
-
-			{/* Live In-Play Match Ticker Banner (if active live matches exist in current round) */}
-			{matches && matches.some((m) => m.status === 'live') && (
-				<div className="rounded-2xl p-4 bg-gradient-to-r from-red-950/40 via-slate-900/60 to-red-950/40 border border-red-500/30 shadow-glow-live flex flex-col sm:flex-row items-center justify-between gap-4">
-					<div className="flex items-center gap-3">
-						<span className="relative flex h-3 w-3">
-							<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-							<span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-						</span>
-						<div>
-							<h4 className="text-xs font-black uppercase text-red-400 tracking-wider">
-								In-Play Action Live Now
-							</h4>
-							<p className="text-xs text-slate-300 font-medium">
-								Live score updates and in-play bonus points are streaming in
-								real-time.
-							</p>
-						</div>
+						))}
 					</div>
-					<div className="flex items-center gap-2">
-						{matches
-							.filter((m) => m.status === 'live')
-							.map((m) => (
-								<div
-									key={m.id}
-									className="px-3 py-1 rounded-xl bg-black/40 border border-red-500/20 text-xs font-bold text-white flex items-center gap-2"
-								>
-									<span>
-										{m.home_team?.short_name ||
-											m.home_team?.name?.substring(0, 3)}
-									</span>
-									<span className="text-red-400 tabular-numbers font-black">
-										{m.home_score ?? 0} - {m.away_score ?? 0}
-									</span>
-									<span>
-										{m.away_team?.short_name ||
-											m.away_team?.name?.substring(0, 3)}
-									</span>
-								</div>
-							))}
+
+					<button
+						onClick={() => scrollRail('right')}
+						className="hidden sm:flex absolute -right-4 z-10 h-8 w-8 rounded-full bg-slate-900/90 border border-white/10 items-center justify-center text-slate-300 hover:text-white shadow-lg"
+					>
+						<ChevronRight className="h-4 w-4" />
+					</button>
+				</div>
+			)}
+
+			{/* Gameweek Performance Summary */}
+			<GameweekPerformanceSummary
+				events={events}
+				predictionsMap={predictionsMap}
+				onOpenRulesModal={() => setIsRulesModalOpen(true)}
+				roundLabel={activeRound}
+			/>
+
+			{/* Event Cards Grid */}
+			<div className="space-y-6">
+				<div className="flex items-center justify-between">
+					<h2 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+						<Clock className="h-5 w-5 text-indigo-400" />
+						<span>Fixtures & Predictions</span>
+					</h2>
+					<span className="text-xs text-slate-400">
+						{events.length} Match{events.length !== 1 ? 'es' : ''} Listed
+					</span>
+				</div>
+
+				{eventsLoading ? (
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+						{Array.from({ length: 6 }).map((_, idx) => (
+							<MatchCardSkeleton key={idx} />
+						))}
 					</div>
-				</div>
-			)}
-
-			{!user && (
-				<div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-start gap-3 max-w-md mx-auto text-indigo-300 font-semibold text-xs">
-					<AlertCircle className="h-5 w-5 shrink-0" />
-					<p>
-						You are viewing matches in spectator mode. Please{' '}
-						<Link
-							href="/login"
-							className="underline font-bold text-white"
-						>
-							Sign In
-						</Link>{' '}
-						to save scoreline picks.
-					</p>
-				</div>
-			)}
-
-			{/* MATCHWEEK PERFORMANCE SUMMARY */}
-			{user && matches && matches.length > 0 && (
-				<GameweekPerformanceSummary
-					matches={matches}
-					predictionsMap={predictionMap}
-					matchday={matchday}
-					onOpenRulesModal={() => setIsRulesModalOpen(true)}
-				/>
-			)}
-
-			{/* FILTER TABS */}
-			<Tabs
-				defaultValue="all"
-				className="space-y-6"
-			>
-				<div className="flex justify-center sm:justify-start">
-					<TabsList className="bg-white/[0.02] border border-white/5 p-1 rounded-xl">
-						<TabsTrigger
-							value="all"
-							className="rounded-lg font-bold text-xs tracking-wide"
-						>
-							All Matches ({matches?.length || 0})
-						</TabsTrigger>
-						{liveMatches.length > 0 && (
-							<TabsTrigger
-								value="live"
-								className="rounded-lg font-bold text-xs tracking-wide text-red-400"
-							>
-								Live In-Play ({liveMatches.length})
-							</TabsTrigger>
-						)}
-						<TabsTrigger
-							value="unpredicted"
-							className="rounded-lg font-bold text-xs tracking-wide"
-						>
-							Unpredicted ({unpredictedMatches.length})
-						</TabsTrigger>
-						<TabsTrigger
-							value="predicted"
-							className="rounded-lg font-bold text-xs tracking-wide"
-						>
-							Predicted ({predictedMatches.length})
-						</TabsTrigger>
-						<TabsTrigger
-							value="finished"
-							className="rounded-lg font-bold text-xs tracking-wide"
-						>
-							Finished ({finishedMatches.length})
-						</TabsTrigger>
-					</TabsList>
-				</div>
-
-				{/* Tab contents */}
-				<TabsContent
-					value="all"
-					className="mt-0"
-				>
-					<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-						{matches?.map((match) => (
-							<MatchCard
-								key={match.id}
-								match={match}
-								userId={user?.id || null}
-								existingPrediction={predictionMap.get(match.id)}
-								onPredict={handlePredictClick}
-								onQuickPredict={handleQuickPredictSave}
+				) : events.length === 0 ? (
+					<div className="text-center py-16 rounded-3xl glass-card border border-white/10 p-8 text-slate-400 space-y-3">
+						<p className="text-sm font-semibold">
+							No fixtures available for {activeRound}.
+						</p>
+						<p className="text-xs text-slate-500">
+							Check other rounds or sports above.
+						</p>
+					</div>
+				) : (
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+						{events.map((event) => (
+							<EventCard
+								key={event.id}
+								event={event}
+								userId={user?.id ?? null}
+								existingPrediction={event.current_market?.user_prediction}
+								onPredict={handleOpenPredictDrawer}
+								onQuickPredict={handleQuickPredict}
 								onBreakdownClick={handleOpenBreakdown}
 								onInsightsClick={handleOpenInsights}
 							/>
 						))}
 					</div>
-				</TabsContent>
-
-				{liveMatches.length > 0 && (
-					<TabsContent
-						value="live"
-						className="mt-0"
-					>
-						<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-							{liveMatches.map((match) => (
-								<MatchCard
-									key={match.id}
-									match={match}
-									userId={user?.id || null}
-									existingPrediction={predictionMap.get(match.id)}
-									onPredict={handlePredictClick}
-									onQuickPredict={handleQuickPredictSave}
-									onBreakdownClick={handleOpenBreakdown}
-									onInsightsClick={handleOpenInsights}
-								/>
-							))}
-						</div>
-					</TabsContent>
 				)}
+			</div>
 
-				<TabsContent
-					value="unpredicted"
-					className="mt-0"
-				>
-					{unpredictedMatches.length === 0 ? (
-						<div className="py-16 text-center text-slate-500 flex flex-col items-center gap-3">
-							<Compass className="h-8 w-8 text-indigo-500/30" />
-							<p className="font-semibold text-sm">
-								Perfect Score! All matches have been predicted.
-							</p>
-						</div>
-					) : (
-						<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-							{unpredictedMatches.map((match) => (
-								<MatchCard
-									key={match.id}
-									match={match}
-									userId={user?.id || null}
-									existingPrediction={undefined}
-									onPredict={handlePredictClick}
-									onQuickPredict={handleQuickPredictSave}
-									onBreakdownClick={handleOpenBreakdown}
-									onInsightsClick={handleOpenInsights}
-								/>
-							))}
-						</div>
-					)}
-				</TabsContent>
-
-				<TabsContent
-					value="predicted"
-					className="mt-0"
-				>
-					{predictedMatches.length === 0 ? (
-						<div className="py-16 text-center text-slate-500 flex flex-col items-center gap-3">
-							<Trophy className="h-8 w-8 text-indigo-500/30" />
-							<p className="font-semibold text-sm">
-								You haven&apos;t placed any predictions yet. Get picking!
-							</p>
-						</div>
-					) : (
-						<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-							{predictedMatches.map((match) => (
-								<MatchCard
-									key={match.id}
-									match={match}
-									userId={user?.id || null}
-									existingPrediction={predictionMap.get(match.id)}
-									onPredict={handlePredictClick}
-									onQuickPredict={handleQuickPredictSave}
-									onBreakdownClick={handleOpenBreakdown}
-									onInsightsClick={handleOpenInsights}
-								/>
-							))}
-						</div>
-					)}
-				</TabsContent>
-
-				<TabsContent
-					value="finished"
-					className="mt-0"
-				>
-					{finishedMatches.length === 0 ? (
-						<div className="py-16 text-center text-slate-500 flex flex-col items-center gap-3">
-							<Clock className="h-8 w-8 text-indigo-500/30" />
-							<p className="font-semibold text-sm">
-								No matches are finished yet in this round.
-							</p>
-						</div>
-					) : (
-						<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-							{finishedMatches.map((match) => (
-								<MatchCard
-									key={match.id}
-									match={match}
-									userId={user?.id || null}
-									existingPrediction={predictionMap.get(match.id)}
-									onPredict={handlePredictClick}
-									onQuickPredict={handleQuickPredictSave}
-									onBreakdownClick={handleOpenBreakdown}
-									onInsightsClick={handleOpenInsights}
-								/>
-							))}
-						</div>
-					)}
-				</TabsContent>
-			</Tabs>
-
-			{/* Slide-over prediction editor drawer */}
+			{/* DRAWER & MODALS */}
 			<PredictionDrawer
 				isOpen={isDrawerOpen}
-				onClose={() => {
-					setIsDrawerOpen(false);
-					setActiveMatch(null);
-				}}
-				match={activeMatch}
-				userId={user?.id || null}
-				existingPrediction={selectedExistingPrediction}
+				onClose={() => setIsDrawerOpen(false)}
+				event={activeEvent}
+				userId={user?.id ?? null}
+				existingPrediction={activeEvent?.current_market?.user_prediction}
 			/>
 
-			{/* Phase 9: Scoring Breakdown Modal */}
-			<ScoreBreakdownModal
-				isOpen={isBreakdownOpen}
-				onClose={() => setIsBreakdownOpen(false)}
-				match={breakdownMatch}
-				prediction={breakdownPrediction}
-				username={user?.user_metadata?.username}
-			/>
-
-			{/* Phase 9: Community / Pool Insights Modal */}
-			<MatchPoolInsightsModal
-				isOpen={isInsightsOpen}
-				onClose={() => setIsInsightsOpen(false)}
-				match={insightsMatch}
-			/>
-
-			{/* Phase 9: Universal Scoring Rules Modal */}
 			<ScoringRulesModal
 				isOpen={isRulesModalOpen}
 				onClose={() => setIsRulesModalOpen(false)}
 			/>
-		</main>
+
+			<ScoreBreakdownModal
+				isOpen={isBreakdownOpen}
+				onClose={() => setIsBreakdownOpen(false)}
+				event={breakdownEvent}
+				prediction={breakdownPrediction}
+			/>
+
+			<MatchPoolInsightsModal
+				isOpen={isInsightsOpen}
+				onClose={() => setIsInsightsOpen(false)}
+				event={insightsEvent}
+			/>
+		</div>
 	);
 }
 
@@ -688,20 +431,12 @@ export default function PredictPage() {
 		<ErrorBoundary>
 			<Suspense
 				fallback={
-					<main className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto space-y-8 animate-pulse">
-						<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
-							<div className="space-y-2">
-								<div className="h-8 w-48 bg-slate-800 rounded" />
-								<div className="h-4 w-72 bg-slate-800/65 rounded" />
-							</div>
-							<div className="h-10 w-36 bg-slate-800/40 rounded-xl" />
-						</div>
-						<div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-							{[...Array(6)].map((_, i) => (
-								<MatchCardSkeleton key={i} />
-							))}
-						</div>
-					</main>
+					<div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center pt-20">
+						<div className="h-8 w-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+						<p className="text-slate-400 text-xs mt-4">
+							Loading Prediction Arena...
+						</p>
+					</div>
 				}
 			>
 				<PredictContent />

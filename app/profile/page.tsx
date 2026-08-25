@@ -12,9 +12,11 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { fetchUserPredictionsWithMatches } from '@/lib/queries/predictions';
+import { fetchUserPredictions } from '@/lib/queries/predictions';
+import { fetchUserScoreSummary, scoringQueryKeys } from '@/lib/queries/scoring';
 import { createClient } from '@/lib/supabase/client';
-import { PredictionWithMatch } from '@/types';
+import { MarketPrediction, UserScoreSummary } from '@/types';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
 	AlertCircle,
@@ -33,14 +35,10 @@ export default function ProfilePage() {
 	const supabase = createClient();
 	const [user, setUser] = useState<any>(null);
 	const [profile, setProfile] = useState<any>(null);
-	const [predictionsWithMatches, setPredictionsWithMatches] = useState<
-		PredictionWithMatch[]
-	>([]);
 	const [loading, setLoading] = useState(true);
 	const [updating, setUpdating] = useState(false);
 	const [isEditing, setIsEditing] = useState(false);
 	const [fullName, setFullName] = useState('');
-	const [username, setUsername] = useState('');
 	const [msg, setMsg] = useState<{
 		type: 'success' | 'error';
 		text: string;
@@ -62,17 +60,43 @@ export default function ProfilePage() {
 				if (data) {
 					setProfile(data);
 					setFullName(data.full_name || '');
-					setUsername(data.username || '');
 				}
-
-				const preds = await fetchUserPredictionsWithMatches(user.id);
-				setPredictionsWithMatches(preds);
 			}
 			setLoading(false);
 		};
 
 		fetchProfile();
 	}, [supabase]);
+
+	// Fetch dynamic score summary
+	const { data: scoreSummary } = useQuery<UserScoreSummary>({
+		queryKey: user?.id
+			? scoringQueryKeys.userSummary(user.id)
+			: ['scoring', 'summary', 'anon'],
+		queryFn: () =>
+			user?.id
+				? fetchUserScoreSummary(user.id)
+				: Promise.resolve({
+						total_raw_points: 0,
+						total_normalized_points: 0,
+						total_predictions: 0,
+						settled_predictions: 0,
+						exact_count: 0,
+						margin_count: 0,
+						outcome_count: 0,
+						miss_count: 0,
+						win_rate: 0,
+					}),
+		enabled: !!user?.id,
+	});
+
+	// Fetch user predictions
+	const { data: predictions = [] } = useQuery<MarketPrediction[]>({
+		queryKey: ['predictions', 'user', user?.id],
+		queryFn: () =>
+			user?.id ? fetchUserPredictions(user.id) : Promise.resolve([]),
+		enabled: !!user?.id,
+	});
 
 	const handleUpdateProfile = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -82,27 +106,17 @@ export default function ProfilePage() {
 		setMsg(null);
 
 		try {
-			if (username.length < 3) {
-				throw new Error('Username must be at least 3 characters long');
-			}
-
 			const { error } = await supabase
 				.from('profiles')
 				.update({
 					full_name: fullName,
-					username: username.toLowerCase().replace(/[^a-z0-9_]/g, ''),
 					updated_at: new Date().toISOString(),
 				})
 				.eq('id', user.id);
 
-			if (error) {
-				if (error.code === '23505') {
-					throw new Error('Username is already taken');
-				}
-				throw error;
-			}
+			if (error) throw error;
 
-			setProfile((prev: any) => ({ ...prev, full_name: fullName, username }));
+			setProfile((prev: any) => ({ ...prev, full_name: fullName }));
 			setIsEditing(false);
 			setMsg({ type: 'success', text: 'Profile updated successfully!' });
 		} catch (err: any) {
@@ -120,364 +134,259 @@ export default function ProfilePage() {
 		);
 	}
 
-	const exactCount = predictionsWithMatches.filter(
-		(p) => p.points_earned === 3,
-	).length;
-	const correctCount = predictionsWithMatches.filter(
-		(p) => p.points_earned >= 1,
-	).length;
+	if (!user) {
+		return (
+			<div className="min-h-[70vh] flex flex-col items-center justify-center p-4">
+				<Card className="glass-card max-w-md w-full text-center p-6 border-white/10">
+					<CardHeader>
+						<CardTitle className="text-xl font-bold text-white">
+							Sign In Required
+						</CardTitle>
+						<CardDescription className="text-slate-400">
+							Please sign in to view your profile and predictions.
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<Button
+							className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+							asChild
+						>
+							<a href="/login">Go to Login</a>
+						</Button>
+					</CardContent>
+				</Card>
+			</div>
+		);
+	}
 
-	const badges = [
-		{
-			id: 'b1',
-			name: 'Genesis Predictor',
-			description: 'Joined during Phase 1 launch',
-			icon: '🌱',
-			color:
-				'from-emerald-500/10 to-emerald-500/20 text-emerald-400 border-emerald-500/20',
-		},
-		{
-			id: 'b2',
-			name: 'Exact Score Whisperer',
-			description: `Predicted exact scores ${exactCount} times`,
-			icon: '🎯',
-			color:
-				exactCount > 0
-					? 'from-indigo-500/10 to-indigo-500/20 text-indigo-400 border-indigo-500/20'
-					: 'from-slate-500/5 to-slate-500/10 text-slate-500 border-slate-500/10 opacity-50',
-		},
-		{
-			id: 'b3',
-			name: 'Outcome Wizard',
-			description: `Guessed correct winner/draw ${correctCount} times`,
-			icon: '🧙‍♂️',
-			color:
-				correctCount > 0
-					? 'from-purple-500/10 to-purple-500/20 text-purple-400 border-purple-500/20'
-					: 'from-slate-500/5 to-slate-500/10 text-slate-500 border-slate-500/10 opacity-50',
-		},
-		{
-			id: 'b4',
-			name: 'Points Champion',
-			description: `Accumulated ${profile?.total_points || 0} global points`,
-			icon: '👑',
-			color:
-				(profile?.total_points || 0) > 0
-					? 'from-yellow-500/10 to-yellow-500/20 text-yellow-400 border-yellow-500/20'
-					: 'from-slate-500/5 to-slate-500/10 text-slate-500 border-slate-500/10 opacity-50',
-		},
-	];
-
-	const finishedPredictions = predictionsWithMatches
-		.filter((p) => p.match?.status === 'finished')
-		.slice(0, 5);
-
-	const initials = (profile?.full_name || profile?.username || 'U')
-		.substring(0, 2)
-		.toUpperCase();
+	const totalPoints = scoreSummary?.total_raw_points ?? 0;
+	const exactHits = scoreSummary?.exact_count ?? 0;
+	const marginHits = scoreSummary?.margin_count ?? 0;
+	const outcomeHits = scoreSummary?.outcome_count ?? 0;
+	const winRate = scoreSummary?.win_rate ?? 0;
 
 	return (
-		<main className="min-h-screen px-4 py-8 md:px-12 max-w-5xl mx-auto space-y-8">
-			{/* Decorative background effects */}
-			<div className="absolute top-1/4 right-1/4 w-96 h-96 rounded-full bg-indigo-500/5 blur-[100px] pointer-events-none" />
+		<div className="max-w-5xl mx-auto px-4 py-8 space-y-8 pt-20">
+			{/* Profile Header Card */}
+			<motion.div
+				initial={{ opacity: 0, y: 10 }}
+				animate={{ opacity: 1, y: 0 }}
+				className="glass-card rounded-3xl p-6 sm:p-8 border border-white/10 relative overflow-hidden bg-gradient-to-r from-indigo-950/40 via-slate-900/60 to-purple-950/40 shadow-2xl"
+			>
+				<div className="flex flex-col sm:flex-row items-center gap-6 relative z-10">
+					<Avatar className="h-24 w-24 border-2 border-indigo-500/40 shadow-2xl shadow-indigo-500/20">
+						<AvatarImage src={profile?.avatar_url || ''} />
+						<AvatarFallback className="bg-gradient-to-tr from-indigo-600 to-purple-600 text-white text-2xl font-black">
+							{(profile?.full_name || user.email || 'U')
+								.substring(0, 2)
+								.toUpperCase()}
+						</AvatarFallback>
+					</Avatar>
 
-			{/* HEADER ROW */}
-			<div className="flex flex-col md:flex-row gap-6 items-center p-6 rounded-2xl glass-card border-white/10 relative overflow-hidden">
-				<div className="absolute -top-12 -left-12 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
-
-				{/* Avatar block */}
-				<Avatar className="h-24 w-24 border-2 border-white/10 shadow-2xl relative z-10">
-					<AvatarImage src={profile?.avatar_url || ''} />
-					<AvatarFallback className="bg-gradient-to-tr from-indigo-600 to-purple-600 text-white font-black text-3xl">
-						{initials}
-					</AvatarFallback>
-				</Avatar>
-
-				{/* Name details */}
-				<div className="flex-grow text-center md:text-left space-y-1.5 relative z-10">
-					<h1 className="text-3xl font-extrabold text-white tracking-tight leading-none">
-						{profile?.full_name || 'Kudo Predictor'}
-					</h1>
-					<p className="text-slate-400 font-medium text-sm">
-						@{profile?.username || 'username'}
-					</p>
-					<div className="flex flex-wrap items-center justify-center md:justify-start gap-4 text-xs text-slate-400 font-semibold pt-1">
-						<span className="flex items-center gap-1">
-							<Calendar className="h-3.5 w-3.5 text-indigo-400" />
-							Member since {new Date(profile?.created_at).toLocaleDateString()}
-						</span>
+					<div className="flex-1 text-center sm:text-left space-y-2">
+						<div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+							<h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+								{profile?.full_name || 'Kudo Predictor'}
+							</h1>
+							<span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/30 text-indigo-300 font-bold text-xs self-center sm:self-auto">
+								<Trophy className="h-3.5 w-3.5 text-amber-400" />
+								{totalPoints} Total Points
+							</span>
+						</div>
+						<p className="text-xs text-slate-400 font-medium">{user.email}</p>
 					</div>
+
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => setIsEditing(!isEditing)}
+						className="border-white/10 hover:bg-white/5 text-slate-300 text-xs font-bold gap-1.5 rounded-xl self-center sm:self-start"
+					>
+						<Edit2 className="h-3.5 w-3.5" />
+						{isEditing ? 'Cancel Edit' : 'Edit Profile'}
+					</Button>
 				</div>
 
-				{/* Global points counter block */}
-				<div className="flex items-center gap-3 bg-white/[0.03] border border-white/5 p-4 rounded-xl shadow-inner relative z-10">
-					<Trophy className="h-8 w-8 text-yellow-500 drop-shadow-[0_0_10px_rgba(234,179,8,0.2)]" />
-					<div className="text-left">
-						<span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">
+				{/* Edit Form Drawer / Toggle */}
+				{isEditing && (
+					<motion.form
+						initial={{ opacity: 0, height: 0 }}
+						animate={{ opacity: 1, height: 'auto' }}
+						exit={{ opacity: 0, height: 0 }}
+						onSubmit={handleUpdateProfile}
+						className="mt-6 pt-6 border-t border-white/10 space-y-4 max-w-md"
+					>
+						<div className="space-y-1.5">
+							<Label
+								htmlFor="fullName"
+								className="text-xs text-slate-300 font-bold"
+							>
+								Display Name
+							</Label>
+							<Input
+								id="fullName"
+								value={fullName}
+								onChange={(e) => setFullName(e.target.value)}
+								placeholder="Your Name"
+								className="bg-slate-900/60 border-white/10 text-white placeholder:text-slate-500 text-xs"
+							/>
+						</div>
+
+						<div className="flex gap-2">
+							<Button
+								type="submit"
+								disabled={updating}
+								size="sm"
+								className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl"
+							>
+								{updating ? 'Saving...' : 'Save Profile'}
+							</Button>
+						</div>
+					</motion.form>
+				)}
+
+				{msg && (
+					<div
+						className={`mt-4 p-3 rounded-xl text-xs font-semibold flex items-center gap-2 ${
+							msg.type === 'success'
+								? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+								: 'bg-red-500/10 text-red-400 border border-red-500/20'
+						}`}
+					>
+						{msg.type === 'success' ? (
+							<Check className="h-4 w-4 shrink-0" />
+						) : (
+							<AlertCircle className="h-4 w-4 shrink-0" />
+						)}
+						<span>{msg.text}</span>
+					</div>
+				)}
+			</motion.div>
+
+			{/* Stats Grid */}
+			<div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+				<div className="glass-card rounded-2xl p-4 border border-white/10 flex flex-col justify-between">
+					<div className="flex items-center justify-between">
+						<span className="text-xs font-bold text-slate-400">
 							Total Points
 						</span>
-						<span className="text-3xl font-black text-white leading-none">
-							{profile?.total_points ?? 0}
+						<Trophy className="h-4 w-4 text-amber-400" />
+					</div>
+					<div className="mt-2 flex items-baseline gap-1">
+						<span className="text-2xl sm:text-3xl font-black text-white">
+							{totalPoints}
 						</span>
+						<span className="text-xs text-slate-500">pts</span>
+					</div>
+				</div>
+
+				<div className="glass-card rounded-2xl p-4 border border-white/10 flex flex-col justify-between">
+					<div className="flex items-center justify-between">
+						<span className="text-xs font-bold text-emerald-400">
+							Exact Calls
+						</span>
+						<Zap className="h-4 w-4 text-emerald-400" />
+					</div>
+					<div className="mt-2 flex items-baseline gap-1">
+						<span className="text-2xl sm:text-3xl font-black text-emerald-300">
+							{exactHits}
+						</span>
+						<span className="text-xs text-emerald-400/60">exact (3pts)</span>
+					</div>
+				</div>
+
+				<div className="glass-card rounded-2xl p-4 border border-white/10 flex flex-col justify-between">
+					<div className="flex items-center justify-between">
+						<span className="text-xs font-bold text-teal-400">
+							Margin / Outcome
+						</span>
+						<Award className="h-4 w-4 text-teal-400" />
+					</div>
+					<div className="mt-2 flex items-baseline gap-1">
+						<span className="text-2xl sm:text-3xl font-black text-teal-300">
+							{marginHits + outcomeHits}
+						</span>
+						<span className="text-xs text-teal-400/60">matches</span>
+					</div>
+				</div>
+
+				<div className="glass-card rounded-2xl p-4 border border-white/10 flex flex-col justify-between">
+					<div className="flex items-center justify-between">
+						<span className="text-xs font-bold text-indigo-400">Win Rate</span>
+						<Flame className="h-4 w-4 text-indigo-400" />
+					</div>
+					<div className="mt-2 flex items-baseline gap-1">
+						<span className="text-2xl sm:text-3xl font-black text-indigo-300">
+							{winRate}%
+						</span>
+						<span className="text-xs text-indigo-400/60">accuracy</span>
 					</div>
 				</div>
 			</div>
 
-			{/* TWO COLUMN GRID DETAILS */}
-			<div className="grid md:grid-cols-3 gap-8">
-				{/* LEFT COLUMN: EDIT PROFILE */}
-				<div className="md:col-span-1 space-y-6">
-					<Card className="glass-card border-white/10 rounded-2xl">
-						<CardHeader className="p-5 pb-3">
-							<CardTitle className="text-lg font-bold text-white flex items-center justify-between">
-								<span>Account Settings</span>
-								{!isEditing && (
-									<Button
-										variant="ghost"
-										size="icon"
-										className="h-8 w-8 hover:bg-white/5"
-										onClick={() => setIsEditing(true)}
-									>
-										<Edit2 className="h-4 w-4 text-slate-400" />
-									</Button>
-								)}
-							</CardTitle>
-							<CardDescription>
-								Configure your predictor credentials
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="p-5 pt-0">
-							{msg && (
-								<div
-									className={`p-3 rounded-lg flex items-start gap-2 text-xs font-semibold mb-4 border ${
-										msg.type === 'success'
-											? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-											: 'bg-destructive/10 text-destructive border-destructive/20'
-									}`}
-								>
-									{msg.type === 'success' ? (
-										<Check className="h-4 w-4 shrink-0" />
-									) : (
-										<AlertCircle className="h-4 w-4 shrink-0" />
-									)}
-									<span>{msg.text}</span>
-								</div>
-							)}
-
-							<form
-								onSubmit={handleUpdateProfile}
-								className="space-y-4"
-							>
-								<div className="space-y-1">
-									<Label
-										htmlFor="fullName"
-										className="text-xs font-bold text-muted-foreground uppercase tracking-wider"
-									>
-										Full Name
-									</Label>
-									<Input
-										id="fullName"
-										value={fullName}
-										onChange={(e) => setFullName(e.target.value)}
-										disabled={!isEditing || updating}
-										className="bg-white/[0.02] border-white/10 text-white placeholder:text-muted-foreground/50 focus:border-white/30"
-									/>
-								</div>
-
-								<div className="space-y-1">
-									<Label
-										htmlFor="username"
-										className="text-xs font-bold text-muted-foreground uppercase tracking-wider"
-									>
-										Username
-									</Label>
-									<Input
-										id="username"
-										value={username}
-										onChange={(e) => setUsername(e.target.value)}
-										disabled={!isEditing || updating}
-										className="bg-white/[0.02] border-white/10 text-white placeholder:text-muted-foreground/50 focus:border-white/30"
-									/>
-								</div>
-
-								{isEditing && (
-									<div className="flex gap-2 pt-2">
-										<Button
-											type="submit"
-											size="sm"
-											className="flex-grow font-bold"
-											disabled={updating}
-										>
-											{updating ? (
-												<Loader2 className="h-3 w-3 animate-spin" />
-											) : (
-												'Save Changes'
-											)}
-										</Button>
-										<Button
-											type="button"
-											size="sm"
-											variant="outline"
-											className="border-white/10"
-											onClick={() => {
-												setIsEditing(false);
-												setFullName(profile?.full_name || '');
-												setUsername(profile?.username || '');
-												setMsg(null);
-											}}
-											disabled={updating}
-										>
-											Cancel
-										</Button>
-									</div>
-								)}
-							</form>
-						</CardContent>
-					</Card>
-
-					{user && <NotificationSettings userId={user.id} />}
-				</div>
-
-				{/* RIGHT COLUMN: BADGES & ACCOMPLISHMENTS */}
-				<div className="md:col-span-2 space-y-6">
-					<Card className="glass-card border-white/10 rounded-2xl">
-						<CardHeader className="p-6">
-							<CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-								<Award className="h-5 w-5 text-indigo-400" />
-								<span>My Earned Badges</span>
-							</CardTitle>
-							<CardDescription>
-								Badges represent your milestones on the platform
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="p-6 pt-0">
-							<div className="grid sm:grid-cols-2 gap-4">
-								{badges.map((badge, idx) => (
-									<motion.div
-										key={badge.id}
-										initial={{ opacity: 0, scale: 0.95 }}
-										animate={{ opacity: 1, scale: 1 }}
-										transition={{ delay: idx * 0.05 }}
-										className={`p-4 rounded-xl border bg-gradient-to-br flex items-start gap-3.5 transition-all duration-300 hover:scale-[1.02] ${badge.color}`}
-									>
-										<span className="text-3xl">{badge.icon}</span>
-										<div className="text-left space-y-1">
-											<p className="font-extrabold text-sm text-white">
-												{badge.name}
-											</p>
-											<p className="text-xs text-slate-300 font-medium leading-relaxed">
-												{badge.description}
-											</p>
-										</div>
-									</motion.div>
-								))}
-							</div>
-						</CardContent>
-					</Card>
-
-					{/* RECENT PREDICTIONS GRAPHIC SUMMARY */}
-					<Card className="glass-card border-white/10 rounded-2xl">
-						<CardHeader className="p-6">
-							<CardTitle className="text-lg font-bold text-white flex items-center gap-2">
-								<Flame className="h-5 w-5 text-indigo-400" />
-								<span>Recent Activity</span>
-							</CardTitle>
-							<CardDescription>
-								Your latest match prediction history
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="p-6 pt-0">
-							{finishedPredictions.length === 0 ? (
-								<div className="py-8 text-slate-500 font-medium text-sm flex flex-col items-center gap-3 text-center">
-									<Zap className="h-8 w-8 text-indigo-500/40 animate-bounce" />
-									<p>No processed predictions found in this round.</p>
-									<p className="text-xs text-slate-600 max-w-xs">
-										Once match predictions open, your active scores and
-										calculations will display here.
-									</p>
-								</div>
-							) : (
-								<div className="space-y-4">
-									{finishedPredictions.map((p) => {
-										const match = p.match!;
-										const homeTeam = match.home_team;
-										const awayTeam = match.away_team;
-										return (
-											<div
-												key={p.id}
-												className="p-4 rounded-xl border border-white/5 bg-white/[0.01] flex flex-col sm:flex-row sm:items-center justify-between text-left gap-3 sm:gap-0"
-											>
-												<div className="flex items-center gap-3">
-													<div className="flex items-center gap-1.5 min-w-[200px]">
-														{homeTeam?.logo_url && (
-															<img
-																src={homeTeam.logo_url}
-																alt={homeTeam.name}
-																className="h-5 w-5 object-contain"
-															/>
-														)}
-														<span className="text-xs font-black text-white truncate max-w-[80px]">
-															{homeTeam?.short_name || homeTeam?.name}
-														</span>
-														<span className="text-[10px] font-bold text-slate-500">
-															vs
-														</span>
-														<span className="text-xs font-black text-white truncate max-w-[80px]">
-															{awayTeam?.short_name || awayTeam?.name}
-														</span>
-														{awayTeam?.logo_url && (
-															<img
-																src={awayTeam.logo_url}
-																alt={awayTeam.name}
-																className="h-5 w-5 object-contain"
-															/>
-														)}
-													</div>
-												</div>
-
-												<div className="flex items-center justify-between sm:justify-end gap-6">
-													<div className="text-xs">
-														<span className="text-slate-500 block text-[9px] font-bold uppercase tracking-wider">
-															Final Score
-														</span>
-														<span className="font-extrabold text-white text-right block">
-															{match.home_score} - {match.away_score}
-														</span>
-													</div>
-
-													<div className="text-xs">
-														<span className="text-slate-500 block text-[9px] font-bold uppercase tracking-wider">
-															Your Pick
-														</span>
-														<span className="font-extrabold text-slate-300 text-right block">
-															{p.predicted_home_score} -{' '}
-															{p.predicted_away_score}
-														</span>
-													</div>
-
-													<div
-														className={`px-2.5 py-1 rounded-lg border text-[10px] font-black tracking-wider ${
-															p.points_earned === 3
-																? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-																: p.points_earned === 2
-																	? 'bg-teal-500/10 border-teal-500/20 text-teal-400'
-																	: p.points_earned === 1
-																		? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-																		: 'bg-slate-500/10 border-slate-500/20 text-slate-400'
-														}`}
-													>
-														+{p.points_earned} PTS
-													</div>
-												</div>
-											</div>
-										);
-									})}
-								</div>
-							)}
-						</CardContent>
-					</Card>
-				</div>
+			{/* Notification Settings Panel */}
+			<div className="glass-card rounded-3xl p-6 sm:p-8 border border-white/10">
+				<NotificationSettings userId={user.id} />
 			</div>
-		</main>
+
+			{/* Prediction History */}
+			<div className="glass-card rounded-3xl p-6 sm:p-8 border border-white/10 space-y-4">
+				<div className="flex items-center justify-between">
+					<h3 className="font-extrabold text-lg text-white flex items-center gap-2">
+						<Calendar className="h-5 w-5 text-indigo-400" />
+						<span>Prediction History</span>
+					</h3>
+					<span className="text-xs text-slate-400">
+						{predictions.length} Total Predictions
+					</span>
+				</div>
+
+				{predictions.length === 0 ? (
+					<div className="text-center py-12 text-slate-500 text-xs">
+						No predictions submitted yet. Head to the Predict tab to make your
+						first pick!
+					</div>
+				) : (
+					<div className="divide-y divide-white/5 max-h-[400px] overflow-y-auto">
+						{predictions.map((p) => {
+							const sel = p.selection as
+								| { home: number; away: number }
+								| undefined;
+							return (
+								<div
+									key={p.id}
+									className="py-3 flex items-center justify-between text-xs"
+								>
+									<div className="space-y-0.5">
+										<span className="font-bold text-slate-200 block">
+											Market #{p.event_market_id}
+										</span>
+										<span className="text-[10px] text-slate-500">
+											{new Date(p.created_at).toLocaleDateString(undefined, {
+												month: 'short',
+												day: 'numeric',
+												hour: '2-digit',
+												minute: '2-digit',
+											})}
+										</span>
+									</div>
+
+									<div className="flex items-center gap-3">
+										<span className="font-mono font-bold text-indigo-300 bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20">
+											{sel ? `${sel.home} - ${sel.away}` : '—'}
+										</span>
+										<span className="font-black text-amber-400 w-16 text-right">
+											{p.raw_points !== null
+												? `+${p.raw_points} PTS`
+												: 'Pending'}
+										</span>
+									</div>
+								</div>
+							);
+						})}
+					</div>
+				)}
+			</div>
+		</div>
 	);
 }

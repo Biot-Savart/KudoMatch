@@ -1,3 +1,5 @@
+import { SportSlug } from '@/types';
+
 export type ScorelinePayload = {
 	kind: 'team_scoreline';
 	version: number;
@@ -165,4 +167,35 @@ export function evaluatePrediction(
 		rawPoints,
 		normalizedBasisPoints: calculateNormalizedBasisPoints(rawPoints, maxPts),
 	};
+}
+
+/**
+ * Evaluates prediction by sport slug, market kind and version.
+ */
+export function evaluateMarketPrediction(
+	sportSlug: SportSlug,
+	marketKind: string,
+	version: number,
+	selection: ScorelinePayload,
+	result: ScorelinePayload,
+): EvaluatedScoreResult {
+	if (marketKind === 'team_scoreline') {
+		if (sportSlug === 'rugby_union') {
+			return evaluatePrediction(
+				'rugby_union_scoreline_v1',
+				{},
+				selection,
+				result,
+				6,
+			);
+		}
+		return evaluatePrediction(
+			'football_scoreline_v1',
+			{},
+			selection,
+			result,
+			3,
+		);
+	}
+	throw new Error(`Unsupported market kind: ${marketKind} for ${sportSlug}`);
 }

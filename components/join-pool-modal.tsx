@@ -8,13 +8,15 @@ import { motion } from 'framer-motion';
 import { KeyRound, X } from 'lucide-react';
 import { useState } from 'react';
 
-interface JoinPoolModalProps {
+export interface JoinPoolModalProps {
+	userId: string;
 	isOpen: boolean;
 	onClose: () => void;
 	onSuccess: (poolId: string) => void;
 }
 
 export function JoinPoolModal({
+	userId,
 	isOpen,
 	onClose,
 	onSuccess,
@@ -38,12 +40,12 @@ export function JoinPoolModal({
 		setError(null);
 
 		try {
-			const res = await joinPoolByCode(cleanCode);
+			const pool = await joinPoolByCode(cleanCode, userId);
 
-			if (res.success && res.pool_id) {
-				onSuccess(res.pool_id);
+			if (pool && pool.id) {
+				onSuccess(pool.id);
 			} else {
-				setError(res.error || 'Invalid invite code or joining failed.');
+				setError('Invalid invite code or joining failed.');
 			}
 		} catch (err: any) {
 			setError(err.message || 'An unexpected error occurred.');
@@ -118,31 +120,31 @@ export function JoinPoolModal({
 						</Label>
 						<Input
 							id="pool-code"
-							placeholder="CODE12"
 							value={code}
 							onChange={handleInputChange}
-							disabled={loading}
-							className="text-center text-2xl font-black tracking-[0.4em] uppercase py-6 bg-white/5 border-white/10 text-white placeholder-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-xl"
-							required
+							placeholder="e.g. A9B2C4"
 							maxLength={6}
-							autoComplete="off"
+							required
+							className="bg-white/5 border-white/10 text-white text-center text-2xl font-mono uppercase tracking-[0.25em] h-14 placeholder:text-slate-600 focus:border-amber-500"
 						/>
+						<p className="text-[10px] text-slate-500">
+							Ask the pool creator or an active member for their invite code
+						</p>
 					</div>
 
-					<div className="flex gap-2 pt-2">
+					<div className="pt-2 flex gap-2">
 						<Button
 							type="button"
-							variant="ghost"
+							variant="outline"
 							onClick={onClose}
-							disabled={loading}
-							className="flex-1 py-5 rounded-xl text-slate-300 hover:bg-white/5"
+							className="w-1/2 border-white/10 hover:bg-white/5 text-slate-300"
 						>
 							Cancel
 						</Button>
 						<Button
 							type="submit"
 							disabled={loading || code.length !== 6}
-							className="flex-1 py-5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+							className="w-1/2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold"
 						>
 							{loading ? 'Joining...' : 'Join Pool'}
 						</Button>
@@ -152,3 +154,5 @@ export function JoinPoolModal({
 		</div>
 	);
 }
+
+export default JoinPoolModal;

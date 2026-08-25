@@ -1,7 +1,11 @@
-// Phase 11: Multi-Sport Core Domain Models & Schemas
+// ============================================================================
+// Core Domain Models & Schemas - Phase 13 Application Event-Model Refactor
+// ============================================================================
+
+export type SportSlug = 'football' | 'rugby_union' | (string & {});
 
 export interface Sport {
-	slug: string;
+	slug: SportSlug;
 	name: string;
 	icon_key: string | null;
 	default_score_unit: string;
@@ -11,12 +15,14 @@ export interface Sport {
 	updated_at: string;
 }
 
+export type CompetitionKind = 'league' | 'cup' | 'tour' | 'race_series';
+
 export interface Competition {
 	id: string; // bigint mapped to string
-	sport_slug: string;
+	sport_slug: SportSlug;
 	slug: string;
 	name: string;
-	kind: 'league' | 'cup' | 'tour' | 'race_series';
+	kind: CompetitionKind;
 	country: string | null;
 	logo_url: string | null;
 	is_active: boolean;
@@ -25,6 +31,8 @@ export interface Competition {
 	sport?: Sport;
 }
 
+export type EditionStatus = 'planned' | 'active' | 'completed' | 'cancelled';
+
 export interface CompetitionEdition {
 	id: string; // bigint mapped to string
 	competition_id: string;
@@ -32,17 +40,19 @@ export interface CompetitionEdition {
 	name: string;
 	starts_at: string;
 	ends_at: string;
-	status: 'planned' | 'active' | 'completed' | 'cancelled';
+	status: EditionStatus;
 	metadata: Record<string, any>;
 	created_at: string;
 	updated_at: string;
 	competition?: Competition;
 }
 
+export type CompetitorKind = 'team' | 'person' | 'constructor';
+
 export interface Competitor {
 	id: string; // bigint mapped to string
-	sport_slug: string;
-	kind: 'team' | 'person' | 'constructor';
+	sport_slug: SportSlug;
+	kind: CompetitorKind;
 	name: string;
 	short_name: string | null;
 	media_url: string | null;
@@ -63,18 +73,34 @@ export interface EditionCompetitor {
 	competitor?: Competitor;
 }
 
+export type EventKind = 'match' | 'race' | 'session' | 'bout';
+export type EventStatus =
+	| 'scheduled'
+	| 'live'
+	| 'completed'
+	| 'finished'
+	| 'postponed'
+	| 'cancelled'
+	| 'abandoned'
+	| (string & {});
+
+export type CompetitorRole = 'home' | 'away' | 'participant';
+
+export interface EventCompetitor {
+	event_id: string;
+	competitor_id: string;
+	slot: number;
+	role: CompetitorRole | null;
+	created_at: string;
+	competitor?: Competitor;
+}
+
 export interface SportEvent {
 	id: string; // bigint mapped to string
 	edition_id: string;
-	kind: 'match' | 'race' | 'session' | 'bout';
+	kind: EventKind;
 	starts_at: string;
-	status:
-		| 'scheduled'
-		| 'live'
-		| 'completed'
-		| 'postponed'
-		| 'cancelled'
-		| 'abandoned';
+	status: EventStatus;
 	round_label: string | null;
 	sequence_number: number | null;
 	venue_name: string | null;
@@ -84,16 +110,11 @@ export interface SportEvent {
 	updated_at: string;
 	edition?: CompetitionEdition;
 	competitors?: EventCompetitor[];
+	markets?: EventMarket[];
+	current_market?: EventMarket;
 }
 
-export interface EventCompetitor {
-	event_id: string;
-	competitor_id: string;
-	slot: number;
-	role: 'home' | 'away' | 'participant' | null;
-	created_at: string;
-	competitor?: Competitor;
-}
+export type PredictableEvent = SportEvent;
 
 export interface DataProvider {
 	slug: string;
@@ -141,31 +162,22 @@ export interface IngestionQuarantine {
 	updated_at: string;
 }
 
-// Phase 12: Prediction Markets, Rulesets, Settlement & Scoped Pools Domain Models
+// ----------------------------------------------------------------------------
+// Scoring Rulesets, Tiers & Settlements
+// ----------------------------------------------------------------------------
 
-export interface ScoringRuleset {
-	id: string; // bigint mapped to string
-	sport_slug: string;
-	market_kind: 'team_scoreline';
-	evaluator_key: string;
-	version: number;
-	max_raw_points: number;
-	evaluator_config: Record<string, any>;
-	ui_config: Record<string, any>;
-	is_active: boolean;
-	created_at: string;
-	updated_at: string;
-	tiers?: ScoringRuleTier[];
-}
+export type MarketKind = 'team_scoreline' | (string & {});
+
+export type TierCode =
+	| 'exact_score'
+	| 'exact_margin'
+	| 'close_margin'
+	| 'outcome'
+	| 'miss';
 
 export interface ScoringRuleTier {
 	ruleset_id: string; // bigint mapped to string
-	tier_code:
-		| 'exact_score'
-		| 'exact_margin'
-		| 'close_margin'
-		| 'outcome'
-		| 'miss';
+	tier_code: TierCode;
 	raw_points: number;
 	rank_order: number;
 	label: string;
@@ -173,45 +185,92 @@ export interface ScoringRuleTier {
 	example: string | null;
 }
 
+export interface ScoringRulesetUiConfig {
+	unit?: string;
+	home_label?: string;
+	away_label?: string;
+	score_min?: number;
+	score_max?: number;
+	step?: number;
+	presets?: { home: number; away: number; label?: string }[];
+	rules_summary?: {
+		title: string;
+		description: string;
+		points: number;
+		tier_code: TierCode;
+	}[];
+	[key: string]: any;
+}
+
+export interface ScoringRuleset {
+	id: string; // bigint mapped to string
+	sport_slug: SportSlug;
+	market_kind: MarketKind;
+	evaluator_key: string;
+	version: number;
+	max_raw_points: number;
+	evaluator_config: Record<string, any>;
+	ui_config: ScoringRulesetUiConfig;
+	is_active: boolean;
+	created_at: string;
+	updated_at: string;
+	tiers?: ScoringRuleTier[];
+}
+
+export type MarketStatus = 'draft' | 'open' | 'locked' | 'settled' | 'void';
+
 export interface EventMarket {
 	id: string; // bigint mapped to string
 	event_id: string; // bigint mapped to string
-	market_kind: 'team_scoreline';
+	market_kind: MarketKind;
 	payload_schema_version: number;
 	ruleset_id: string; // bigint mapped to string
 	sequence_no: number;
 	is_current: boolean;
 	opens_at: string;
 	locks_at: string;
-	status: 'draft' | 'open' | 'locked' | 'settled' | 'void';
+	status: MarketStatus;
 	created_at: string;
 	updated_at: string;
 	event?: SportEvent;
 	ruleset?: ScoringRuleset;
+	result?: MarketResult;
+	user_prediction?: MarketPrediction;
 }
 
-export interface MarketSelection {
+// ----------------------------------------------------------------------------
+// Market Selections & Results (Discriminated Unions)
+// ----------------------------------------------------------------------------
+
+export interface TeamScorelineSelection {
 	kind: 'team_scoreline';
 	version: number;
 	home: number;
 	away: number;
 }
 
+export type PredictionSelection = TeamScorelineSelection;
+
+export interface TeamScorelineResult {
+	kind: 'team_scoreline';
+	version: number;
+	home: number;
+	away: number;
+}
+
+export type MarketResultPayload = TeamScorelineResult;
+
+export type SettlementStatus = 'pending' | 'settled' | 'void';
+
 export interface MarketPrediction {
 	id: string; // bigint mapped to string
 	user_id: string; // UUID
 	event_market_id: string; // bigint mapped to string
-	selection: MarketSelection;
-	settlement_status: 'pending' | 'settled' | 'void';
+	selection: PredictionSelection;
+	settlement_status: SettlementStatus;
 	ruleset_id: string | null;
 	result_revision: number | null;
-	tier_code:
-		| 'exact_score'
-		| 'exact_margin'
-		| 'close_margin'
-		| 'outcome'
-		| 'miss'
-		| null;
+	tier_code: TierCode | null;
 	raw_points: number | null;
 	normalized_basis_points: number | null;
 	settled_at: string | null;
@@ -221,12 +280,15 @@ export interface MarketPrediction {
 	profile?: Profile;
 }
 
+export type MarketResultStatus = 'provisional' | 'final' | 'void';
+export type MarketResultSourceKind = 'provider' | 'manual';
+
 export interface MarketResult {
 	event_market_id: string; // bigint mapped to string
-	result: MarketSelection;
+	result: MarketResultPayload;
 	revision: number;
-	status: 'provisional' | 'final' | 'void';
-	source_kind: 'provider' | 'manual';
+	status: MarketResultStatus;
+	source_kind: MarketResultSourceKind;
 	source_ref: string | null;
 	source_priority: number;
 	finalized_at: string | null;
@@ -234,22 +296,44 @@ export interface MarketResult {
 	updated_at: string;
 }
 
+export interface SettlementAward {
+	tier_code: TierCode;
+	raw_points: number;
+	normalized_basis_points: number;
+	label?: string;
+	description?: string;
+}
+
+// ----------------------------------------------------------------------------
+// Scoped Pools, Membership & Leaderboards
+// ----------------------------------------------------------------------------
+
+export type PoolScopeKind = 'all_sports' | 'sport' | 'competition' | 'edition';
+export type PoolScoringMode = 'raw' | 'normalized';
+
 export interface ScopedPool {
 	id: string; // UUID
 	name: string;
 	created_by: string; // UUID
 	invite_code: string;
-	scope_kind: 'all_sports' | 'sport' | 'competition' | 'edition';
-	sport_slug: string | null;
+	scope_kind: PoolScopeKind;
+	sport_slug: SportSlug | null;
 	competition_id: string | null;
 	edition_id: string | null;
-	scoring_mode: 'raw' | 'normalized';
+	scoring_mode: PoolScoringMode;
 	scoring_starts_at: string;
 	is_private: boolean;
 	created_at: string;
 	updated_at: string;
 	creator?: Profile;
+	member_count?: number;
+	competition?: Competition;
+	edition?: CompetitionEdition;
+	sport?: Sport;
 }
+
+// ScopedPool is the new primary Pool interface
+export type Pool = ScopedPool;
 
 export interface PoolMembershipEpisode {
 	id: string; // bigint mapped to string
@@ -262,114 +346,18 @@ export interface PoolMembershipEpisode {
 	profile?: Profile;
 }
 
-// Legacy Application Types (Retained for application stability until Phase 13 Refactor)
-
-export interface Profile {
-	id: string;
-	username?: string | null;
-	full_name: string | null;
-	avatar_url: string | null;
-	total_points?: number;
-	created_at: string;
-	updated_at: string;
-}
-
-export interface Tournament {
-	id: string; // UUID
-	name: string;
-	sport: string;
-	season: string | null;
-	status: 'upcoming' | 'active' | 'finished';
-	logo_url: string | null;
-	external_id: number | null; // API-Football League ID
-	created_at: string;
-}
-
-export interface Team {
-	id: string; // UUID
-	tournament_id: string | null; // UUID references public.tournaments(id)
-	name: string;
-	short_name: string | null;
-	logo_url: string | null;
-	external_id: number | null; // API-Football Team ID
-	created_at: string;
-}
-
-export interface Match {
-	id: string; // UUID
-	tournament_id: string; // UUID
-	matchday: number | null;
-	round: string | null;
-	home_team_id: string; // UUID references public.teams(id)
-	away_team_id: string; // UUID references public.teams(id)
-	kickoff_time: string;
-	home_score: number | null;
-	away_score: number | null;
-	status: 'scheduled' | 'live' | 'finished' | 'cancelled';
-	external_id: number | null; // API-Football Fixture ID
-	created_at: string;
-	updated_at: string;
-	home_team?: Team;
-	away_team?: Team;
-}
-
-export interface Prediction {
-	id: string; // UUID
-	user_id: string; // UUID references public.profiles(id)
-	match_id: string; // UUID references public.matches(id)
-	predicted_home_score: number;
-	predicted_away_score: number;
-	predicted_winner: 'home' | 'away' | 'draw' | null;
-	points_earned: number;
-	created_at: string;
-}
-
-export interface PredictionWithMatch extends Prediction {
-	match?: Match & {
-		home_team?: Team;
-		away_team?: Team;
-	};
-}
-
-export interface Pool {
-	id: string; // UUID
-	name: string;
-	description: string | null;
-	invite_code: string;
-	creator_id: string; // UUID references public.profiles(id)
-	is_public: boolean;
-	created_at: string;
-	creator?: Profile;
-	member_count?: number;
-}
-
-export interface PoolMember {
-	pool_id: string; // UUID REFERENCES pools(id)
-	user_id: string; // UUID REFERENCES profiles(id)
-	role: 'creator' | 'admin' | 'member';
-	joined_at: string;
-	profile?: Profile;
-}
-
-export interface PoolStanding {
-	pool_id: string; // UUID
-	user_id: string; // UUID
-	total_points: number;
-	wins: number;
-	rank: number | null;
-	profile?: Profile;
-}
+export type PoolMember = PoolMembershipEpisode;
 
 export interface PoolLeaderboardEntry {
 	rank: number;
 	user_id: string;
-	username: string | null;
 	full_name: string | null;
 	avatar_url: string | null;
 	total_points: number;
 	exact_count: number;
+	margin_count: number;
+	outcome_count: number;
 	predictions_count: number;
-	joined_at: string;
 }
 
 export interface PoolMessage {
@@ -381,8 +369,59 @@ export interface PoolMessage {
 	profile?: Profile;
 }
 
+// ----------------------------------------------------------------------------
+// Profiles, Score Summaries & Analytics
+// ----------------------------------------------------------------------------
+
+export interface Profile {
+	id: string;
+	email?: string;
+	username?: string | null;
+	full_name: string | null;
+	avatar_url: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface UserScoreSummary {
+	total_raw_points: number;
+	total_normalized_points: number;
+	total_predictions: number;
+	settled_predictions: number;
+	exact_count: number;
+	margin_count: number;
+	outcome_count: number;
+	miss_count: number;
+	win_rate: number;
+}
+
+export interface MarketCommunityStats {
+	total_predictions: number;
+	avg_home_score: number;
+	avg_away_score: number;
+	home_win_pct: number;
+	draw_pct: number;
+	away_win_pct: number;
+	top_exact_scores: {
+		home: number;
+		away: number;
+		count: number;
+		pct: number;
+	}[];
+}
+
+export interface ParticipantPick {
+	user_id: string;
+	full_name: string | null;
+	avatar_url: string | null;
+	home: number;
+	away: number;
+	tier_code: TierCode | null;
+	points: number | null;
+}
+
 export interface HeadToHeadStats {
-	matches_compared: number;
+	events_compared: number;
 	wins_a: number;
 	wins_b: number;
 	draws: number;
@@ -391,6 +430,10 @@ export interface HeadToHeadStats {
 	points_a: number;
 	points_b: number;
 }
+
+// ----------------------------------------------------------------------------
+// Notifications & Subscriptions
+// ----------------------------------------------------------------------------
 
 export interface PushSubscriptionData {
 	endpoint: string;
@@ -425,19 +468,47 @@ export interface NotificationPayload {
 	data?: Record<string, any>;
 }
 
-export interface KickoffReminderMatch {
-	matchId: string;
+export interface KickoffReminderEvent {
+	marketId?: string;
+	matchId?: string;
+	eventId?: string;
 	homeTeamName: string;
 	awayTeamName: string;
 	homeTeamLogo?: string | null;
 	awayTeamLogo?: string | null;
-	kickoffTime: string;
-	gameweek?: number | null;
+	locksAt?: string;
+	startsAt?: string;
+	kickoffTime?: string;
+	roundLabel?: string | null;
 }
+
+export type KickoffReminderMatch = KickoffReminderEvent;
+
+// Legacy test & compatibility aliases
+export type Match = Partial<SportEvent> & {
+	id: string;
+	tournament_id?: string;
+	matchday?: number | null;
+	round?: string | null;
+	home_team_id?: string;
+	away_team_id?: string;
+	kickoff_time?: string;
+	home_score?: number | null;
+	away_score?: number | null;
+	status?: any;
+	home_team?: any;
+	away_team?: any;
+	[key: string]: any;
+};
+
+export type Tournament = any;
+export type Team = any;
+export type Prediction = any;
+export type PredictionWithMatch = any;
 
 export interface WeeklyDigestSummary {
 	userId: string;
-	username: string;
+	username?: string | null;
 	fullName?: string | null;
 	email?: string | null;
 	totalPoints: number;
@@ -446,41 +517,6 @@ export interface WeeklyDigestSummary {
 	totalPredictionsThisWeek: number;
 	topPoolName?: string | null;
 	topPoolRank?: number | null;
-	upcomingMatchesCount: number;
-}
-
-export interface MatchParticipantPick {
-	user_id: string;
-	username: string;
-	avatar_url?: string | null;
-	full_name?: string | null;
-	predicted_home_score: number;
-	predicted_away_score: number;
-	points_earned: number;
-}
-
-export interface MatchCommunityInsights {
-	match_id: string;
-	is_locked: boolean;
-	total_predictions: number;
-	outcome_distribution: {
-		home_win_count: number;
-		draw_count: number;
-		away_win_count: number;
-		home_win_pct: number;
-		draw_pct: number;
-		away_win_pct: number;
-	};
-	points_distribution: {
-		exact_3pts: number;
-		diff_2pts: number;
-		winner_1pt: number;
-		miss_0pts: number;
-	};
-	top_scores: {
-		scoreline: string;
-		count: number;
-		percentage: number;
-	}[];
-	participants: MatchParticipantPick[];
+	upcomingEventsCount?: number;
+	upcomingMatchesCount?: number;
 }

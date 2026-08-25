@@ -3,413 +3,399 @@ vi.mock('@/lib/supabase/client', () => ({
 }));
 
 import {
-	fetchActiveMatchday,
-	fetchAvailableMatchdays,
-	fetchMatchCommunityInsights,
-	fetchMatches,
-} from '@/lib/queries/matches';
+	fetchActiveCompetitionEditions,
+	fetchActiveCompetitions,
+	fetchEditionRounds,
+} from '@/lib/queries/competitions';
+import { fetchEventById, fetchEvents } from '@/lib/queries/events';
+import {
+	fetchMarketCommunityStats,
+	fetchMarketParticipantPicks,
+} from '@/lib/queries/markets';
 import {
 	createPool,
-	fetchPoolDetails,
 	fetchPoolLeaderboard,
-	fetchPoolMembers,
-	fetchPoolPicksMatrix,
 	fetchUserPools,
-	joinPoolByCode,
-	leavePool,
 } from '@/lib/queries/pools';
 import {
 	fetchUserPredictions,
-	fetchUserPredictionsWithMatches,
-	upsertPrediction,
+	submitPrediction,
 } from '@/lib/queries/predictions';
+import { fetchUserScoreSummary } from '@/lib/queries/scoring';
+import { fetchActiveSports } from '@/lib/queries/sports';
 
 const { mockSupabaseClient, MockQueryBuilder } = globalThis as any;
 
-describe('lib/queries/matches', () => {
+describe('lib/queries modular unit tests', () => {
 	beforeEach(() => {
 		vi.restoreAllMocks();
 		vi.clearAllMocks();
 	});
 
-	it('should fetch matches successfully', async () => {
-		const mockMatchList = [{ id: 'match-1', matchday: 12 }];
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(mockMatchList);
-		});
-
-		const matches = await fetchMatches(12);
-		expect(matches).toEqual(mockMatchList);
-	});
-
-	it('should return fallback matches if no matches are found in db', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder([]);
-		});
-
-		const matches = await fetchMatches(12);
-		expect(matches).toHaveLength(3); // returns fallback matches
-	});
-
-	it('should return fallback matches if fetch matches throws an error', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(
-				null,
-				new Error('Database connection failed'),
-			);
-		});
-
-		const matches = await fetchMatches(12);
-		expect(matches).toHaveLength(3); // returns fallback matches
-	});
-
-	it('should fetch available matchdays successfully', async () => {
-		const mockData = [{ matchday: 12 }, { matchday: 13 }, { matchday: 12 }];
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(mockData);
-		});
-
-		const matchdays = await fetchAvailableMatchdays();
-		expect(matchdays).toEqual([12, 13]);
-	});
-
-	it('should fetch active matchday successfully based on upcoming match', async () => {
-		const mockUpcoming = [
-			{ matchday: 13, kickoff_time: '2026-08-22T12:00:00Z' },
-		];
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(mockUpcoming);
-		});
-
-		const active = await fetchActiveMatchday();
-		expect(active).toBe(13);
-	});
-
-	it('should fetch active matchday fallback to finished matches when no upcoming', async () => {
-		(mockSupabaseClient.from as any)
-			.mockImplementationOnce(() => {
-				return new MockQueryBuilder([]); // no upcoming
-			})
-			.mockImplementationOnce(() => {
-				return new MockQueryBuilder([{ matchday: 11 }]); // finished matchday 11
+	describe('lib/queries/sports', () => {
+		it('should fetch active sports', async () => {
+			const mockSports = [
+				{
+					slug: 'football',
+					name: 'Football',
+					icon_key: 'football',
+					default_score_unit: 'goals',
+					is_active: true,
+					display_order: 1,
+					created_at: '',
+					updated_at: '',
+				},
+			];
+			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+				return new MockQueryBuilder(mockSports);
 			});
 
-		const active = await fetchActiveMatchday();
-		expect(active).toBe(11);
+			const sports = await fetchActiveSports();
+			expect(sports).toHaveLength(1);
+			expect(sports[0].slug).toBe('football');
+		});
 	});
 
-	it('should fetch match community insights via rpc', async () => {
-		const mockInsights = {
-			match_id: 'm-1',
-			is_locked: true,
-			total_predictions: 10,
-			outcome_distribution: {
-				home_win_count: 5,
-				draw_count: 3,
-				away_win_count: 2,
-				home_win_pct: 50,
-				draw_pct: 30,
-				away_win_pct: 20,
-			},
-			points_distribution: {
-				exact_3pts: 2,
-				diff_2pts: 3,
-				winner_1pt: 3,
-				miss_0pts: 2,
-			},
-			top_scores: [{ scoreline: '2 - 1', count: 4, percentage: 40 }],
-			participants: [],
-		};
+	describe('lib/queries/competitions', () => {
+		it('should fetch active competitions', async () => {
+			const mockComps = [
+				{
+					id: 1,
+					sport_slug: 'football',
+					slug: 'premier-league',
+					name: 'Premier League',
+					kind: 'league',
+					country: 'England',
+					logo_url: null,
+					is_active: true,
+					created_at: '',
+					updated_at: '',
+				},
+			];
+			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+				return new MockQueryBuilder(mockComps);
+			});
 
-		vi.spyOn(mockSupabaseClient, 'rpc').mockResolvedValueOnce({
-			data: mockInsights,
-			error: null,
+			const comps = await fetchActiveCompetitions('football');
+			expect(comps).toHaveLength(1);
+			expect(comps[0].id).toBe('1');
+			expect(comps[0].name).toBe('Premier League');
 		});
 
-		const insights = await fetchMatchCommunityInsights('m-1', 'pool-1');
-		expect(insights).toEqual(mockInsights);
-	});
+		it('should fetch active competition editions', async () => {
+			const mockEds = [
+				{
+					id: 10,
+					competition_id: 1,
+					season_key: '2025-2026',
+					name: 'Premier League 2025/26',
+					starts_at: '2026-08-01T00:00:00Z',
+					ends_at: '2026-05-30T00:00:00Z',
+					status: 'active',
+					metadata: {},
+					created_at: '',
+					updated_at: '',
+				},
+			];
+			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+				return new MockQueryBuilder(mockEds);
+			});
 
-	it('should fallback to graceful default insights when rpc fails', async () => {
-		vi.spyOn(mockSupabaseClient, 'rpc').mockResolvedValueOnce({
-			data: null,
-			error: new Error('RPC unavailable'),
+			const eds = await fetchActiveCompetitionEditions();
+			expect(eds).toHaveLength(1);
+			expect(eds[0].id).toBe('10');
+			expect(eds[0].season_key).toBe('2025-2026');
 		});
 
-		const insights = await fetchMatchCommunityInsights('m-1');
-		expect(insights?.total_predictions).toBe(18);
-		expect(insights?.outcome_distribution.home_win_pct).toBe(56);
-	});
-});
+		it('should fetch distinct edition rounds', async () => {
+			const mockEvents = [
+				{ round_label: 'Round 12' },
+				{ round_label: 'Round 13' },
+				{ round_label: 'Round 12' },
+			];
+			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+				return new MockQueryBuilder(mockEvents);
+			});
 
-describe('lib/queries/pools', () => {
-	beforeEach(() => {
-		vi.restoreAllMocks();
-		vi.clearAllMocks();
+			const rounds = await fetchEditionRounds('10');
+			expect(rounds).toEqual(['Round 12', 'Round 13']);
+		});
 	});
 
-	it('should fetch user pools successfully', async () => {
-		const mockPools = [{ pool_id: 'pool-1', pool: { name: 'Pool One' } }];
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(mockPools);
+	describe('lib/queries/events', () => {
+		it('should fetch events with competitors and markets', async () => {
+			const mockRawEvents = [
+				{
+					id: 100,
+					edition_id: 10,
+					kind: 'match',
+					starts_at: '2026-08-25T15:00:00Z',
+					status: 'scheduled',
+					round_label: 'Round 12',
+					sequence_number: 1,
+					event_competitors: [
+						{
+							slot: 1,
+							role: 'home',
+							competitors: { id: 1, name: 'Arsenal', short_name: 'ARS' },
+						},
+						{
+							slot: 2,
+							role: 'away',
+							competitors: { id: 2, name: 'Chelsea', short_name: 'CHE' },
+						},
+					],
+					event_markets: [
+						{
+							id: 500,
+							market_kind: 'team_scoreline',
+							is_current: true,
+							status: 'open',
+							locks_at: '2026-08-25T15:00:00Z',
+						},
+					],
+				},
+			];
+
+			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+				return new MockQueryBuilder(mockRawEvents);
+			});
+
+			const events = await fetchEvents({ editionId: '10' });
+			expect(events).toHaveLength(1);
+			expect(events[0].id).toBe('100');
+			expect(events[0].competitors).toHaveLength(2);
+			expect(events[0].current_market?.id).toBe('500');
 		});
 
-		const result = await fetchUserPools('user-1');
-		expect(result).toEqual(mockPools);
+		it('should fetch event by ID', async () => {
+			const mockEvent = {
+				id: 100,
+				edition_id: 10,
+				kind: 'match',
+				starts_at: '2026-08-25T15:00:00Z',
+				status: 'scheduled',
+				round_label: 'Round 12',
+				event_competitors: [],
+				event_markets: [],
+			};
+
+			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+				return new MockQueryBuilder(mockEvent);
+			});
+
+			const ev = await fetchEventById('100');
+			expect(ev).not.toBeNull();
+			expect(ev?.id).toBe('100');
+		});
 	});
 
-	it('should handle errors when fetching user pools', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(null, new Error('Error fetching pools'));
+	describe('lib/queries/markets', () => {
+		it('should fetch market community stats via RPC', async () => {
+			const mockStats = [
+				{
+					total_predictions: 25,
+					avg_home_score: 2.1,
+					avg_away_score: 1.2,
+					home_win_pct: 60,
+					draw_pct: 20,
+					away_win_pct: 20,
+					top_exact_scores: [{ home: 2, away: 1, count: 10, pct: 40 }],
+				},
+			];
+
+			vi.spyOn(mockSupabaseClient, 'rpc').mockResolvedValueOnce({
+				data: mockStats,
+				error: null,
+			});
+
+			const stats = await fetchMarketCommunityStats('500');
+			expect(stats.total_predictions).toBe(25);
+			expect(stats.home_win_pct).toBe(60);
+			expect(stats.top_exact_scores).toHaveLength(1);
 		});
 
-		const result = await fetchUserPools('user-1');
-		expect(result).toEqual([]);
+		it('should fetch market participant picks', async () => {
+			const mockPicks = [
+				{
+					user_id: 'u1',
+					selection: { home: 2, away: 1 },
+					tier_code: 'exact_score',
+					raw_points: 3,
+					profiles: { id: 'u1', full_name: 'Alice' },
+				},
+			];
+
+			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+				return new MockQueryBuilder(mockPicks);
+			});
+
+			const picks = await fetchMarketParticipantPicks('500');
+			expect(picks).toHaveLength(1);
+			expect(picks[0].full_name).toBe('Alice');
+			expect(picks[0].home).toBe(2);
+			expect(picks[0].tier_code).toBe('exact_score');
+		});
 	});
 
-	it('should fetch pool details and member count successfully', async () => {
-		const mockPool = { id: 'pool-1', name: 'Pool One' };
-		(mockSupabaseClient.from as any).mockImplementation((table: string) => {
-			if (table === 'pools') {
-				return new MockQueryBuilder(mockPool);
-			}
-			// pool_members count query
-			return {
-				select: vi.fn().mockReturnThis(),
-				eq: vi.fn().mockReturnValue(Promise.resolve({ count: 5, error: null })),
-			} as any;
+	describe('lib/queries/predictions', () => {
+		it('should fetch user predictions', async () => {
+			const mockPreds = [
+				{
+					id: 1,
+					user_id: 'u1',
+					event_market_id: 500,
+					selection: { kind: 'team_scoreline', version: 1, home: 2, away: 1 },
+					settlement_status: 'settled',
+					raw_points: 3,
+					tier_code: 'exact_score',
+					created_at: '2026-08-25T12:00:00Z',
+				},
+			];
+
+			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+				return new MockQueryBuilder(mockPreds);
+			});
+
+			const preds = await fetchUserPredictions('u1');
+			expect(preds).toHaveLength(1);
+			expect(preds[0].id).toBe('1');
+			expect(preds[0].raw_points).toBe(3);
 		});
 
-		const result = await fetchPoolDetails('pool-1');
-		expect(result).toEqual({ ...mockPool, member_count: 5 });
+		it('should submit prediction successfully', async () => {
+			const mockSaved = {
+				id: 1,
+				user_id: 'u1',
+				event_market_id: 500,
+				selection: { kind: 'team_scoreline', version: 1, home: 2, away: 1 },
+				settlement_status: 'pending',
+				created_at: '2026-08-25T12:00:00Z',
+				updated_at: '2026-08-25T12:00:00Z',
+			};
+
+			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+				return new MockQueryBuilder(mockSaved);
+			});
+
+			const result = await submitPrediction('u1', '500', {
+				kind: 'team_scoreline',
+				version: 1,
+				home: 2,
+				away: 1,
+			});
+
+			expect(result.id).toBe('1');
+			expect(result.event_market_id).toBe('500');
+		});
 	});
 
-	it('should return null when fetch pool details errors out', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(null, new Error('Pool not found'));
-		});
+	describe('lib/queries/scoring', () => {
+		it('should fetch user score summary via RPC', async () => {
+			const mockSummary = [
+				{
+					total_raw_points: 15,
+					total_normalized_points: 50000,
+					total_predictions: 10,
+					settled_predictions: 8,
+					exact_count: 3,
+					margin_count: 2,
+					outcome_count: 2,
+					miss_count: 1,
+					win_rate: 87.5,
+				},
+			];
 
-		const result = await fetchPoolDetails('pool-1');
-		expect(result).toBeNull();
+			vi.spyOn(mockSupabaseClient, 'rpc').mockResolvedValueOnce({
+				data: mockSummary,
+				error: null,
+			});
+
+			const summary = await fetchUserScoreSummary('u1');
+			expect(summary.total_raw_points).toBe(15);
+			expect(summary.exact_count).toBe(3);
+			expect(summary.win_rate).toBe(87.5);
+		});
 	});
 
-	it('should fetch pool leaderboard successfully', async () => {
-		const mockLeaderboard = [{ username: 'User1', points: 10 }];
-		(mockSupabaseClient.rpc as any).mockResolvedValueOnce({
-			data: mockLeaderboard,
-			error: null,
+	describe('lib/queries/pools', () => {
+		it('should fetch user pools', async () => {
+			const mockUserPools = [
+				{
+					pool_id: 'p1',
+					role: 'admin',
+					joined_at: '2026-08-20T00:00:00Z',
+					pools: {
+						id: 'p1',
+						name: 'Champions Pool',
+						invite_code: 'CHAMP1',
+						scope_kind: 'sport',
+						sport_slug: 'football',
+						scoring_mode: 'raw',
+						is_private: true,
+					},
+				},
+			];
+
+			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
+				return new MockQueryBuilder(mockUserPools);
+			});
+
+			const pools = await fetchUserPools('u1');
+			expect(pools).toHaveLength(1);
+			expect(pools[0].id).toBe('p1');
+			expect(pools[0].name).toBe('Champions Pool');
 		});
 
-		const result = await fetchPoolLeaderboard('pool-1');
-		expect(result).toEqual(mockLeaderboard);
-	});
+		it('should create pool and assign admin membership', async () => {
+			const mockPool = {
+				id: 'p-new',
+				name: 'Premier League Legends',
+				created_by: 'u1',
+				invite_code: 'PL2026',
+				scope_kind: 'sport',
+				sport_slug: 'football',
+				scoring_mode: 'raw',
+				is_private: true,
+			};
 
-	it('should return empty list when fetch pool leaderboard errors out', async () => {
-		(mockSupabaseClient.rpc as any).mockResolvedValueOnce({
-			data: null,
-			error: new Error('RPC failed'),
+			(mockSupabaseClient.from as any)
+				.mockImplementationOnce(() => new MockQueryBuilder(mockPool))
+				.mockImplementationOnce(() => new MockQueryBuilder({ id: 1 }));
+
+			const created = await createPool({
+				name: 'Premier League Legends',
+				created_by: 'u1',
+				scope_kind: 'sport',
+				sport_slug: 'football',
+			});
+
+			expect(created.id).toBe('p-new');
 		});
 
-		const result = await fetchPoolLeaderboard('pool-1');
-		expect(result).toEqual([]);
-	});
+		it('should fetch pool leaderboard via RPC', async () => {
+			const mockBoard = [
+				{
+					rank: 1,
+					user_id: 'u1',
+					full_name: 'Alice',
+					total_points: 12,
+					exact_count: 2,
+					margin_count: 1,
+					outcome_count: 2,
+					predictions_count: 5,
+				},
+			];
 
-	it('should fetch pool members successfully', async () => {
-		const mockMembers = [{ user_id: 'user-1' }];
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(mockMembers);
+			vi.spyOn(mockSupabaseClient, 'rpc').mockResolvedValueOnce({
+				data: mockBoard,
+				error: null,
+			});
+
+			const board = await fetchPoolLeaderboard('p1');
+			expect(board).toHaveLength(1);
+			expect(board[0].rank).toBe(1);
+			expect(board[0].total_points).toBe(12);
 		});
-
-		const result = await fetchPoolMembers('pool-1');
-		expect(result).toEqual(mockMembers);
-	});
-
-	it('should return empty list when fetch pool members errors out', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(null, new Error('Error fetching members'));
-		});
-
-		const result = await fetchPoolMembers('pool-1');
-		expect(result).toEqual([]);
-	});
-
-	it('should create pool successfully', async () => {
-		const mockPool = { id: 'pool-1', name: 'My Pool' };
-		// First RPC: invite code, then Insert
-		(mockSupabaseClient.rpc as any).mockResolvedValueOnce({
-			data: 'INV123',
-			error: null,
-		});
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(mockPool);
-		});
-
-		const result = await createPool('user-1', 'My Pool', 'Desc', true);
-		expect(result).toEqual(mockPool);
-	});
-
-	it('should throw error when pool creation fails', async () => {
-		(mockSupabaseClient.rpc as any).mockResolvedValueOnce({
-			data: null,
-			error: new Error('Code gen failed'),
-		});
-
-		await expect(createPool('user-1', 'My Pool', 'Desc', true)).rejects.toThrow(
-			'Code gen failed',
-		);
-	});
-
-	it('should join pool by code successfully', async () => {
-		const mockResponse = { success: true, pool_id: 'pool-1' };
-		(mockSupabaseClient.rpc as any).mockResolvedValueOnce({
-			data: mockResponse,
-			error: null,
-		});
-
-		const result = await joinPoolByCode('INV123');
-		expect(result).toEqual(mockResponse);
-	});
-
-	it('should return error response when joining pool by code fails', async () => {
-		(mockSupabaseClient.rpc as any).mockResolvedValueOnce({
-			data: null,
-			error: new Error('Invalid code'),
-		});
-
-		const result = await joinPoolByCode('INV123');
-		expect(result).toEqual({ success: false, error: 'Invalid code' });
-	});
-
-	it('should leave pool successfully', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder([], null);
-		});
-
-		const result = await leavePool('pool-1', 'user-1');
-		expect(result).toBe(true);
-	});
-
-	it('should return false when leaving pool fails', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(null, new Error('Failed to delete member'));
-		});
-
-		const result = await leavePool('pool-1', 'user-1');
-		expect(result).toBe(false);
-	});
-
-	it('should fetch pool picks matrix successfully', async () => {
-		const mockMatches = [{ id: 'm-1', matchday: 12 }];
-		const mockMembers = [{ user_id: 'u-1' }, { user_id: 'u-2' }];
-		const mockPredictions = [
-			{
-				user_id: 'u-1',
-				match_id: 'm-1',
-				predicted_home_score: 2,
-				predicted_away_score: 1,
-			},
-		];
-
-		(mockSupabaseClient.from as any).mockImplementation((table: string) => {
-			if (table === 'matches') {
-				return new MockQueryBuilder(mockMatches);
-			}
-			if (table === 'pool_members') {
-				return new MockQueryBuilder(mockMembers);
-			}
-			if (table === 'predictions') {
-				return new MockQueryBuilder(mockPredictions);
-			}
-			return new MockQueryBuilder();
-		});
-
-		const result = await fetchPoolPicksMatrix('pool-1', 12);
-		expect(result.matches).toEqual(mockMatches);
-		expect(result.predictions['u-1']['m-1']).toBeDefined();
-		expect(result.predictions['u-2']).toEqual({});
-	});
-
-	it('should handle errors in fetch pool picks matrix', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(null, new Error('Database down'));
-		});
-
-		const result = await fetchPoolPicksMatrix('pool-1', 12);
-		expect(result).toEqual({ matches: [], predictions: {} });
-	});
-});
-
-describe('lib/queries/predictions', () => {
-	beforeEach(() => {
-		vi.restoreAllMocks();
-		vi.clearAllMocks();
-	});
-
-	it('should fetch user predictions successfully', async () => {
-		const mockPredictions = [{ id: 'pred-1', user_id: 'user-1' }];
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(mockPredictions);
-		});
-
-		const result = await fetchUserPredictions('user-1');
-		expect(result).toEqual(mockPredictions);
-	});
-
-	it('should handle errors when fetching user predictions', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(
-				null,
-				new Error('Error fetching predictions'),
-			);
-		});
-
-		const result = await fetchUserPredictions('user-1');
-		expect(result).toEqual([]);
-	});
-
-	it('should fetch user predictions with matches successfully', async () => {
-		const mockPredictions = [{ id: 'pred-1', match: { id: 'm-1' } }];
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(mockPredictions);
-		});
-
-		const result = await fetchUserPredictionsWithMatches('user-1');
-		expect(result).toEqual(mockPredictions);
-	});
-
-	it('should handle errors when fetching user predictions with matches', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(
-				null,
-				new Error('Error fetching detailed predictions'),
-			);
-		});
-
-		const result = await fetchUserPredictionsWithMatches('user-1');
-		expect(result).toEqual([]);
-	});
-
-	it('should upsert prediction successfully', async () => {
-		const mockPrediction = {
-			id: 'pred-1',
-			predicted_home_score: 2,
-			predicted_away_score: 1,
-		};
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(mockPrediction);
-		});
-
-		const result = await upsertPrediction('user-1', 'match-1', 2, 1);
-		expect(result).toEqual(mockPrediction);
-	});
-
-	it('should throw error when upsert prediction fails', async () => {
-		vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
-			return new MockQueryBuilder(null, new Error('Upsert failed'));
-		});
-
-		await expect(upsertPrediction('user-1', 'match-1', 2, 1)).rejects.toThrow(
-			'Upsert failed',
-		);
 	});
 });

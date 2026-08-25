@@ -7,11 +7,6 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const RAPIDAPI_KEY =
-	process.env.RAPIDAPI_KEY || process.env.NEXT_PUBLIC_RAPIDAPI_KEY;
-const FOOTBALL_DATA_API_KEY =
-	process.env.FOOTBALL_DATA_API_KEY ||
-	process.env.NEXT_PUBLIC_FOOTBALL_DATA_API_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 	console.error('❌ Missing Supabase environment variables. Check .env.local');
@@ -24,517 +19,284 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 	},
 });
 
-// MOCK DATASET FOR OFFLINE FALLBACK
-const fallbackTeams = [
+const teams = [
 	{
 		name: 'Arsenal',
 		short_name: 'ARS',
 		logo_url: 'https://media.api-sports.io/football/teams/42.png',
-		external_id: 42,
 	},
 	{
 		name: 'Aston Villa',
 		short_name: 'AVL',
 		logo_url: 'https://media.api-sports.io/football/teams/66.png',
-		external_id: 66,
 	},
 	{
 		name: 'Chelsea',
 		short_name: 'CHE',
 		logo_url: 'https://media.api-sports.io/football/teams/49.png',
-		external_id: 49,
 	},
 	{
 		name: 'Liverpool',
 		short_name: 'LIV',
 		logo_url: 'https://media.api-sports.io/football/teams/40.png',
-		external_id: 40,
 	},
 	{
 		name: 'Manchester City',
 		short_name: 'MCI',
 		logo_url: 'https://media.api-sports.io/football/teams/50.png',
-		external_id: 50,
 	},
 	{
 		name: 'Manchester United',
 		short_name: 'MUN',
 		logo_url: 'https://media.api-sports.io/football/teams/33.png',
-		external_id: 33,
 	},
 	{
 		name: 'Newcastle',
 		short_name: 'NEW',
 		logo_url: 'https://media.api-sports.io/football/teams/34.png',
-		external_id: 34,
 	},
 	{
 		name: 'Tottenham Hotspur',
 		short_name: 'TOT',
 		logo_url: 'https://media.api-sports.io/football/teams/47.png',
-		external_id: 47,
 	},
 	{
 		name: 'West Ham United',
 		short_name: 'WHU',
 		logo_url: 'https://media.api-sports.io/football/teams/48.png',
-		external_id: 48,
-	},
-	{
-		name: 'Wolverhampton Wanderers',
-		short_name: 'WOL',
-		logo_url: 'https://media.api-sports.io/football/teams/39.png',
-		external_id: 39,
-	},
-	{
-		name: 'Leicester City',
-		short_name: 'LEI',
-		logo_url: 'https://media.api-sports.io/football/teams/46.png',
-		external_id: 46,
-	},
-	{
-		name: 'Everton',
-		short_name: 'EVE',
-		logo_url: 'https://media.api-sports.io/football/teams/45.png',
-		external_id: 45,
 	},
 	{
 		name: 'Brighton',
 		short_name: 'BHA',
 		logo_url: 'https://media.api-sports.io/football/teams/51.png',
-		external_id: 51,
-	},
-	{
-		name: 'Crystal Palace',
-		short_name: 'CRY',
-		logo_url: 'https://media.api-sports.io/football/teams/52.png',
-		external_id: 52,
-	},
-	{
-		name: 'Brentford',
-		short_name: 'BRE',
-		logo_url: 'https://media.api-sports.io/football/teams/55.png',
-		external_id: 55,
-	},
-	{
-		name: 'Fulham',
-		short_name: 'FUL',
-		logo_url: 'https://media.api-sports.io/football/teams/36.png',
-		external_id: 36,
-	},
-	{
-		name: 'Bournemouth',
-		short_name: 'BOU',
-		logo_url: 'https://media.api-sports.io/football/teams/35.png',
-		external_id: 35,
-	},
-	{
-		name: 'Ipswich Town',
-		short_name: 'IPS',
-		logo_url: 'https://media.api-sports.io/football/teams/57.png',
-		external_id: 57,
-	},
-	{
-		name: 'Southampton',
-		short_name: 'SOU',
-		logo_url: 'https://media.api-sports.io/football/teams/41.png',
-		external_id: 41,
-	},
-	{
-		name: 'Nottingham Forest',
-		short_name: 'NFO',
-		logo_url: 'https://media.api-sports.io/football/teams/65.png',
-		external_id: 65,
 	},
 ];
 
-// 10 matches for Matchweek 12
-const fallbackMatches = [
-	{
-		matchday: 12,
-		round: 'Regular Season - 12',
-		home_external_id: 49,
-		away_external_id: 42,
-		kickoff_offset_days: 1,
-		kickoff_hour: 15,
-		external_id: 12001,
-	}, // Chelsea vs Arsenal
-	{
-		matchday: 12,
-		round: 'Regular Season - 12',
-		home_external_id: 50,
-		away_external_id: 47,
-		kickoff_offset_days: 2,
-		kickoff_hour: 17,
-		external_id: 12002,
-	}, // Man City vs Tottenham
-	{
-		matchday: 12,
-		round: 'Regular Season - 12',
-		home_external_id: 40,
-		away_external_id: 66,
-		kickoff_offset_days: 3,
-		kickoff_hour: 16,
-		external_id: 12003,
-	}, // Liverpool vs Aston Villa
-	{
-		matchday: 12,
-		round: 'Regular Season - 12',
-		home_external_id: 33,
-		away_external_id: 45,
-		kickoff_offset_days: 2,
-		kickoff_hour: 12,
-		external_id: 12004,
-	}, // Man United vs Everton
-	{
-		matchday: 12,
-		round: 'Regular Season - 12',
-		home_external_id: 34,
-		away_external_id: 48,
-		kickoff_offset_days: 1,
-		kickoff_hour: 15,
-		external_id: 12005,
-	}, // Newcastle vs West Ham
-	{
-		matchday: 12,
-		round: 'Regular Season - 12',
-		home_external_id: 51,
-		away_external_id: 39,
-		kickoff_offset_days: 1,
-		kickoff_hour: 15,
-		external_id: 12006,
-	}, // Brighton vs Wolves
-	{
-		matchday: 12,
-		round: 'Regular Season - 12',
-		home_external_id: 36,
-		away_external_id: 52,
-		kickoff_offset_days: 2,
-		kickoff_hour: 15,
-		external_id: 12007,
-	}, // Fulham vs Crystal Palace
-	{
-		matchday: 12,
-		round: 'Regular Season - 12',
-		home_external_id: 46,
-		away_external_id: 55,
-		kickoff_offset_days: 1,
-		kickoff_hour: 15,
-		external_id: 12008,
-	}, // Leicester vs Brentford
-	{
-		matchday: 12,
-		round: 'Regular Season - 12',
-		home_external_id: 35,
-		away_external_id: 41,
-		kickoff_offset_days: 3,
-		kickoff_hour: 14,
-		external_id: 12009,
-	}, // Bournemouth vs Southampton
-	{
-		matchday: 12,
-		round: 'Regular Season - 12',
-		home_external_id: 57,
-		away_external_id: 65,
-		kickoff_offset_days: 2,
-		kickoff_hour: 15,
-		external_id: 12010,
-	}, // Ipswich vs Nottingham Forest
-];
+export async function seedDeterministicFixtures() {
+	console.log('🌱 Starting deterministic fixture seeding for Phase 13...');
 
-async function seed() {
-	console.log('🚀 Starting Data Ingestion Pipeline...');
-
-	// 1. Seed Tournament
-	const tournamentData = {
-		name: 'Premier League 24/25',
-		sport: 'football',
-		season: '2024',
-		status: 'active',
-		logo_url: 'https://media.api-sports.io/football/leagues/39.png',
-		external_id: 39,
-	};
-
-	console.log('Inserting tournament...');
-	const { data: tournament, error: tournamentErr } = await supabase
-		.from('tournaments')
-		.upsert(tournamentData, { onConflict: 'external_id' })
-		.select()
-		.single();
-
-	if (tournamentErr || !tournament) {
-		console.error('❌ Failed to upsert tournament:', tournamentErr);
-		process.exit(1);
-	}
-
-	console.log(
-		`✅ Tournament initialized: "${tournament.name}" (ID: ${tournament.id})`,
-	);
-
-	let apiTeams: any[] = [];
-	let apiFixtures: any[] = [];
-	let usingLiveApi = false;
-
-	// 2. Try Fetching from Football-Data.org (FIRST PRIORITY DIRECT API)
-	if (
-		FOOTBALL_DATA_API_KEY &&
-		FOOTBALL_DATA_API_KEY !== 'your-football-data-api-key' &&
-		!FOOTBALL_DATA_API_KEY.includes('placeholder')
-	) {
-		try {
-			console.log(
-				'📡 Fetching Premier League fixtures from Football-Data.org...',
-			);
-			const url = 'https://api.football-data.org/v4/competitions/PL/matches';
-			const res = await fetch(url, {
-				headers: {
-					'X-Auth-Token': FOOTBALL_DATA_API_KEY,
-				},
-			});
-
-			if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-
-			const json = await res.json();
-			const matches = json.matches || [];
-
-			if (matches.length > 0) {
-				console.log(
-					`✅ Retrieved ${matches.length} fixtures from Football-Data.org!`,
-				);
-				usingLiveApi = true;
-
-				const teamsMap = new Map();
-				matches.forEach((item: any) => {
-					const home = item.homeTeam;
-					const away = item.awayTeam;
-
-					if (home.id) {
-						teamsMap.set(home.id, {
-							name: home.name,
-							short_name: home.tla || home.name.substring(0, 3).toUpperCase(),
-							logo_url: home.crest,
-							external_id: home.id,
-						});
-					}
-					if (away.id) {
-						teamsMap.set(away.id, {
-							name: away.name,
-							short_name: away.tla || away.name.substring(0, 3).toUpperCase(),
-							logo_url: away.crest,
-							external_id: away.id,
-						});
-					}
-				});
-
-				apiTeams = Array.from(teamsMap.values());
-				apiFixtures = matches.map((item: any) => {
-					const isFinished = item.status === 'FINISHED';
-					const isLive = item.status === 'IN_PLAY' || item.status === 'PAUSED';
-
-					return {
-						matchday: item.matchday,
-						round: `Regular Season - ${item.matchday}`,
-						home_external_id: item.homeTeam.id,
-						away_external_id: item.awayTeam.id,
-						kickoff_time: item.utcDate,
-						home_score: isFinished ? item.score.fullTime.home : null,
-						away_score: isFinished ? item.score.fullTime.away : null,
-						status: isFinished ? 'finished' : isLive ? 'live' : 'scheduled',
-						external_id: item.id,
-					};
-				});
-			}
-		} catch (err) {
-			console.warn(
-				'⚠️ Football-Data.org fetch failed, trying RapidAPI/API-Football next...',
-				err,
-			);
-		}
-	}
-
-	// 3. Fallback to API-Football (RapidAPI) if key exists and Football-Data wasn't run
-	if (
-		!usingLiveApi &&
-		RAPIDAPI_KEY &&
-		RAPIDAPI_KEY !== 'your-supabase-anon-key' &&
-		!RAPIDAPI_KEY.includes('placeholder')
-	) {
-		try {
-			console.log(
-				'📡 Fetching Premier League fixtures from RapidAPI/API-Football...',
-			);
-			const url =
-				'https://api-football-v1.p.rapidapi.com/v3/fixtures?league=39&season=2024';
-			const res = await fetch(url, {
-				headers: {
-					'x-rapidapi-key': RAPIDAPI_KEY,
-					'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
-				},
-			});
-
-			if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-
-			const json = await res.json();
-			const fixtures = json.response || [];
-
-			if (fixtures.length > 0) {
-				console.log(
-					`✅ Retrieved ${fixtures.length} fixtures from API-Football!`,
-				);
-				usingLiveApi = true;
-
-				const teamsMap = new Map();
-				fixtures.forEach((item: any) => {
-					const home = item.teams.home;
-					const away = item.teams.away;
-					teamsMap.set(home.id, {
-						name: home.name,
-						short_name: home.name.substring(0, 3).toUpperCase(),
-						logo_url: home.logo,
-						external_id: home.id,
-					});
-					teamsMap.set(away.id, {
-						name: away.name,
-						short_name: away.name.substring(0, 3).toUpperCase(),
-						logo_url: away.logo,
-						external_id: away.id,
-					});
-				});
-
-				apiTeams = Array.from(teamsMap.values());
-				apiFixtures = fixtures.map((item: any) => {
-					return {
-						matchday: parseInt(item.league.round.replace(/[^0-9]/g, '')) || 1,
-						round: item.league.round,
-						home_external_id: item.teams.home.id,
-						away_external_id: item.teams.away.id,
-						kickoff_time: item.fixture.date,
-						home_score: item.goals.home,
-						away_score: item.goals.away,
-						status:
-							item.fixture.status.short === 'FT'
-								? 'finished'
-								: item.fixture.status.short === '1H' ||
-									  item.fixture.status.short === '2H'
-									? 'live'
-									: 'scheduled',
-						external_id: item.fixture.id,
-					};
-				});
-			}
-		} catch (err) {
-			console.warn(
-				'⚠️ API-Football fetch failed. Swerving back to beautiful built-in fallback dataset:',
-				err,
-			);
-		}
-	}
-
-	if (!usingLiveApi) {
-		console.log(
-			'ℹ️ No active/functioning live API keys detected. Launching local fallback seeder.',
-		);
-	}
-
-	// Define lists to upsert
-	const teamsToUpsert = usingLiveApi ? apiTeams : fallbackTeams;
-	const finalTeams = teamsToUpsert.map((t) => ({
-		...t,
-		tournament_id: tournament.id,
-	}));
-
-	console.log(`Inserting ${finalTeams.length} teams...`);
-	const { data: insertedTeams, error: teamsErr } = await supabase
-		.from('teams')
-		.upsert(finalTeams, { onConflict: 'external_id' })
-		.select();
-
-	if (teamsErr || !insertedTeams) {
-		console.error('❌ Failed to upsert teams:', teamsErr);
-		process.exit(1);
-	}
-
-	console.log('✅ Teams inserted/updated successfully.');
-
-	// Create lookup map of external_id -> UUID
-	const teamUuidMap = new Map<number, string>();
-	insertedTeams.forEach((team) => {
-		if (team.external_id) teamUuidMap.set(team.external_id, team.id);
+	// 1. Ensure Sport
+	await supabase.from('sports').upsert({
+		slug: 'football',
+		name: 'Football',
+		icon_key: 'football',
+		default_score_unit: 'goals',
+		is_active: true,
+		display_order: 1,
 	});
 
-	// Format matches
-	let finalMatchesToInsert: any[] = [];
+	// 2. Ensure Competition
+	let compId: string | number;
+	const { data: compData } = await supabase
+		.from('competitions')
+		.select('id')
+		.eq('slug', 'premier-league')
+		.maybeSingle();
 
-	if (usingLiveApi) {
-		finalMatchesToInsert = apiFixtures.map((fixture) => {
-			const homeUuid = teamUuidMap.get(fixture.home_external_id);
-			const awayUuid = teamUuidMap.get(fixture.away_external_id);
-
-			return {
-				tournament_id: tournament.id,
-				matchday: fixture.matchday,
-				round: fixture.round,
-				home_team_id: homeUuid,
-				away_team_id: awayUuid,
-				kickoff_time: fixture.kickoff_time,
-				home_score: fixture.home_score,
-				away_score: fixture.away_score,
-				status: fixture.status,
-				external_id: fixture.external_id,
-				updated_at: new Date().toISOString(),
-			};
-		});
+	if (compData) {
+		compId = compData.id;
 	} else {
-		// Generate dates based on local time offset for fallbacks
-		const now = new Date();
-		finalMatchesToInsert = fallbackMatches.map((fixture) => {
-			const homeUuid = teamUuidMap.get(fixture.home_external_id);
-			const awayUuid = teamUuidMap.get(fixture.away_external_id);
-
-			const kickoff = new Date();
-			kickoff.setDate(now.getDate() + fixture.kickoff_offset_days);
-			kickoff.setHours(fixture.kickoff_hour, 0, 0, 0);
-
-			return {
-				tournament_id: tournament.id,
-				matchday: fixture.matchday,
-				round: fixture.round,
-				home_team_id: homeUuid,
-				away_team_id: awayUuid,
-				kickoff_time: kickoff.toISOString(),
-				home_score: null,
-				away_score: null,
-				status: 'scheduled',
-				external_id: fixture.external_id,
-				updated_at: new Date().toISOString(),
-			};
-		});
+		const { data: createdComp, error: cErr } = await supabase
+			.from('competitions')
+			.insert({
+				sport_slug: 'football',
+				slug: 'premier-league',
+				name: 'Premier League',
+				kind: 'league',
+				country: 'England',
+				logo_url: 'https://media.api-sports.io/football/leagues/39.png',
+				is_active: true,
+			})
+			.select()
+			.single();
+		if (cErr) throw cErr;
+		compId = createdComp.id;
 	}
 
-	// Filter out any matches with undefined home or away team UUIDs
-	finalMatchesToInsert = finalMatchesToInsert.filter(
-		(m) => m.home_team_id && m.away_team_id,
-	);
+	// 3. Ensure Competition Edition
+	let editionId: string | number;
+	const { data: edData } = await supabase
+		.from('competition_editions')
+		.select('id')
+		.eq('competition_id', compId)
+		.eq('season_key', '2025-2026')
+		.maybeSingle();
 
-	console.log(`Inserting ${finalMatchesToInsert.length} fixtures...`);
+	if (edData) {
+		editionId = edData.id;
+	} else {
+		const { data: createdEd, error: edErr } = await supabase
+			.from('competition_editions')
+			.insert({
+				competition_id: compId,
+				season_key: '2025-2026',
+				name: 'Premier League 2025/26',
+				starts_at: new Date(Date.now() - 30 * 86400000).toISOString(),
+				ends_at: new Date(Date.now() + 200 * 86400000).toISOString(),
+				status: 'active',
+			})
+			.select()
+			.single();
+		if (edErr) throw edErr;
+		editionId = createdEd.id;
+	}
 
-	// Chunk inserts if too large
-	const chunkSize = 100;
-	for (let i = 0; i < finalMatchesToInsert.length; i += chunkSize) {
-		const chunk = finalMatchesToInsert.slice(i, i + chunkSize);
-		const { error: matchesErr } = await supabase
-			.from('matches')
-			.upsert(chunk, { onConflict: 'external_id' });
+	// 4. Ensure Competitors
+	const competitorMap = new Map<string, string | number>();
+	for (const t of teams) {
+		let cId: string | number;
+		const { data: existingComp } = await supabase
+			.from('competitors')
+			.select('id')
+			.eq('name', t.name)
+			.eq('sport_slug', 'football')
+			.maybeSingle();
 
-		if (matchesErr) {
-			console.error(`❌ Failed to upsert match chunk:`, matchesErr);
-			process.exit(1);
+		if (existingComp) {
+			cId = existingComp.id;
+		} else {
+			const { data: createdComp } = await supabase
+				.from('competitors')
+				.insert({
+					sport_slug: 'football',
+					kind: 'team',
+					name: t.name,
+					short_name: t.short_name,
+					media_url: t.logo_url,
+					is_active: true,
+				})
+				.select()
+				.single();
+			cId = createdComp.id;
 		}
+		competitorMap.set(t.name, cId);
+	}
+
+	// 5. Fetch active football ruleset
+	const { data: ruleset } = await supabase
+		.from('scoring_rulesets')
+		.select('id')
+		.eq('sport_slug', 'football')
+		.eq('market_kind', 'team_scoreline')
+		.eq('is_active', true)
+		.single();
+
+	if (!ruleset) {
+		console.warn('⚠️ No active scoring ruleset found for football.');
+		return;
+	}
+
+	// 6. Create fixtures for Round 12 and Round 13
+	const fixtures = [
+		{
+			home: 'Chelsea',
+			away: 'Arsenal',
+			round: 'Round 12',
+			seq: 1,
+			starts_at: new Date(Date.now() + 1 * 86400000).toISOString(),
+		},
+		{
+			home: 'Manchester City',
+			away: 'Tottenham Hotspur',
+			round: 'Round 12',
+			seq: 2,
+			starts_at: new Date(Date.now() + 2 * 86400000).toISOString(),
+		},
+		{
+			home: 'Liverpool',
+			away: 'Aston Villa',
+			round: 'Round 12',
+			seq: 3,
+			starts_at: new Date(Date.now() + 3 * 86400000).toISOString(),
+		},
+		{
+			home: 'Manchester United',
+			away: 'Newcastle',
+			round: 'Round 12',
+			seq: 4,
+			starts_at: new Date(Date.now() + 4 * 86400000).toISOString(),
+		},
+		{
+			home: 'Brighton',
+			away: 'West Ham United',
+			round: 'Round 12',
+			seq: 5,
+			starts_at: new Date(Date.now() + 5 * 86400000).toISOString(),
+		},
+		// Round 13
+		{
+			home: 'Arsenal',
+			away: 'Manchester City',
+			round: 'Round 13',
+			seq: 6,
+			starts_at: new Date(Date.now() + 8 * 86400000).toISOString(),
+		},
+		{
+			home: 'Tottenham Hotspur',
+			away: 'Chelsea',
+			round: 'Round 13',
+			seq: 7,
+			starts_at: new Date(Date.now() + 9 * 86400000).toISOString(),
+		},
+	];
+
+	for (const f of fixtures) {
+		const homeId = competitorMap.get(f.home);
+		const awayId = competitorMap.get(f.away);
+		if (!homeId || !awayId) continue;
+
+		// Insert event
+		const { data: event, error: evErr } = await supabase
+			.from('events')
+			.insert({
+				edition_id: editionId,
+				kind: 'match',
+				starts_at: f.starts_at,
+				status: 'scheduled',
+				round_label: f.round,
+				sequence_number: f.seq,
+			})
+			.select()
+			.single();
+
+		if (evErr) {
+			console.error('Error inserting event:', evErr);
+			continue;
+		}
+
+		// Insert event competitors
+		await supabase.from('event_competitors').insert([
+			{ event_id: event.id, competitor_id: homeId, slot: 1, role: 'home' },
+			{ event_id: event.id, competitor_id: awayId, slot: 2, role: 'away' },
+		]);
+
+		// Insert event market
+		await supabase.from('event_markets').insert({
+			event_id: event.id,
+			market_kind: 'team_scoreline',
+			payload_schema_version: 1,
+			ruleset_id: ruleset.id,
+			sequence_no: 1,
+			is_current: true,
+			opens_at: new Date(Date.now() - 7 * 86400000).toISOString(),
+			locks_at: f.starts_at,
+			status: 'open',
+		});
 	}
 
 	console.log(
-		'🎉 Seeding complete! Database is successfully prepared with live/mock fixtures.',
+		`✅ Seeded ${fixtures.length} events with markets and competitors.`,
 	);
 }
 
-seed();
+if (require.main === module) {
+	seedDeterministicFixtures()
+		.then(() => {
+			console.log('Done!');
+			process.exit(0);
+		})
+		.catch((err) => {
+			console.error('Error:', err);
+			process.exit(1);
+		});
+}

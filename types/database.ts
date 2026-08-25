@@ -181,32 +181,6 @@ export interface Database {
 					updated_at?: string;
 				};
 			};
-			edition_competitors: {
-				Row: {
-					edition_id: number | string;
-					competitor_id: number | string;
-					seed: number | null;
-					group_conference: string | null;
-					display_order: number;
-					created_at: string;
-				};
-				Insert: {
-					edition_id: number | string;
-					competitor_id: number | string;
-					seed?: number | null;
-					group_conference?: string | null;
-					display_order?: number;
-					created_at?: string;
-				};
-				Update: {
-					edition_id?: number | string;
-					competitor_id?: number | string;
-					seed?: number | null;
-					group_conference?: string | null;
-					display_order?: number;
-					created_at?: string;
-				};
-			};
 			events: {
 				Row: {
 					id: number | string;
@@ -292,146 +266,11 @@ export interface Database {
 					created_at?: string;
 				};
 			};
-			data_providers: {
-				Row: {
-					slug: string;
-					name: string;
-					server_config_id: string | null;
-					is_active: boolean;
-					created_at: string;
-					updated_at: string;
-				};
-				Insert: {
-					slug: string;
-					name: string;
-					server_config_id?: string | null;
-					is_active?: boolean;
-					created_at?: string;
-					updated_at?: string;
-				};
-				Update: {
-					slug?: string;
-					name?: string;
-					server_config_id?: string | null;
-					is_active?: boolean;
-					created_at?: string;
-					updated_at?: string;
-				};
-			};
-			external_entity_refs: {
-				Row: {
-					id: number | string;
-					provider_slug: string;
-					entity_kind: 'competition' | 'edition' | 'competitor' | 'event';
-					external_key: string;
-					competition_id: number | string | null;
-					edition_id: number | string | null;
-					competitor_id: number | string | null;
-					event_id: number | string | null;
-					is_primary: boolean;
-					metadata: Json;
-					created_at: string;
-					updated_at: string;
-				};
-				Insert: {
-					id?: never;
-					provider_slug: string;
-					entity_kind: 'competition' | 'edition' | 'competitor' | 'event';
-					external_key: string;
-					competition_id?: number | string | null;
-					edition_id?: number | string | null;
-					competitor_id?: number | string | null;
-					event_id?: number | string | null;
-					is_primary?: boolean;
-					metadata?: Json;
-					created_at?: string;
-					updated_at?: string;
-				};
-				Update: {
-					id?: never;
-					provider_slug?: string;
-					entity_kind?: 'competition' | 'edition' | 'competitor' | 'event';
-					external_key?: string;
-					competition_id?: number | string | null;
-					edition_id?: number | string | null;
-					competitor_id?: number | string | null;
-					event_id?: number | string | null;
-					is_primary?: boolean;
-					metadata?: Json;
-					created_at?: string;
-					updated_at?: string;
-				};
-			};
-			ingestion_quarantine: {
-				Row: {
-					id: number | string;
-					provider_slug: string;
-					entity_kind:
-						| 'competition'
-						| 'edition'
-						| 'competitor'
-						| 'event'
-						| 'result'
-						| 'unknown';
-					external_key: string | null;
-					reason_code: string;
-					error_summary: string;
-					payload_fingerprint: string | null;
-					occurrence_count: number;
-					status: 'unresolved' | 'resolved' | 'ignored';
-					first_seen_at: string;
-					last_seen_at: string;
-					created_at: string;
-					updated_at: string;
-				};
-				Insert: {
-					id?: never;
-					provider_slug: string;
-					entity_kind:
-						| 'competition'
-						| 'edition'
-						| 'competitor'
-						| 'event'
-						| 'result'
-						| 'unknown';
-					external_key?: string | null;
-					reason_code: string;
-					error_summary: string;
-					payload_fingerprint?: string | null;
-					occurrence_count?: number;
-					status?: 'unresolved' | 'resolved' | 'ignored';
-					first_seen_at?: string;
-					last_seen_at?: string;
-					created_at?: string;
-					updated_at?: string;
-				};
-				Update: {
-					id?: never;
-					provider_slug?: string;
-					entity_kind?:
-						| 'competition'
-						| 'edition'
-						| 'competitor'
-						| 'event'
-						| 'result'
-						| 'unknown';
-					external_key?: string | null;
-					reason_code?: string;
-					error_summary?: string;
-					payload_fingerprint?: string | null;
-					occurrence_count?: number;
-					status?: 'unresolved' | 'resolved' | 'ignored';
-					first_seen_at?: string;
-					last_seen_at?: string;
-					created_at?: string;
-					updated_at?: string;
-				};
-			};
 			scoring_rulesets: {
 				Row: {
 					id: number | string;
 					sport_slug: string;
-					market_kind: 'team_scoreline';
+					market_kind: string;
 					evaluator_key: string;
 					version: number;
 					max_raw_points: number;
@@ -444,12 +283,12 @@ export interface Database {
 				Insert: {
 					id?: never;
 					sport_slug: string;
-					market_kind?: 'team_scoreline';
+					market_kind: string;
 					evaluator_key: string;
 					version: number;
 					max_raw_points: number;
-					evaluator_config?: Json;
-					ui_config?: Json;
+					evaluator_config: Json;
+					ui_config: Json;
 					is_active?: boolean;
 					created_at?: string;
 					updated_at?: string;
@@ -457,7 +296,7 @@ export interface Database {
 				Update: {
 					id?: never;
 					sport_slug?: string;
-					market_kind?: 'team_scoreline';
+					market_kind?: string;
 					evaluator_key?: string;
 					version?: number;
 					max_raw_points?: number;
@@ -501,7 +340,7 @@ export interface Database {
 				Row: {
 					id: number | string;
 					event_id: number | string;
-					market_kind: 'team_scoreline';
+					market_kind: string;
 					payload_schema_version: number;
 					ruleset_id: number | string;
 					sequence_no: number;
@@ -515,8 +354,8 @@ export interface Database {
 				Insert: {
 					id?: never;
 					event_id: number | string;
-					market_kind?: 'team_scoreline';
-					payload_schema_version?: number;
+					market_kind: string;
+					payload_schema_version: number;
 					ruleset_id: number | string;
 					sequence_no?: number;
 					is_current?: boolean;
@@ -529,7 +368,7 @@ export interface Database {
 				Update: {
 					id?: never;
 					event_id?: number | string;
-					market_kind?: 'team_scoreline';
+					market_kind?: string;
 					payload_schema_version?: number;
 					ruleset_id?: number | string;
 					sequence_no?: number;
@@ -606,7 +445,7 @@ export interface Database {
 					result: Json;
 					revision?: number;
 					status?: 'provisional' | 'final' | 'void';
-					source_kind: 'provider' | 'manual';
+					source_kind?: 'provider' | 'manual';
 					source_ref?: string | null;
 					source_priority?: number;
 					finalized_at?: string | null;
@@ -646,7 +485,7 @@ export interface Database {
 					id?: string;
 					name: string;
 					created_by: string;
-					invite_code: string;
+					invite_code?: string;
 					scope_kind: 'all_sports' | 'sport' | 'competition' | 'edition';
 					sport_slug?: string | null;
 					competition_id?: number | string | null;
@@ -704,47 +543,120 @@ export interface Database {
 			};
 			pool_messages: {
 				Row: {
-					id: number | string;
+					id: string;
 					pool_id: string;
 					user_id: string;
 					message: string;
 					created_at: string;
 				};
 				Insert: {
-					id?: never;
+					id?: string;
 					pool_id: string;
 					user_id: string;
 					message: string;
 					created_at?: string;
 				};
 				Update: {
-					id?: never;
+					id?: string;
 					pool_id?: string;
 					user_id?: string;
 					message?: string;
 					created_at?: string;
 				};
 			};
+			notification_preferences: {
+				Row: {
+					user_id: string;
+					kickoff_warnings: boolean;
+					match_results: boolean;
+					weekly_digest: boolean;
+					email_notifications: boolean;
+					push_notifications: boolean;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					user_id: string;
+					kickoff_warnings?: boolean;
+					match_results?: boolean;
+					weekly_digest?: boolean;
+					email_notifications?: boolean;
+					push_notifications?: boolean;
+					created_at?: string;
+					updated_at?: string;
+				};
+				Update: {
+					user_id?: string;
+					kickoff_warnings?: boolean;
+					match_results?: boolean;
+					weekly_digest?: boolean;
+					email_notifications?: boolean;
+					push_notifications?: boolean;
+					created_at?: string;
+					updated_at?: string;
+				};
+			};
+			push_subscriptions: {
+				Row: {
+					id: string;
+					user_id: string;
+					endpoint: string;
+					p256dh: string;
+					auth: string;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					user_id: string;
+					endpoint: string;
+					p256dh: string;
+					auth: string;
+					created_at?: string;
+					updated_at?: string;
+				};
+				Update: {
+					id?: string;
+					user_id?: string;
+					endpoint?: string;
+					p256dh?: string;
+					auth?: string;
+					created_at?: string;
+					updated_at?: string;
+				};
+			};
 		};
-		Views: {
-			[_ in never]: never;
-		};
+		Views: Record<string, never>;
 		Functions: {
-			get_pool_eligible_markets: {
+			get_user_score_summary: {
 				Args: {
-					p_pool_id: string;
+					p_user_id: string;
+					p_sport_slug?: string | null;
 				};
 				Returns: {
-					event_market_id: number | string;
-					event_id: number | string;
-					market_kind: string;
-					ruleset_id: number | string;
-					opens_at: string;
-					locks_at: string;
-					status: string;
-					sport_slug: string;
-					competition_id: number | string;
-					edition_id: number | string;
+					total_raw_points: number;
+					total_normalized_points: number;
+					total_predictions: number;
+					settled_predictions: number;
+					exact_count: number;
+					margin_count: number;
+					outcome_count: number;
+					miss_count: number;
+					win_rate: number;
+				}[];
+			};
+			get_market_community_stats: {
+				Args: {
+					p_market_id: number | string;
+				};
+				Returns: {
+					total_predictions: number;
+					avg_home_score: number;
+					avg_away_score: number;
+					home_win_pct: number;
+					draw_pct: number;
+					away_win_pct: number;
+					top_exact_scores: Json;
 				}[];
 			};
 			get_pool_leaderboard: {
@@ -752,70 +664,21 @@ export interface Database {
 					p_pool_id: string;
 				};
 				Returns: {
-					user_id: string;
-					display_name: string | null;
-					avatar_url: string | null;
-					role: string;
 					rank: number;
-					displayed_score: number;
-					raw_total: number;
-					normalized_total: number;
+					user_id: string;
+					full_name: string | null;
+					avatar_url: string | null;
+					total_points: number;
 					exact_count: number;
-					submitted_count: number;
-					settled_count: number;
-					joined_at: string;
+					margin_count: number;
+					outcome_count: number;
+					predictions_count: number;
 				}[];
 			};
-			get_user_score_summary: {
-				Args: {
-					p_user_id?: string | null;
-				};
-				Returns: {
-					sport_slug: string | null;
-					competition_id: number | string | null;
-					edition_id: number | string | null;
-					total_predictions: number;
-					settled_predictions: number;
-					exact_count: number;
-					raw_total: number;
-					normalized_total: number;
-				}[];
-			};
-			create_pool: {
-				Args: {
-					p_name: string;
-					p_invite_code: string;
-					p_scope_kind: string;
-					p_sport_slug?: string | null;
-					p_competition_id?: number | string | null;
-					p_edition_id?: number | string | null;
-					p_scoring_mode?: string;
-					p_is_private?: boolean;
-				};
-				Returns: string;
-			};
-			join_pool_by_invite_code: {
-				Args: {
-					p_invite_code: string;
-				};
-				Returns: string;
-			};
-			leave_pool: {
-				Args: {
-					p_pool_id: string;
-				};
-				Returns: boolean;
-			};
-			send_pool_message: {
-				Args: {
-					p_pool_id: string;
-					p_message: string;
-				};
-				Returns: number | string;
-			};
-		};
-		Enums: {
-			[_ in never]: never;
 		};
 	};
 }
+
+export type Tables<T extends keyof Database['public']['Tables']> =
+	Database['public']['Tables'][T]['Row'];
+export type Enums<T extends keyof Database['public']> = never;

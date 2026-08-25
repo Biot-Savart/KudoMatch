@@ -4,17 +4,17 @@ import { CreatePoolModal } from '@/components/create-pool-modal';
 import { JoinPoolModal } from '@/components/join-pool-modal';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { fetchUserPools } from '@/lib/queries/pools';
+import { fetchUserPools, poolsQueryKeys } from '@/lib/queries/pools';
 import { createClient } from '@/lib/supabase/client';
+import { ScopedPool } from '@/types';
 import { useQuery } from '@tanstack/react-query';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-    Crown,
-    Loader2,
-    Plus,
-    Trophy,
-    UserPlus,
-    Users
+	Crown,
+	Loader2,
+	Plus,
+	Trophy,
+	UserPlus
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -42,12 +42,14 @@ export default function LeaguesPage() {
 
 	// Fetch user pools using TanStack Query
 	const {
-		data: userPools,
+		data: userPools = [],
 		isLoading: poolsLoading,
 		refetch,
-	} = useQuery({
-		queryKey: ['user-pools', user?.id],
-		queryFn: () => fetchUserPools(user?.id!),
+	} = useQuery<ScopedPool[]>({
+		queryKey: user?.id
+			? poolsQueryKeys.user(user.id)
+			: ['pools', 'user', 'anon'],
+		queryFn: () => (user?.id ? fetchUserPools(user.id) : Promise.resolve([])),
 		enabled: !!user?.id,
 	});
 
@@ -113,26 +115,27 @@ export default function LeaguesPage() {
 							My Leagues & Pools
 						</h1>
 						<p className="text-sm md:text-base text-slate-400 max-w-lg">
-							Create a custom pool, invite your squad via WhatsApp or code, and
-							dominate the private leaderboards.
+							Create a custom pool, invite your squad via code, and dominate the
+							private leaderboards.
 						</p>
 					</div>
 
-					<div className="flex items-center gap-2.5">
+					{/* Action Buttons */}
+					<div className="flex items-center gap-3">
 						<Button
-							onClick={() => setIsJoinOpen(true)}
 							variant="outline"
-							className="flex-1 md:flex-none border-white/10 hover:bg-white/5 py-5 font-bold rounded-xl text-xs uppercase tracking-wider"
+							onClick={() => setIsJoinOpen(true)}
+							className="border-white/10 hover:bg-white/5 text-slate-200 font-semibold gap-2 py-5 rounded-xl text-xs"
 						>
-							<UserPlus className="h-4 w-4 mr-2 text-amber-400" />
-							Join Pool
+							<UserPlus className="h-4 w-4 text-indigo-400" />
+							<span>Join with Code</span>
 						</Button>
 						<Button
 							onClick={() => setIsCreateOpen(true)}
-							className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-700 font-bold py-5 rounded-xl text-xs uppercase tracking-wider text-white shadow-lg shadow-indigo-500/20"
+							className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold gap-2 py-5 rounded-xl text-xs shadow-lg shadow-indigo-500/20"
 						>
-							<Plus className="h-4 w-4 mr-1.5" />
-							Create Pool
+							<Plus className="h-4 w-4" />
+							<span>Create New Pool</span>
 						</Button>
 					</div>
 				</div>
@@ -147,9 +150,8 @@ export default function LeaguesPage() {
 					</div>
 				) : userPools && userPools.length > 0 ? (
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-						{userPools.map((member) => {
-							const pool = member.pool;
-							const isCreator = member.role === 'creator';
+						{userPools.map((pool) => {
+							const isCreator = pool.created_by === user?.id;
 
 							return (
 								<motion.div
@@ -158,9 +160,6 @@ export default function LeaguesPage() {
 									transition={{ duration: 0.2 }}
 								>
 									<Card className="relative overflow-hidden glass-card border border-white/10 p-5 flex flex-col justify-between h-48 group hover:border-indigo-500/30 shadow-md">
-										{/* Highlight background glow on hover */}
-										<div className="absolute inset-0 bg-gradient-to-b from-indigo-500/0 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition duration-300 pointer-events-none" />
-
 										<div className="space-y-2">
 											<div className="flex items-start justify-between gap-2">
 												<h3 className="text-lg font-extrabold text-white group-hover:text-indigo-300 transition truncate max-w-[190px]">
@@ -180,31 +179,34 @@ export default function LeaguesPage() {
 												</div>
 											</div>
 
-											<p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-												{pool.description ||
-													'Challenge accepted! Predict scores and win.'}
-											</p>
+											<div className="flex items-center gap-2 text-[10px] text-slate-400">
+												<span className="px-2 py-0.5 rounded bg-white/5 border border-white/5">
+													{pool.scope_kind === 'all_sports'
+														? '🌐 All Sports'
+														: pool.sport_slug === 'rugby_union'
+															? '🏉 Rugby'
+															: '⚽ Football'}
+												</span>
+												<span className="px-2 py-0.5 rounded bg-white/5 border border-white/5">
+													{pool.scoring_mode === 'normalized'
+														? 'Normalized'
+														: 'Raw Pts'}
+												</span>
+											</div>
 										</div>
 
 										<div className="border-t border-white/5 pt-3 mt-4 flex items-center justify-between">
-											<div className="flex items-center gap-4 text-slate-400">
-												<div className="flex items-center gap-1.5 text-xs font-semibold">
-													<Users className="h-3.5 w-3.5 text-indigo-400" />
-													<span>
-														Code:{' '}
-														<b className="text-white select-all">
-															{pool.invite_code}
-														</b>
-													</span>
-												</div>
+											<div className="text-[11px] text-slate-400 font-mono tracking-wider">
+												CODE:{' '}
+												<b className="text-indigo-300">{pool.invite_code}</b>
 											</div>
 
 											<Button
-												variant="ghost"
-												className="text-xs text-indigo-400 hover:text-white hover:bg-white/5 font-extrabold px-3 py-1 rounded-lg flex items-center gap-1"
+												size="sm"
+												className="bg-white/5 hover:bg-indigo-600 text-slate-200 hover:text-white text-xs font-semibold py-1.5 px-3 rounded-lg border border-white/10 transition"
 												asChild
 											>
-												<Link href={`/leagues/${pool.id}`}>View Standings</Link>
+												<Link href={`/leagues/${pool.id}`}>Enter Arena</Link>
 											</Button>
 										</div>
 									</Card>
@@ -213,61 +215,34 @@ export default function LeaguesPage() {
 						})}
 					</div>
 				) : (
-					<motion.div
-						initial={{ opacity: 0, y: 10 }}
-						animate={{ opacity: 1, y: 0 }}
-						className="p-12 text-center rounded-2xl glass-card border border-white/10 flex flex-col items-center justify-center gap-4 py-16"
-					>
-						<div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center border border-white/5 text-slate-400 mb-2">
-							<Trophy className="h-8 w-8" />
-						</div>
-						<h2 className="text-xl font-bold tracking-tight">
-							You are not in any leagues yet
-						</h2>
-						<p className="text-slate-400 text-sm max-w-sm">
-							Join an existing league using a 6-character private code, or
-							create your own pool and invite friends.
+					<div className="text-center py-20 rounded-3xl glass-card border border-white/10 p-8 space-y-4">
+						<Trophy className="h-12 w-12 text-slate-600 mx-auto" />
+						<h3 className="text-xl font-bold text-white">
+							No pools joined yet
+						</h3>
+						<p className="text-xs text-slate-400 max-w-sm mx-auto">
+							You are not participating in any prediction pools yet. Create your
+							own or enter an invite code to get started.
 						</p>
-						<div className="flex items-center gap-3 mt-2">
-							<Button
-								onClick={() => setIsJoinOpen(true)}
-								variant="outline"
-								className="border-white/10 hover:bg-white/5 font-bold py-5 px-6 rounded-xl text-xs uppercase tracking-wider"
-							>
-								Join Pool
-							</Button>
-							<Button
-								onClick={() => setIsCreateOpen(true)}
-								className="bg-indigo-600 hover:bg-indigo-700 font-bold py-5 px-6 rounded-xl text-xs uppercase tracking-wider text-white shadow-lg"
-							>
-								Create Pool
-							</Button>
-						</div>
-					</motion.div>
+					</div>
 				)}
 			</div>
 
-			{/* Modals */}
-			<AnimatePresence>
-				{isCreateOpen && (
-					<CreatePoolModal
-						userId={user?.id}
-						isOpen={isCreateOpen}
-						onClose={() => setIsCreateOpen(false)}
-						onSuccess={handlePoolSuccess}
-					/>
-				)}
-			</AnimatePresence>
+			{/* Create Pool Modal */}
+			<CreatePoolModal
+				userId={user.id}
+				isOpen={isCreateOpen}
+				onClose={() => setIsCreateOpen(false)}
+				onSuccess={handlePoolSuccess}
+			/>
 
-			<AnimatePresence>
-				{isJoinOpen && (
-					<JoinPoolModal
-						isOpen={isJoinOpen}
-						onClose={() => setIsJoinOpen(false)}
-						onSuccess={handlePoolSuccess}
-					/>
-				)}
-			</AnimatePresence>
+			{/* Join Pool Modal */}
+			<JoinPoolModal
+				userId={user.id}
+				isOpen={isJoinOpen}
+				onClose={() => setIsJoinOpen(false)}
+				onSuccess={handlePoolSuccess}
+			/>
 		</div>
 	);
 }

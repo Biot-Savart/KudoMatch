@@ -1,25 +1,27 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { upsertPrediction } from '@/lib/queries/predictions';
-import { Match, Prediction } from '@/types';
+import { submitPrediction } from '@/lib/queries/predictions';
+import { TeamScorelineSelection } from '@/types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Loader2, Minus, Plus, Save, Trophy, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-interface PredictionDrawerProps {
+export interface PredictionDrawerProps {
 	isOpen: boolean;
 	onClose: () => void;
-	match: Match | null;
+	event?: any | null;
+	match?: any | null;
 	userId: string | null;
-	existingPrediction?: Prediction | null;
+	existingPrediction?: any | null;
 }
 
 export function PredictionDrawer({
 	isOpen,
 	onClose,
+	event,
 	match,
 	userId,
 	existingPrediction,
@@ -28,16 +30,45 @@ export function PredictionDrawer({
 	const [homeScore, setHomeScore] = useState<number>(0);
 	const [awayScore, setAwayScore] = useState<number>(0);
 
-	// Reset scores when a new match is loaded
+	const target = event || match;
+	const homeComp =
+		target?.competitors?.find((c: any) => c.slot === 1 || c.role === 'home')
+			?.competitor ??
+		target?.competitors?.[0]?.competitor ??
+		target?.home_team;
+	const awayComp =
+		target?.competitors?.find((c: any) => c.slot === 2 || c.role === 'away')
+			?.competitor ??
+		target?.competitors?.[1]?.competitor ??
+		target?.away_team;
+
+	const currentMarket = target?.current_market ?? target?.markets?.[0];
+	const marketId = currentMarket?.id ?? target?.id;
+	const uiConfig = currentMarket?.ruleset?.ui_config ?? {};
+	const scoreMin = uiConfig.score_min ?? 0;
+	const scoreMax = uiConfig.score_max ?? 99;
+
+	// Reset scores when a new event/prediction is loaded
 	useEffect(() => {
-		if (existingPrediction) {
+		const sel = (existingPrediction?.selection ??
+			currentMarket?.user_prediction?.selection) as
+			| TeamScorelineSelection
+			| undefined;
+
+		if (sel && typeof sel.home === 'number' && typeof sel.away === 'number') {
+			setHomeScore(sel.home);
+			setAwayScore(sel.away);
+		} else if (
+			existingPrediction &&
+			typeof existingPrediction.predicted_home_score === 'number'
+		) {
 			setHomeScore(existingPrediction.predicted_home_score);
 			setAwayScore(existingPrediction.predicted_away_score);
 		} else {
 			setHomeScore(0);
 			setAwayScore(0);
 		}
-	}, [match, existingPrediction]);
+	}, [target, existingPrediction, currentMarket]);
 
 	// Close drawer on Escape key down
 	useEffect(() => {
@@ -51,12 +82,22 @@ export function PredictionDrawer({
 	}, [isOpen, onClose]);
 
 	const saveMutation = useMutation({
-		mutationFn: () => {
-			if (!userId || !match) throw new Error('Authentication required');
-			return upsertPrediction(userId, match.id, homeScore, awayScore);
+		mutationFn: async () => {
+			if (!userId || !target || !marketId) {
+				throw new Error('Authentication and active market required');
+			}
+			const selection: TeamScorelineSelection = {
+				kind: 'team_scoreline',
+				version: currentMarket?.payload_schema_version || 1,
+				home: homeScore,
+				away: awayScore,
+			};
+			return submitPrediction(userId, marketId, selection);
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ['predictions', userId] });
+			queryClient.invalidateQueries({ queryKey: ['predictions'] });
+			queryClient.invalidateQueries({ queryKey: ['events'] });
+			queryClient.invalidateQueries({ queryKey: ['matches'] });
 			toast.success('Prediction saved successfully!');
 			onClose();
 		},
@@ -65,12 +106,11 @@ export function PredictionDrawer({
 		},
 	});
 
-	if (!match) return null;
+	if (!target) return null;
 
-	// Compute live outcome text
 	const getOutcomeText = () => {
-		if (homeScore > awayScore) return `${match.home_team?.name} Win`;
-		if (awayScore > homeScore) return `${match.away_team?.name} Win`;
+		if (homeScore > awayScore) return `${homeComp?.name || 'Home'} Win`;
+		if (awayScore > homeScore) return `${awayComp?.name || 'Away'} Win`;
 		return 'Draw Match';
 	};
 
@@ -81,6 +121,17 @@ export function PredictionDrawer({
 		}
 		saveMutation.mutate();
 	};
+
+	const presets = uiConfig.presets ?? [
+		{ home: 1, away: 0, label: '1 - 0' },
+		{ home: 2, away: 0, label: '2 - 0' },
+		{ home: 2, away: 1, label: '2 - 1' },
+		{ home: 1, away: 1, label: '1 - 1' },
+		{ home: 0, away: 0, label: '0 - 0' },
+		{ home: 0, away: 1, label: '0 - 1' },
+		{ home: 1, away: 2, label: '1 - 2' },
+		{ home: 0, away: 2, label: '0 - 2' },
+	];
 
 	return (
 		<AnimatePresence>
@@ -95,7 +146,7 @@ export function PredictionDrawer({
 						className="fixed inset-0 bg-black z-40"
 					/>
 
-					{/* Responsive Sheet Panel (Bottom Sheet on mobile, side-over on desktop) */}
+					{/* Responsive Sheet Panel */}
 					<motion.div
 						initial={{ y: '100%', opacity: 0 }}
 						animate={{ y: 0, opacity: 1 }}
@@ -112,7 +163,7 @@ export function PredictionDrawer({
 								<div className="flex items-center gap-2 text-indigo-400">
 									<Trophy className="h-5 w-5 text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
 									<span className="font-black text-sm tracking-wider uppercase">
-										Prediction Dialer
+										Scoreline Predictor
 									</span>
 								</div>
 								<button
@@ -123,188 +174,176 @@ export function PredictionDrawer({
 								</button>
 							</div>
 
-							{/* Content Body */}
-							<div className="py-6 flex flex-col items-center justify-center space-y-6">
-								{/* Teams Display */}
-								<div className="flex items-center justify-between w-full text-center px-2">
-									<div className="flex flex-col items-center gap-2 w-28">
-										<div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/10 p-2.5 flex items-center justify-center shadow-inner">
-											{match.home_team?.logo_url ? (
-												<img
-													src={match.home_team.logo_url}
-													alt={match.home_team.name}
-													className="h-12 w-12 object-contain drop-shadow"
-												/>
-											) : (
-												<span className="text-3xl">🔵</span>
-											)}
-										</div>
-										<span className="font-extrabold text-xs text-white line-clamp-2 leading-tight">
-											{match.home_team?.name}
-										</span>
-									</div>
-
-									<div className="flex flex-col items-center gap-1">
-										<span className="text-xs font-black text-slate-500 bg-white/5 border border-white/5 px-2.5 py-1 rounded-full">
-											VS
-										</span>
-										<span className="text-[10px] font-semibold text-slate-400">
-											Matchweek {match.matchday}
-										</span>
-									</div>
-
-									<div className="flex flex-col items-center gap-2 w-28">
-										<div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/10 p-2.5 flex items-center justify-center shadow-inner">
-											{match.away_team?.logo_url ? (
-												<img
-													src={match.away_team.logo_url}
-													alt={match.away_team.name}
-													className="h-12 w-12 object-contain drop-shadow"
-												/>
-											) : (
-												<span className="text-3xl">🔴</span>
-											)}
-										</div>
-										<span className="font-extrabold text-xs text-white line-clamp-2 leading-tight">
-											{match.away_team?.name}
-										</span>
-									</div>
+							{/* Event Context Meta */}
+							<div className="mt-4 text-center">
+								<span className="text-xs font-semibold px-2.5 py-1 bg-white/5 border border-white/10 rounded-full text-indigo-300">
+									{target.edition?.name ?? 'Match'} •{' '}
+									{target.round_label ??
+										(target.matchday
+											? `Matchday ${target.matchday}`
+											: 'Regular Season')}
+								</span>
+								<div className="text-xs text-slate-400 mt-2 font-medium">
+									Kickoff:{' '}
+									{new Date(
+										target.starts_at || target.kickoff_time || Date.now(),
+									).toLocaleDateString(undefined, {
+										weekday: 'short',
+										month: 'short',
+										day: 'numeric',
+										hour: '2-digit',
+										minute: '2-digit',
+									})}
 								</div>
+							</div>
 
-								{/* Exact Score Steppers with High-Tactility Dials */}
-								<div className="grid grid-cols-2 gap-4 sm:gap-6 w-full max-w-sm pt-2">
-									{/* Home goals dial */}
-									<div className="flex flex-col items-center space-y-2 p-4 rounded-2xl bg-white/[0.03] border border-white/10">
-										<span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate w-full text-center">
-											{match.home_team?.name || 'Home'}
-										</span>
-										<div className="flex items-center gap-2">
-											<Button
-												variant="ghost"
-												size="icon"
-												aria-label={`Decrease ${match.home_team?.name || 'home team'} goals`}
-												className="h-10 w-10 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl active:scale-90 transition-transform"
-												onClick={() =>
-													setHomeScore((prev) => Math.max(0, prev - 1))
-												}
-											>
-												<Minus className="h-5 w-5" />
-											</Button>
-											<span
-												className="text-4xl font-black text-white w-12 text-center tabular-numbers"
-												aria-live="polite"
-											>
-												{homeScore}
+							{/* Interactive Score Steppers */}
+							<div className="my-6 grid grid-cols-2 gap-4">
+								{/* Home Team Stepper */}
+								<div className="glass-card p-4 rounded-2xl flex flex-col items-center border border-white/10">
+									<div className="h-12 w-12 rounded-xl bg-white/5 p-2 flex items-center justify-center mb-2">
+										{homeComp?.media_url || homeComp?.logo_url ? (
+											<img
+												src={homeComp.media_url || homeComp.logo_url}
+												alt={homeComp.name}
+												className="max-h-full max-w-full object-contain"
+											/>
+										) : (
+											<span className="font-bold text-xs">
+												{homeComp?.short_name || 'HOME'}
 											</span>
-											<Button
-												variant="ghost"
-												size="icon"
-												aria-label={`Increase ${match.home_team?.name || 'home team'} goals`}
-												className="h-10 w-10 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl active:scale-90 transition-transform"
-												onClick={() => setHomeScore((prev) => prev + 1)}
-											>
-												<Plus className="h-5 w-5" />
-											</Button>
-										</div>
+										)}
 									</div>
-
-									{/* Away goals dial */}
-									<div className="flex flex-col items-center space-y-2 p-4 rounded-2xl bg-white/[0.03] border border-white/10">
-										<span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate w-full text-center">
-											{match.away_team?.name || 'Away'}
-										</span>
-										<div className="flex items-center gap-2">
-											<Button
-												variant="ghost"
-												size="icon"
-												aria-label={`Decrease ${match.away_team?.name || 'away team'} goals`}
-												className="h-10 w-10 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl active:scale-90 transition-transform"
-												onClick={() =>
-													setAwayScore((prev) => Math.max(0, prev - 1))
-												}
-											>
-												<Minus className="h-5 w-5" />
-											</Button>
-											<span
-												className="text-4xl font-black text-white w-12 text-center tabular-numbers"
-												aria-live="polite"
-											>
-												{awayScore}
-											</span>
-											<Button
-												variant="ghost"
-												size="icon"
-												aria-label={`Increase ${match.away_team?.name || 'away team'} goals`}
-												className="h-10 w-10 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl active:scale-90 transition-transform"
-												onClick={() => setAwayScore((prev) => prev + 1)}
-											>
-												<Plus className="h-5 w-5" />
-											</Button>
-										</div>
-									</div>
-								</div>
-
-								{/* Quick Preset Scoreline Pills */}
-								<div className="w-full">
-									<p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 text-center">
-										Quick Score Presets
-									</p>
-									<div className="flex flex-wrap items-center justify-center gap-1.5">
-										{[
-											[1, 0],
-											[2, 0],
-											[2, 1],
-											[1, 1],
-											[0, 0],
-											[1, 2],
-											[0, 2],
-											[3, 1],
-										].map(([h, a]) => {
-											const isSelected = homeScore === h && awayScore === a;
-											return (
-												<button
-													key={`${h}-${a}`}
-													type="button"
-													onClick={() => {
-														setHomeScore(h);
-														setAwayScore(a);
-													}}
-													className={`px-3 py-1.5 rounded-xl text-xs font-black tabular-numbers border transition-all active:scale-95 ${
-														isSelected
-															? 'bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/30'
-															: 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
-													}`}
-												>
-													{h}-{a}
-												</button>
-											);
-										})}
-									</div>
-								</div>
-
-								{/* Calculated Live Pick Badge */}
-								<div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-indigo-500/15 to-purple-500/15 border border-indigo-500/30 text-indigo-300 font-bold text-xs shadow-sm">
-									<Trophy className="h-4 w-4 text-amber-400" />
-									<span>
-										Prediction: {getOutcomeText()} ({homeScore} - {awayScore})
+									<span className="font-bold text-xs text-slate-200 text-center line-clamp-1 mb-4">
+										{homeComp?.name || 'Home Team'}
 									</span>
+
+									{/* Stepper Controls */}
+									<div className="flex items-center gap-3">
+										<button
+											onClick={() =>
+												setHomeScore((prev) => Math.max(scoreMin, prev - 1))
+											}
+											disabled={homeScore <= scoreMin}
+											className="h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 transition active:scale-95"
+										>
+											<Minus className="h-4 w-4" />
+										</button>
+										<span className="text-3xl font-black text-white w-8 text-center">
+											{homeScore}
+										</span>
+										<button
+											onClick={() =>
+												setHomeScore((prev) => Math.min(scoreMax, prev + 1))
+											}
+											disabled={homeScore >= scoreMax}
+											className="h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 transition active:scale-95"
+										>
+											<Plus className="h-4 w-4" />
+										</button>
+									</div>
+								</div>
+
+								{/* Away Team Stepper */}
+								<div className="glass-card p-4 rounded-2xl flex flex-col items-center border border-white/10">
+									<div className="h-12 w-12 rounded-xl bg-white/5 p-2 flex items-center justify-center mb-2">
+										{awayComp?.media_url || awayComp?.logo_url ? (
+											<img
+												src={awayComp.media_url || awayComp.logo_url}
+												alt={awayComp.name}
+												className="max-h-full max-w-full object-contain"
+											/>
+										) : (
+											<span className="font-bold text-xs">
+												{awayComp?.short_name || 'AWAY'}
+											</span>
+										)}
+									</div>
+									<span className="font-bold text-xs text-slate-200 text-center line-clamp-1 mb-4">
+										{awayComp?.name || 'Away Team'}
+									</span>
+
+									{/* Stepper Controls */}
+									<div className="flex items-center gap-3">
+										<button
+											onClick={() =>
+												setAwayScore((prev) => Math.max(scoreMin, prev - 1))
+											}
+											disabled={awayScore <= scoreMin}
+											className="h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 transition active:scale-95"
+										>
+											<Minus className="h-4 w-4" />
+										</button>
+										<span className="text-3xl font-black text-white w-8 text-center">
+											{awayScore}
+										</span>
+										<button
+											onClick={() =>
+												setAwayScore((prev) => Math.min(scoreMax, prev + 1))
+											}
+											disabled={awayScore >= scoreMax}
+											className="h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 transition active:scale-95"
+										>
+											<Plus className="h-4 w-4" />
+										</button>
+									</div>
+								</div>
+							</div>
+
+							{/* Dynamic Outcome Banner */}
+							<div className="text-center p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-bold text-sm tracking-wide shadow-inner">
+								Outcome: {getOutcomeText()} ({homeScore} - {awayScore})
+							</div>
+
+							{/* Quick Score Presets */}
+							<div className="mt-5">
+								<span className="text-xs font-semibold text-slate-400 block mb-2">
+									Common Presets:
+								</span>
+								<div className="grid grid-cols-4 gap-2">
+									{presets.map((preset: any, idx: number) => (
+										<button
+											key={idx}
+											onClick={() => {
+												setHomeScore(preset.home);
+												setAwayScore(preset.away);
+											}}
+											className={`py-1.5 rounded-lg border text-xs font-semibold transition ${
+												homeScore === preset.home && awayScore === preset.away
+													? 'bg-indigo-600 border-indigo-500 text-white'
+													: 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'
+											}`}
+										>
+											{preset.label ?? `${preset.home} - ${preset.away}`}
+										</button>
+									))}
 								</div>
 							</div>
 						</div>
 
-						{/* Bottom Actions */}
-						<div className="border-t border-white/10 pt-4 pb-safe">
+						{/* Footer Actions */}
+						<div className="pt-6 border-t border-white/10 flex gap-3 mt-6">
 							<Button
-								className="w-full py-6 font-bold rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 text-sm"
+								variant="outline"
+								onClick={onClose}
+								className="w-1/3 border-white/10 hover:bg-white/5 text-slate-300"
+							>
+								Cancel
+							</Button>
+							<Button
 								onClick={handleSave}
 								disabled={saveMutation.isPending}
+								className="w-2/3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold gap-2 shadow-lg shadow-indigo-600/30"
 							>
 								{saveMutation.isPending ? (
-									<Loader2 className="h-5 w-5 animate-spin" />
+									<>
+										<Loader2 className="h-4 w-4 animate-spin" />
+										<span>Saving...</span>
+									</>
 								) : (
 									<>
-										<Save className="h-5 w-5" />
-										Save Prediction
+										<Save className="h-4 w-4" />
+										<span>Confirm Pick</span>
 									</>
 								)}
 							</Button>
@@ -315,3 +354,5 @@ export function PredictionDrawer({
 		</AnimatePresence>
 	);
 }
+
+export default PredictionDrawer;

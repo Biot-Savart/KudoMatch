@@ -1,6 +1,25 @@
-import { Match, PoolLeaderboardEntry, Prediction } from '@/types';
+import {
+	EvaluatedScoreResult,
+	evaluateMarketPrediction,
+} from '@/lib/scoring/evaluator';
+import {
+	PoolLeaderboardEntry,
+	SportSlug,
+	TeamScorelineResult,
+	TeamScorelineSelection,
+	TierCode,
+} from '@/types';
 
-export type ScoringTier = 'exact' | 'diff' | 'winner' | 'miss' | 'unscored';
+export type ScoringTier =
+	| 'exact'
+	| 'diff'
+	| 'winner'
+	| 'exact_score'
+	| 'exact_margin'
+	| 'close_margin'
+	| 'outcome'
+	| 'miss'
+	| 'unscored';
 
 export interface ScoringExplanation {
 	points: number;
@@ -23,6 +42,7 @@ export interface ScoringExplanation {
 
 export interface ScoringRule {
 	points: number;
+	tier_code: TierCode;
 	title: string;
 	badge: string;
 	icon: string;
@@ -37,9 +57,10 @@ export interface ScoringRule {
 	};
 }
 
-export const SCORING_RULES: ScoringRule[] = [
+export const FOOTBALL_SCORING_RULES: ScoringRule[] = [
 	{
 		points: 3,
+		tier_code: 'exact_score',
 		title: 'Exact Score',
 		badge: '3 PTS',
 		icon: '🎯',
@@ -56,6 +77,7 @@ export const SCORING_RULES: ScoringRule[] = [
 	},
 	{
 		points: 2,
+		tier_code: 'exact_margin',
 		title: 'Outcome & Goal Difference',
 		badge: '2 PTS',
 		icon: '↔️',
@@ -73,6 +95,7 @@ export const SCORING_RULES: ScoringRule[] = [
 	},
 	{
 		points: 1,
+		tier_code: 'outcome',
 		title: 'Winner Only',
 		badge: '1 PT',
 		icon: '👍',
@@ -90,6 +113,7 @@ export const SCORING_RULES: ScoringRule[] = [
 	},
 	{
 		points: 0,
+		tier_code: 'miss',
 		title: 'Incorrect Outcome',
 		badge: '0 PTS',
 		icon: '❌',
@@ -106,14 +130,50 @@ export const SCORING_RULES: ScoringRule[] = [
 	},
 ];
 
+export const SCORING_RULES = FOOTBALL_SCORING_RULES;
+
 /**
- * Calculates the awarded points for a prediction against a given actual or live score.
+ * Evaluates scoreline prediction and returns tier code and points.
+ */
+export function evaluateScoreline(
+	predHome: number,
+	predAway: number,
+	actualHome: number,
+	actualAway: number,
+	sportSlug: SportSlug = 'football',
+	version: number = 1,
+): EvaluatedScoreResult {
+	const sel: TeamScorelineSelection = {
+		kind: 'team_scoreline',
+		version,
+		home: predHome,
+		away: predAway,
+	};
+	const res: TeamScorelineResult = {
+		kind: 'team_scoreline',
+		version,
+		home: actualHome,
+		away: actualAway,
+	};
+	return evaluateMarketPrediction(
+		sportSlug,
+		'team_scoreline',
+		version,
+		sel,
+		res,
+	);
+}
+
+/**
+ * Calculates awarded points for a scoreline prediction.
  */
 export function calculatePredictionPoints(
 	predHome: number | null | undefined,
 	predAway: number | null | undefined,
 	actualHome: number | null | undefined,
 	actualAway: number | null | undefined,
+	sportSlug: SportSlug = 'football',
+	version: number = 1,
 ): number {
 	if (
 		predHome === null ||
@@ -128,284 +188,336 @@ export function calculatePredictionPoints(
 		return 0;
 	}
 
-	// 1. Exact score matched: 3 points
-	if (predHome === actualHome && predAway === actualAway) {
-		return 3;
-	}
-
-	const predDiff = predHome - predAway;
-	const actualDiff = actualHome - actualAway;
-
-	const predOutcome = predDiff > 0 ? 'home' : predDiff < 0 ? 'away' : 'draw';
-	const actualOutcome =
-		actualDiff > 0 ? 'home' : actualDiff < 0 ? 'away' : 'draw';
-
-	// If outcome did not match: 0 points
-	if (predOutcome !== actualOutcome) {
-		return 0;
-	}
-
-	// 2. Correct outcome + correct goal difference: 2 points
-	if (predDiff === actualDiff) {
-		return 2;
-	}
-
-	// 3. Correct outcome only: 1 point
-	return 1;
+	const result = evaluateScoreline(
+		predHome,
+		predAway,
+		actualHome,
+		actualAway,
+		sportSlug,
+		version,
+	);
+	return result.rawPoints;
 }
 
 /**
- * Returns a transparent step-by-step scoring breakdown explanation.
+ * Returns a rich scoring explanation for UI modals and badges.
  */
 export function getScoringExplanation(
 	predHome: number | null | undefined,
 	predAway: number | null | undefined,
 	actualHome: number | null | undefined,
 	actualAway: number | null | undefined,
-	status: 'scheduled' | 'live' | 'finished' | 'cancelled' = 'finished',
+	statusOrSport: string = 'football',
+	version: number = 1,
 ): ScoringExplanation {
-	const hasPrediction =
-		predHome !== null &&
-		predHome !== undefined &&
-		predAway !== null &&
-		predAway !== undefined;
-	const hasActual =
-		actualHome !== null &&
-		actualHome !== undefined &&
-		actualAway !== null &&
-		actualAway !== undefined;
+	const isUnscoredStatus =
+		statusOrSport === 'scheduled' ||
+		actualHome === null ||
+		actualHome === undefined ||
+		actualAway === null ||
+		actualAway === undefined;
 
-	const pH = hasPrediction ? (predHome as number) : null;
-	const pA = hasPrediction ? (predAway as number) : null;
-	const predDiff = pH !== null && pA !== null ? pH - pA : null;
-	const predictedOutcome: 'home' | 'draw' | 'away' | null =
-		predDiff !== null
-			? predDiff > 0
-				? 'home'
-				: predDiff < 0
-					? 'away'
-					: 'draw'
-			: null;
-
-	if (!hasPrediction || !hasActual) {
+	if (isUnscoredStatus) {
 		return {
 			points: 0,
 			tier: 'unscored',
-			tierLabel: 'Unscored',
-			colorClass: 'text-slate-500',
+			tierLabel: 'Pending',
+			colorClass: 'text-slate-400',
 			badgeBg: 'bg-slate-500/10',
 			badgeBorder: 'border-slate-500/20',
 			icon: '⏳',
-			predictedOutcome,
+			predictedOutcome:
+				predHome !== null &&
+				predAway !== null &&
+				predHome !== undefined &&
+				predAway !== undefined
+					? predHome > predAway
+						? 'home'
+						: predHome < predAway
+							? 'away'
+							: 'draw'
+					: null,
 			actualOutcome: null,
 			outcomeMatched: false,
 			goalDiffMatched: false,
 			exactScoreMatched: false,
-			predDiff,
+			predDiff:
+				predHome !== null &&
+				predAway !== null &&
+				predHome !== undefined &&
+				predAway !== undefined
+					? predHome - predAway
+					: null,
 			actualDiff: null,
-			summary: !hasPrediction
-				? 'No prediction submitted.'
-				: 'Match score has not been recorded yet.',
-			details:
-				'Points are calculated automatically once match scores are entered or synced.',
+			summary: 'Match has not finished yet.',
+			details: 'Points will be calculated once the match finishes.',
 		};
 	}
 
-	const aH = actualHome as number;
-	const aA = actualAway as number;
-	const actualDiff = aH - aA;
-	const actualOutcome: 'home' | 'draw' | 'away' =
-		actualDiff > 0 ? 'home' : actualDiff < 0 ? 'away' : 'draw';
-
-	const outcomeMatched = predictedOutcome === actualOutcome;
-	const goalDiffMatched = outcomeMatched && predDiff === actualDiff;
-	const exactScoreMatched = pH === aH && pA === aA;
-
-	const isLive = status === 'live';
-	const livePrefix = isLive ? 'Live Tracking: ' : '';
-
-	if (exactScoreMatched) {
+	if (
+		predHome === null ||
+		predHome === undefined ||
+		predAway === null ||
+		predAway === undefined
+	) {
 		return {
-			points: 3,
-			tier: 'exact',
-			tierLabel: `${livePrefix}Exact Score`,
-			colorClass: 'text-emerald-400',
-			badgeBg: 'bg-emerald-500/10',
-			badgeBorder: 'border-emerald-500/30',
-			icon: '🎯',
-			predictedOutcome,
-			actualOutcome,
-			outcomeMatched: true,
-			goalDiffMatched: true,
-			exactScoreMatched: true,
-			predDiff,
-			actualDiff,
-			summary: `Bullseye! You nailed the exact ${pH} - ${pA} scoreline.`,
-			details: `You correctly predicted ${pH} home goals and ${pA} away goals (+3 PTS).`,
-		};
-	}
-
-	if (goalDiffMatched) {
-		return {
-			points: 2,
-			tier: 'diff',
-			tierLabel: `${livePrefix}Outcome & Goal Diff`,
-			colorClass: 'text-teal-400',
-			badgeBg: 'bg-teal-500/10',
-			badgeBorder: 'border-teal-500/30',
-			icon: '↔️',
-			predictedOutcome,
-			actualOutcome,
-			outcomeMatched: true,
-			goalDiffMatched: true,
-			exactScoreMatched: false,
-			predDiff,
-			actualDiff,
-			summary: `Great pick! Correct outcome with matching goal difference (${predDiff! > 0 ? '+' : ''}${predDiff}).`,
-			details: `You predicted a ${predDiff! > 0 ? 'Home Win' : predDiff! < 0 ? 'Away Win' : 'Draw'} by ${Math.abs(predDiff!)} goal(s), which matched the actual outcome margin (+2 PTS).`,
-		};
-	}
-
-	if (outcomeMatched) {
-		return {
-			points: 1,
-			tier: 'winner',
-			tierLabel: `${livePrefix}Winner Only`,
-			colorClass: 'text-blue-400',
-			badgeBg: 'bg-blue-500/10',
-			badgeBorder: 'border-blue-500/30',
-			icon: '👍',
-			predictedOutcome,
-			actualOutcome,
-			outcomeMatched: true,
+			points: 0,
+			tier: 'miss',
+			tierLabel: 'No Prediction',
+			colorClass: 'text-slate-500',
+			badgeBg: 'bg-slate-500/10',
+			badgeBorder: 'border-slate-500/20',
+			icon: '⚪',
+			predictedOutcome: null,
+			actualOutcome:
+				actualHome > actualAway
+					? 'home'
+					: actualHome < actualAway
+						? 'away'
+						: 'draw',
+			outcomeMatched: false,
 			goalDiffMatched: false,
 			exactScoreMatched: false,
-			predDiff,
-			actualDiff,
-			summary: `Good call! Correct match outcome (${actualOutcome === 'home' ? 'Home Win' : actualOutcome === 'away' ? 'Away Win' : 'Draw'}).`,
-			details: `You correctly picked the winner/draw (+1 PT). The scoreline was ${aH} - ${aA} (predicted ${pH} - ${pA}).`,
+			predDiff: null,
+			actualDiff: actualHome - actualAway,
+			summary: 'No prediction submitted for this match.',
+			details: 'You did not submit a scoreline prediction before kickoff.',
 		};
 	}
 
-	return {
-		points: 0,
-		tier: 'miss',
-		tierLabel: `${livePrefix}Miss`,
-		colorClass: 'text-slate-400',
-		badgeBg: 'bg-slate-500/10',
-		badgeBorder: 'border-slate-500/20',
-		icon: '❌',
-		predictedOutcome,
-		actualOutcome,
-		outcomeMatched: false,
-		goalDiffMatched: false,
-		exactScoreMatched: false,
-		predDiff,
-		actualDiff,
-		summary: `Outcome miss: Predicted ${predictedOutcome === 'home' ? 'Home Win' : predictedOutcome === 'away' ? 'Away Win' : 'Draw'}, actual was ${actualOutcome === 'home' ? 'Home Win' : actualOutcome === 'away' ? 'Away Win' : 'Draw'}.`,
-		details: `Actual result was ${aH} - ${aA}, while your prediction was ${pH} - ${pA} (0 PTS).`,
-	};
+	const sport =
+		statusOrSport === 'finished' || statusOrSport === 'live'
+			? 'football'
+			: (statusOrSport as SportSlug);
+	const evaluation = evaluateScoreline(
+		predHome,
+		predAway,
+		actualHome,
+		actualAway,
+		sport,
+		version,
+	);
+
+	const predDiff = predHome - predAway;
+	const actualDiff = actualHome - actualAway;
+	const predictedOutcome =
+		predHome > predAway ? 'home' : predHome < predAway ? 'away' : 'draw';
+	const actualOutcome =
+		actualHome > actualAway
+			? 'home'
+			: actualHome < actualAway
+				? 'away'
+				: 'draw';
+	const outcomeMatched = predictedOutcome === actualOutcome;
+	const exactScoreMatched = predHome === actualHome && predAway === actualAway;
+	const goalDiffMatched = outcomeMatched && predDiff === actualDiff;
+
+	switch (evaluation.tierCode) {
+		case 'exact_score':
+			return {
+				points: evaluation.rawPoints,
+				tier: 'exact',
+				tierLabel: 'Exact Score',
+				colorClass: 'text-emerald-400',
+				badgeBg: 'bg-emerald-500/20',
+				badgeBorder: 'border-emerald-500/40',
+				icon: '🎯',
+				predictedOutcome,
+				actualOutcome,
+				outcomeMatched: true,
+				goalDiffMatched: true,
+				exactScoreMatched: true,
+				predDiff,
+				actualDiff,
+				summary: `Perfect call! You predicted the exact ${actualHome}-${actualAway} scoreline.`,
+				details: `Both home (${predHome}) and away (${predAway}) goals matched exactly, awarding maximum ${evaluation.rawPoints} points.`,
+			};
+
+		case 'exact_margin':
+			return {
+				points: evaluation.rawPoints,
+				tier: 'diff',
+				tierLabel: 'Winner + Goal Diff',
+				colorClass: 'text-teal-400',
+				badgeBg: 'bg-teal-500/20',
+				badgeBorder: 'border-teal-500/40',
+				icon: '↔️',
+				predictedOutcome,
+				actualOutcome,
+				outcomeMatched: true,
+				goalDiffMatched: true,
+				exactScoreMatched: false,
+				predDiff,
+				actualDiff,
+				summary: `Great call! Correct winner with exact goal difference (${actualDiff > 0 ? `+${actualDiff}` : actualDiff}).`,
+				details: `Predicted ${predHome}-${predAway} (${predDiff > 0 ? `+${predDiff}` : predDiff} diff) vs Actual ${actualHome}-${actualAway} (${actualDiff > 0 ? `+${actualDiff}` : actualDiff} diff).`,
+			};
+
+		case 'close_margin':
+			return {
+				points: evaluation.rawPoints,
+				tier: 'diff',
+				tierLabel: 'Close Margin',
+				colorClass: 'text-cyan-400',
+				badgeBg: 'bg-cyan-500/20',
+				badgeBorder: 'border-cyan-500/40',
+				icon: '📐',
+				predictedOutcome,
+				actualOutcome,
+				outcomeMatched: true,
+				goalDiffMatched: false,
+				exactScoreMatched: false,
+				predDiff,
+				actualDiff,
+				summary: `Close call! Correct winner with close margin error.`,
+				details: `Predicted ${predHome}-${predAway} vs Actual ${actualHome}-${actualAway}.`,
+			};
+
+		case 'outcome':
+			return {
+				points: evaluation.rawPoints,
+				tier: 'winner',
+				tierLabel: 'Winner Only',
+				colorClass: 'text-blue-400',
+				badgeBg: 'bg-blue-500/20',
+				badgeBorder: 'border-blue-500/40',
+				icon: '👍',
+				predictedOutcome,
+				actualOutcome,
+				outcomeMatched: true,
+				goalDiffMatched: false,
+				exactScoreMatched: false,
+				predDiff,
+				actualDiff,
+				summary: `Correct outcome! You picked the right winner.`,
+				details: `Predicted ${predictedOutcome.toUpperCase()} win (${predHome}-${predAway}), Actual ${actualHome}-${actualAway}.`,
+			};
+
+		case 'miss':
+		default:
+			return {
+				points: 0,
+				tier: 'miss',
+				tierLabel: 'Incorrect',
+				colorClass: 'text-rose-400',
+				badgeBg: 'bg-rose-500/15',
+				badgeBorder: 'border-rose-500/30',
+				icon: '❌',
+				predictedOutcome,
+				actualOutcome,
+				outcomeMatched: false,
+				goalDiffMatched: false,
+				exactScoreMatched: false,
+				predDiff,
+				actualDiff,
+				summary: `Outcome missed. Predicted ${predictedOutcome.toUpperCase()} win, but result was ${actualOutcome.toUpperCase()}.`,
+				details: `Predicted ${predHome}-${predAway} vs Actual ${actualHome}-${actualAway}.`,
+			};
+	}
+}
+
+export interface SimulatedLeaderboardEntry extends PoolLeaderboardEntry {
+	simulated_points: number;
+	simulatedPoints: number;
+	simulated_exact_count: number;
+	simulated_rank: number;
+	rank_delta: number;
+	rankDelta: number;
 }
 
 /**
- * Calculates simulated pool standings under a hypothetical scenario of match scores.
+ * Computes tie-break order between leaderboard entries.
+ */
+export function compareLeaderboardEntries(
+	a: PoolLeaderboardEntry,
+	b: PoolLeaderboardEntry,
+): number {
+	if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+	if (b.exact_count !== a.exact_count) return b.exact_count - a.exact_count;
+	if (b.margin_count !== a.margin_count) return b.margin_count - a.margin_count;
+	if (b.outcome_count !== a.outcome_count)
+		return b.outcome_count - a.outcome_count;
+	return (a.full_name ?? '').localeCompare(b.full_name ?? '');
+}
+
+/**
+ * Simulates pool standings given hypothetical event scorelines.
  */
 export function simulatePoolStandings(
 	leaderboard: PoolLeaderboardEntry[],
-	predictionsByMember: Record<string, Record<string, Prediction>>,
-	matches: Match[],
+	predictionsByMember: Record<string, Record<string, any>>,
+	events: any[],
 	simulatedScores: Record<string, { home_score: number; away_score: number }>,
-): {
-	simulatedLeaderboard: (PoolLeaderboardEntry & {
-		originalRank: number;
-		rankDelta: number;
-		simulatedPoints: number;
-		pointsDelta: number;
-	})[];
-} {
-	const memberSimulatedPoints: Record<
-		string,
-		{ total: number; exactCount: number }
-	> = {};
+	sportSlug: SportSlug = 'football',
+): { simulatedLeaderboard: SimulatedLeaderboardEntry[] } {
+	const entries: SimulatedLeaderboardEntry[] = leaderboard.map((entry) => {
+		let addedPoints = 0;
+		let addedExact = 0;
 
-	// Base current points
-	leaderboard.forEach((entry) => {
-		memberSimulatedPoints[entry.user_id] = {
-			total: entry.total_points,
-			exactCount: entry.exact_count,
-		};
-	});
+		const userPicks = predictionsByMember[entry.user_id] || {};
 
-	// For each match in simulatedScores, calculate point differences
-	matches.forEach((match) => {
-		const sim = simulatedScores[match.id];
-		if (!sim) return;
+		for (const ev of events) {
+			const sim = simulatedScores[ev.id];
+			if (!sim) continue;
 
-		leaderboard.forEach((member) => {
-			const pred = predictionsByMember[member.user_id]?.[match.id];
-			if (!pred) return;
+			const pick = userPicks[ev.id] || userPicks[ev.current_market?.id ?? ''];
+			if (!pick) continue;
 
-			// Current points earned on this match
-			const currentEarned =
-				match.status === 'finished'
-					? calculatePredictionPoints(
-							pred.predicted_home_score,
-							pred.predicted_away_score,
-							match.home_score,
-							match.away_score,
-						)
-					: 0;
+			const homePick =
+				pick.predicted_home_score ?? pick.home ?? pick.selection?.home;
+			const awayPick =
+				pick.predicted_away_score ?? pick.away ?? pick.selection?.away;
 
-			// Simulated points earned
-			const simEarned = calculatePredictionPoints(
-				pred.predicted_home_score,
-				pred.predicted_away_score,
-				sim.home_score,
-				sim.away_score,
-			);
-
-			const diff = simEarned - currentEarned;
-			if (memberSimulatedPoints[member.user_id]) {
-				memberSimulatedPoints[member.user_id].total += diff;
-				if (simEarned === 3 && currentEarned !== 3) {
-					memberSimulatedPoints[member.user_id].exactCount += 1;
-				} else if (simEarned !== 3 && currentEarned === 3) {
-					memberSimulatedPoints[member.user_id].exactCount -= 1;
+			if (typeof homePick === 'number' && typeof awayPick === 'number') {
+				const evalRes = evaluateScoreline(
+					homePick,
+					awayPick,
+					sim.home_score,
+					sim.away_score,
+					sportSlug,
+				);
+				addedPoints += evalRes.rawPoints;
+				if (evalRes.tierCode === 'exact_score') {
+					addedExact++;
 				}
 			}
-		});
-	});
+		}
 
-	// Build and sort simulated leaderboard
-	const simulatedList = leaderboard.map((entry) => {
-		const simData = memberSimulatedPoints[entry.user_id] || {
-			total: entry.total_points,
-			exactCount: entry.exact_count,
-		};
+		const totalSimPoints = entry.total_points + addedPoints;
+		const totalSimExact = entry.exact_count + addedExact;
+
 		return {
 			...entry,
-			originalRank: entry.rank,
-			simulatedPoints: simData.total,
-			pointsDelta: simData.total - entry.total_points,
-			exact_count: simData.exactCount,
-			rank: 0,
+			simulated_points: totalSimPoints,
+			simulatedPoints: totalSimPoints,
+			simulated_exact_count: totalSimExact,
+			simulated_rank: entry.rank,
+			rank: entry.rank,
+			rank_delta: 0,
 			rankDelta: 0,
 		};
 	});
 
-	// Sort by simulatedPoints descending, then exact_count descending
-	simulatedList.sort((a, b) => {
-		if (b.simulatedPoints !== a.simulatedPoints) {
-			return b.simulatedPoints - a.simulatedPoints;
+	// Sort by simulated points
+	entries.sort((a, b) => {
+		if (b.simulated_points !== a.simulated_points) {
+			return b.simulated_points - a.simulated_points;
 		}
-		return b.exact_count - a.exact_count;
+		if (b.simulated_exact_count !== a.simulated_exact_count) {
+			return b.simulated_exact_count - a.simulated_exact_count;
+		}
+		return (a.full_name ?? '').localeCompare(b.full_name ?? '');
 	});
 
-	// Assign new ranks and rankDelta
-	simulatedList.forEach((item, index) => {
-		item.rank = index + 1;
-		item.rankDelta = item.originalRank - item.rank; // Positive means moved up!
+	// Re-assign ranks and calculate rank deltas
+	entries.forEach((item, idx) => {
+		const newRank = idx + 1;
+		const initialRank = item.rank;
+		item.simulated_rank = newRank;
+		item.rank = newRank;
+		item.rank_delta = initialRank - newRank; // positive = climbed up
+		item.rankDelta = initialRank - newRank;
 	});
 
-	return { simulatedLeaderboard: simulatedList };
+	return { simulatedLeaderboard: entries };
 }
