@@ -23,12 +23,22 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 // Ordered tables for reference constraints during insert/restore
 const TABLES_ORDER = [
 	'profiles',
-	'tournaments',
-	'teams',
-	'matches',
+	'sports',
+	'competitions',
+	'competition_editions',
+	'competitors',
+	'events',
+	'event_competitors',
+	'scoring_rulesets',
+	'scoring_rule_tiers',
+	'event_markets',
 	'predictions',
+	'market_results',
 	'pools',
 	'pool_members',
+	'pool_messages',
+	'notification_preferences',
+	'push_subscriptions',
 ];
 
 export async function backupDatabase(

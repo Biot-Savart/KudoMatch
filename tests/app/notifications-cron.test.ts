@@ -320,8 +320,26 @@ describe('Notification Cron Routes & Scripts', () => {
 			const mockPrefs = [{ user_id: 'u1', kickoff_warnings: true }];
 			const mockPreds: any[] = [];
 
+			const mockMarkets = [
+				{
+					id: 1,
+					locks_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+					events: {
+						id: 101,
+						starts_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+						round_label: 'Round 12',
+						status: 'scheduled',
+						event_competitors: [
+							{ slot: 1, role: 'home', competitors: { name: 'Arsenal' } },
+							{ slot: 2, role: 'away', competitors: { name: 'Chelsea' } },
+						],
+					},
+				},
+			];
+
 			(mockSupabaseJsClient.from as any).mockImplementation((table: string) => {
-				if (table === 'matches') return new MockQueryBuilder(mockMatches);
+				if (table === 'event_markets' || table === 'matches')
+					return new MockQueryBuilder(mockMarkets);
 				if (table === 'profiles') return new MockQueryBuilder(mockProfiles);
 				if (table === 'notification_preferences')
 					return new MockQueryBuilder(mockPrefs);

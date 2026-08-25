@@ -34,7 +34,7 @@ export function generateKickoffReminderHtml(params: {
             ${m.homeTeamName} <span style="color: #64748b; font-weight: 400;">vs</span> ${m.awayTeamName}
           </div>
           <div style="font-size: 12px; color: #f59e0b; font-weight: 600;">
-            ⏳ Kickoff: ${new Date(m.kickoffTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            ⏳ Kickoff: ${new Date(m.kickoffTime || m.startsAt || m.locksAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </div>
         </div>
       </div>
@@ -45,7 +45,7 @@ export function generateKickoffReminderHtml(params: {
 	const matchRowsText = matches
 		.map(
 			(m) =>
-				`- ${m.homeTeamName} vs ${m.awayTeamName} (Kickoff: ${new Date(m.kickoffTime).toLocaleTimeString()})`,
+				`- ${m.homeTeamName} vs ${m.awayTeamName} (Kickoff: ${new Date(m.kickoffTime || m.startsAt || m.locksAt || Date.now()).toLocaleTimeString()})`,
 		)
 		.join('\n');
 

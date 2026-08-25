@@ -3,7 +3,7 @@ import {
 	sendEmail,
 } from '@/lib/notifications/email-service';
 import { sendPushToUser } from '@/lib/notifications/push-service';
-import { KickoffReminderMatch, Match } from '@/types';
+import { KickoffReminderEvent } from '@/types';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -37,7 +37,7 @@ export interface KickoffRemindersResult {
 }
 
 /**
- * Finds upcoming matches and notifies users who haven't predicted them yet
+ * Finds upcoming events and notifies users who haven't predicted them yet
  */
 export async function sendKickoffReminders(
 	options: KickoffRemindersOptions = {},
@@ -50,35 +50,45 @@ export async function sendKickoffReminders(
 		const now = new Date();
 		const windowEnd = new Date(now.getTime() + windowMinutes * 60 * 1000);
 
-		// 1. Fetch matches scheduled within the upcoming window
-		let matchesQuery = supabase
-			.from('matches')
+		// 1. Fetch event markets locking within the upcoming window
+		let marketsQuery = supabase
+			.from('event_markets')
 			.select(
 				`
-				*,
-				home_team:teams!matches_home_team_id_fkey (*),
-				away_team:teams!matches_away_team_id_fkey (*)
+				id,
+				locks_at,
+				events:events(
+					id,
+					starts_at,
+					round_label,
+					status,
+					event_competitors:event_competitors(
+						slot,
+						role,
+						competitors:competitors(*)
+					)
+				)
 			`,
 			)
-			.eq('status', 'scheduled');
+			.eq('is_current', true)
+			.eq('status', 'open');
 
 		if (!simulate) {
-			matchesQuery = matchesQuery
-				.gte('kickoff_time', now.toISOString())
-				.lte('kickoff_time', windowEnd.toISOString());
+			marketsQuery = marketsQuery
+				.gte('locks_at', now.toISOString())
+				.lte('locks_at', windowEnd.toISOString());
 		} else {
-			// In simulate mode, grab up to 5 upcoming scheduled matches
-			matchesQuery = matchesQuery
-				.order('kickoff_time', { ascending: true })
+			marketsQuery = marketsQuery
+				.order('locks_at', { ascending: true })
 				.limit(5);
 		}
 
-		const { data: upcomingMatches, error: matchesError } = await matchesQuery;
+		const { data: upcomingMarkets, error: marketsError } = await marketsQuery;
 
-		if (matchesError) throw matchesError;
+		if (marketsError) throw marketsError;
 
-		if (!upcomingMatches || upcomingMatches.length === 0) {
-			console.log('ℹ️ No upcoming matches found within reminder window.');
+		if (!upcomingMarkets || upcomingMarkets.length === 0) {
+			console.log('ℹ️ No upcoming markets found within reminder window.');
 			return {
 				success: true,
 				matchesFound: 0,
@@ -88,24 +98,44 @@ export async function sendKickoffReminders(
 			};
 		}
 
-		const matchIds = upcomingMatches.map((m: Match) => m.id);
-		console.log(
-			`🎯 Found ${upcomingMatches.length} matches kicking off soon:`,
-			upcomingMatches.map(
-				(m: any) => `${m.home_team?.name} vs ${m.away_team?.name}`,
-			),
-		);
+		const upcomingEvents: KickoffReminderEvent[] = upcomingMarkets
+			.filter((m: any) => m.events)
+			.map((m: any) => {
+				const ev = m.events;
+				const homeComp =
+					ev.event_competitors?.find(
+						(c: any) => c.slot === 1 || c.role === 'home',
+					)?.competitors ?? ev.event_competitors?.[0]?.competitors;
+				const awayComp =
+					ev.event_competitors?.find(
+						(c: any) => c.slot === 2 || c.role === 'away',
+					)?.competitors ?? ev.event_competitors?.[1]?.competitors;
 
-		// 2. Fetch users with notification preferences
+				return {
+					marketId: String(m.id),
+					eventId: String(ev.id),
+					homeTeamName: homeComp?.name || 'Home',
+					awayTeamName: awayComp?.name || 'Away',
+					homeTeamLogo: homeComp?.media_url ?? null,
+					awayTeamLogo: awayComp?.media_url ?? null,
+					locksAt: m.locks_at,
+					startsAt: ev.starts_at,
+					roundLabel: ev.round_label,
+				};
+			});
+
+		const marketIds = upcomingEvents.map((e) => Number(e.marketId));
+
+		// 2. Fetch users
 		const { data: userProfiles, error: profilesError } = await supabase
 			.from('profiles')
-			.select('id, username, full_name');
+			.select('id, full_name');
 
 		if (profilesError) throw profilesError;
 		if (!userProfiles || userProfiles.length === 0) {
 			return {
 				success: true,
-				matchesFound: upcomingMatches.length,
+				matchesFound: upcomingEvents.length,
 				usersNotified: 0,
 				pushSent: 0,
 				emailsSent: 0,
@@ -121,124 +151,133 @@ export async function sendKickoffReminders(
 			(preferencesList || []).map((p: any) => [p.user_id, p]),
 		);
 
-		// 4. Fetch existing predictions for these upcoming matches
-		const { data: existingPredictions, error: predsError } = await supabase
+		// 4. Fetch all predictions on these markets
+		const { data: predictionsList, error: predError } = await supabase
 			.from('predictions')
-			.select('user_id, match_id')
-			.in('match_id', matchIds);
+			.select('user_id, event_market_id')
+			.in('event_market_id', marketIds);
 
-		if (predsError) throw predsError;
+		if (predError) throw predError;
 
-		const userPredictedMatchMap = new Map<string, Set<string>>();
-		(existingPredictions || []).forEach((pred: any) => {
-			if (!userPredictedMatchMap.has(pred.user_id)) {
-				userPredictedMatchMap.set(pred.user_id, new Set());
-			}
-			userPredictedMatchMap.get(pred.user_id)!.add(pred.match_id);
-		});
+		const userPredictedMarketSet = new Set<string>(
+			(predictionsList || []).map(
+				(p: any) => `${p.user_id}_${p.event_market_id}`,
+			),
+		);
 
 		let usersNotified = 0;
 		let pushSent = 0;
 		let emailsSent = 0;
 
-		// 5. Send reminders to users who have missing predictions
 		for (const profile of userProfiles) {
-			const prefs = preferencesMap.get(profile.id) || {
-				kickoff_warnings: true,
-				email_notifications: true,
-				push_notifications: true,
-			};
+			const userId = profile.id;
+			const prefs = preferencesMap.get(userId);
 
-			// Skip if user explicitly disabled kickoff warnings
-			if (prefs.kickoff_warnings === false) {
+			if (prefs && !prefs.kickoff_warnings) {
 				continue;
 			}
 
-			const predictedSet = userPredictedMatchMap.get(profile.id) || new Set();
-			const unpredicted = upcomingMatches.filter(
-				(m: Match) => !predictedSet.has(m.id),
+			const unpredictedEvents = upcomingEvents.filter(
+				(e) => !userPredictedMarketSet.has(`${userId}_${e.marketId}`),
 			);
 
-			if (unpredicted.length === 0) {
+			if (unpredictedEvents.length === 0) {
 				continue;
 			}
 
 			usersNotified++;
-			const reminderMatches: KickoffReminderMatch[] = unpredicted.map(
-				(m: any) => ({
-					matchId: m.id,
-					homeTeamName: m.home_team?.short_name || m.home_team?.name || 'Home',
-					awayTeamName: m.away_team?.short_name || m.away_team?.name || 'Away',
-					homeTeamLogo: m.home_team?.logo_url,
-					awayTeamLogo: m.away_team?.logo_url,
-					kickoffTime: m.kickoff_time,
-					gameweek: m.matchday,
-				}),
-			);
+			const count = unpredictedEvents.length;
+			const nextEvent = unpredictedEvents[0];
+			const title = `⚽ Upcoming Kickoff Reminder!`;
+			const body =
+				count === 1
+					? `${nextEvent.homeTeamName} vs ${nextEvent.awayTeamName} locks soon. Submit your pick!`
+					: `You have ${count} matches locking soon starting with ${nextEvent.homeTeamName} vs ${nextEvent.awayTeamName}.`;
 
-			// A. Dispatch Web Push Notification
-			if (prefs.push_notifications !== false) {
-				const pushPayload = {
-					title: '⚽ Matchday Kickoff Alert',
-					body: `You have ${reminderMatches.length} unpredicted match${reminderMatches.length > 1 ? 'es' : ''} starting soon!`,
+			const allowPush = !prefs || prefs.push_notifications;
+			const allowEmail = !prefs || prefs.email_notifications;
+
+			if (allowPush) {
+				const pushResult = await sendPushToUser(userId, {
+					title,
+					body,
 					url: '/predict',
-				};
-
-				const pushResult = await sendPushToUser(profile.id, pushPayload);
-				pushSent += pushResult.sent;
+					data: { type: 'kickoff_reminder', count },
+				});
+				if (pushResult && pushResult.sent > 0) {
+					pushSent += pushResult.sent;
+				}
 			}
 
-			// B. Dispatch Email Notification
-			if (prefs.email_notifications !== false) {
-				const { html, text } = generateKickoffReminderHtml({
-					username: profile.username || 'Predictor',
-					matches: reminderMatches,
-				});
+			if (allowEmail && process.env.RESEND_API_KEY) {
+				try {
+					const { data: authUser } =
+						await supabase.auth.admin.getUserById(userId);
+					if (authUser?.user?.email) {
+						const emailContent = generateKickoffReminderHtml({
+							username: profile.full_name || 'Predictor',
+							matches: unpredictedEvents.map((e) => ({
+								matchId: e.eventId,
+								homeTeamName: e.homeTeamName,
+								awayTeamName: e.awayTeamName,
+								homeTeamLogo: e.homeTeamLogo,
+								awayTeamLogo: e.awayTeamLogo,
+								kickoffTime: e.startsAt,
+							})),
+							appUrl:
+								process.env.NEXT_PUBLIC_APP_URL || 'https://kudomatch.com',
+						});
 
-				// In production, user email is in auth.users or profiles
-				const emailAddress = `${profile.username || profile.id}@example.com`;
-				const emailResult = await sendEmail({
-					to: emailAddress,
-					subject: `⚽ KudoMatch: ${reminderMatches.length} upcoming match${reminderMatches.length > 1 ? 'es' : ''} need your picks!`,
-					html,
-					text,
-				});
+						const emailResult = await sendEmail({
+							to: authUser.user.email,
+							subject: `⏰ Don't miss out! ${count} match${count > 1 ? 'es' : ''} kicking off soon`,
+							html: emailContent.html,
+							text: emailContent.text,
+						});
 
-				if (emailResult.success) {
-					emailsSent++;
+						if (emailResult.success) {
+							emailsSent++;
+						}
+					}
+				} catch (emailErr) {
+					console.warn(
+						`Failed to send reminder email to user ${userId}:`,
+						emailErr,
+					);
 				}
 			}
 		}
 
-		console.log(
-			`✅ Reminders processed: ${usersNotified} users notified (${pushSent} pushes, ${emailsSent} emails).`,
-		);
-
 		return {
 			success: true,
-			matchesFound: upcomingMatches.length,
+			matchesFound: upcomingEvents.length,
 			usersNotified,
 			pushSent,
 			emailsSent,
 		};
 	} catch (err: any) {
-		console.error('❌ Error executing kickoff reminders:', err);
+		console.error('❌ Error in sendKickoffReminders:', err);
 		return {
 			success: false,
 			matchesFound: 0,
 			usersNotified: 0,
 			pushSent: 0,
 			emailsSent: 0,
-			error: err.message || 'Failed to dispatch reminders',
+			error: err.message || 'Unknown error occurred',
 		};
 	}
 }
 
-// CLI Execution Support
+// Standalone execution if called directly
 if (require.main === module) {
 	const simulate = process.argv.includes('--simulate');
-	sendKickoffReminders({ simulate }).then((res) => {
-		console.log('Result:', res);
-		process.exit(res.success ? 0 : 1);
-	});
+	sendKickoffReminders({ simulate })
+		.then((res) => {
+			console.log('✅ Kickoff reminder pipeline completed:', res);
+			process.exit(res.success ? 0 : 1);
+		})
+		.catch((err) => {
+			console.error('💥 Fatal error in kickoff reminder script:', err);
+			process.exit(1);
+		});
 }

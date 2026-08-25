@@ -22,8 +22,6 @@ export async function sendWebPushNotification(
 ): Promise<PushSendResult> {
 	const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 	const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-	const vapidSubject =
-		process.env.VAPID_SUBJECT || 'mailto:admin@kudomatch.com';
 
 	try {
 		const payloadString = JSON.stringify({
@@ -45,14 +43,12 @@ export async function sendWebPushNotification(
 					'Content-Type': 'application/json',
 					TTL: '86400', // 24 hours
 					Urgency: 'high',
-					// Simulated VAPID authorization header for browser push services
 					Authorization: `WebPush vapid_public_key=${vapidPublicKey}`,
 				},
 				body: payloadString,
 			});
 
 			if (res.status === 410 || res.status === 404) {
-				// Subscription has expired or was unsubscribed on the client
 				return {
 					endpoint: subscription.endpoint,
 					success: false,
@@ -109,8 +105,15 @@ export async function sendWebPushNotification(
 export async function sendPushToUser(
 	userId: string,
 	payload: NotificationPayload,
-): Promise<{ sent: number; failed: number; pruned: number }> {
-	const supabase = createClient();
+	client?: any,
+): Promise<{
+	sent: number;
+	failed: number;
+	pruned: number;
+	success?: boolean;
+	sentCount?: number;
+}> {
+	const supabase = client || createClient();
 
 	const { data: subscriptions, error } = await supabase
 		.from('push_subscriptions')
@@ -118,7 +121,7 @@ export async function sendPushToUser(
 		.eq('user_id', userId);
 
 	if (error || !subscriptions || subscriptions.length === 0) {
-		return { sent: 0, failed: 0, pruned: 0 };
+		return { sent: 0, failed: 0, pruned: 0, success: true, sentCount: 0 };
 	}
 
 	let sent = 0;
@@ -132,12 +135,17 @@ export async function sendPushToUser(
 		} else {
 			failed++;
 			if (res.isExpired) {
-				// Remove expired endpoint
 				await supabase.from('push_subscriptions').delete().eq('id', sub.id);
 				pruned++;
 			}
 		}
 	}
 
-	return { sent, failed, pruned };
+	return {
+		sent,
+		failed,
+		pruned,
+		success: true,
+		sentCount: sent,
+	};
 }

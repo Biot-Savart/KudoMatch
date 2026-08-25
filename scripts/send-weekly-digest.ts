@@ -50,7 +50,7 @@ export async function sendWeeklyDigest(
 		// 1. Fetch user profiles
 		const { data: profiles, error: profilesError } = await supabase
 			.from('profiles')
-			.select('id, username, full_name, total_points');
+			.select('id, full_name, email');
 
 		if (profilesError) throw profilesError;
 		if (!profiles || profiles.length === 0) {
@@ -66,9 +66,9 @@ export async function sendWeeklyDigest(
 			(preferencesList || []).map((p: any) => [p.user_id, p]),
 		);
 
-		// 3. Determine upcoming matches count
+		// 3. Determine upcoming events count
 		const { count: upcomingCount } = await supabase
-			.from('matches')
+			.from('events')
 			.select('id', { count: 'exact', head: true })
 			.eq('status', 'scheduled');
 
@@ -76,100 +76,113 @@ export async function sendWeeklyDigest(
 		const sevenDaysAgo = new Date();
 		sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-		const { data: recentPredictions, error: predsError } = await supabase
+		const { data: allPredictions, error: predsError } = await supabase
 			.from('predictions')
-			.select('user_id, points_earned, created_at');
+			.select('user_id, raw_points, tier_code, created_at, settlement_status');
 
 		if (predsError) throw predsError;
 
-		// Group recent predictions by user
+		// Group predictions by user
 		const userPredictionsMap = new Map<string, any[]>();
-		(recentPredictions || []).forEach((pred: any) => {
+		(allPredictions || []).forEach((pred: any) => {
 			if (!userPredictionsMap.has(pred.user_id)) {
 				userPredictionsMap.set(pred.user_id, []);
 			}
 			userPredictionsMap.get(pred.user_id)!.push(pred);
 		});
 
-		// 5. Fetch pool standings for users
-		const { data: standings } = await supabase
-			.from('pool_standings')
-			.select('user_id, total_points, rank, pools(name)');
-
-		const userTopPoolMap = new Map<
-			string,
-			{ poolName: string; rank: number }
-		>();
-		(standings || []).forEach((st: any) => {
-			if (
-				st.pools?.name &&
-				(!userTopPoolMap.has(st.user_id) ||
-					(st.rank && st.rank < (userTopPoolMap.get(st.user_id)?.rank || 999)))
-			) {
-				userTopPoolMap.set(st.user_id, {
-					poolName: st.pools.name,
-					rank: st.rank || 1,
-				});
-			}
-		});
-
 		let digestsSent = 0;
 
-		// 6. Process each user and send digest
+		// 5. Process each user and send digest
 		for (const profile of profiles) {
 			const prefs = preferencesMap.get(profile.id) || {
 				weekly_digest: true,
 				email_notifications: true,
 			};
 
-			// Check if user disabled weekly digest or email notifications
-			if (
-				prefs.weekly_digest === false ||
-				prefs.email_notifications === false
-			) {
+			if (!prefs.weekly_digest || !prefs.email_notifications) {
 				continue;
 			}
 
 			const userPreds = userPredictionsMap.get(profile.id) || [];
-			const pointsThisWeek = userPreds.reduce(
-				(sum, p) => sum + (p.points_earned || 0),
+			const totalPoints = userPreds.reduce(
+				(sum, p) => sum + (p.raw_points || 0),
 				0,
 			);
-			const exactThisWeek = userPreds.filter(
-				(p) => p.points_earned === 3,
-			).length;
-			const topPool = userTopPoolMap.get(profile.id);
 
-			const summary: WeeklyDigestSummary = {
+			const recentPreds = userPreds.filter(
+				(p) => new Date(p.created_at) >= sevenDaysAgo,
+			);
+			const pointsThisWeek = recentPreds.reduce(
+				(sum, p) => sum + (p.raw_points || 0),
+				0,
+			);
+			const exactsThisWeek = recentPreds.filter(
+				(p) => p.tier_code === 'exact_score',
+			).length;
+
+			const summaryData: WeeklyDigestSummary = {
 				userId: profile.id,
-				username: profile.username || 'Predictor',
-				fullName: profile.full_name,
-				totalPoints: profile.total_points || 0,
+				fullName: profile.full_name || 'Predictor',
+				email: profile.email,
+				totalPoints,
 				pointsEarnedThisWeek: pointsThisWeek,
-				exactPredictionsThisWeek: exactThisWeek,
-				totalPredictionsThisWeek: userPreds.length,
-				topPoolName: topPool?.poolName || null,
-				topPoolRank: topPool?.rank || null,
-				upcomingMatchesCount: upcomingCount || 0,
+				exactPredictionsThisWeek: exactsThisWeek,
+				totalPredictionsThisWeek: recentPreds.length,
+				upcomingEventsCount: upcomingCount || 0,
 			};
 
-			const { html, text } = generateWeeklyDigestHtml(summary);
-			const emailAddress = `${profile.username || profile.id}@example.com`;
-
-			const emailResult = await sendEmail({
-				to: emailAddress,
-				subject: `📊 Your KudoMatch Weekly Recap (+${pointsThisWeek} PTS)`,
-				html,
-				text,
-			});
-
-			if (emailResult.success) {
+			if (simulate) {
+				console.log(
+					`[SIMULATION] Weekly digest prepared for user ${profile.id} (${profile.email}):`,
+					summaryData,
+				);
 				digestsSent++;
+				continue;
+			}
+
+			// In real dispatch mode, send with email service if RESEND_API_KEY is configured
+			if (process.env.RESEND_API_KEY && profile.email) {
+				try {
+					const emailContent = generateWeeklyDigestHtml(
+						{
+							userId: profile.id,
+							username: profile.full_name || 'Predictor',
+							fullName: profile.full_name || 'Predictor',
+							email: profile.email,
+							totalPoints: summaryData.totalPoints,
+							pointsEarnedThisWeek: summaryData.pointsEarnedThisWeek,
+							exactPredictionsThisWeek: summaryData.exactPredictionsThisWeek,
+							totalPredictionsThisWeek: summaryData.totalPredictionsThisWeek,
+							topPoolName: summaryData.topPoolName || undefined,
+							topPoolRank: summaryData.topPoolRank || undefined,
+							upcomingEventsCount: summaryData.upcomingEventsCount,
+							upcomingMatchesCount: summaryData.upcomingEventsCount,
+						},
+						process.env.NEXT_PUBLIC_APP_URL || 'https://kudomatch.com',
+					);
+
+					const res = await sendEmail({
+						to: profile.email,
+						subject: `📈 Your Weekly KudoMatch Digest: +${pointsThisWeek} pts this week!`,
+						html: emailContent.html,
+						text: emailContent.text,
+					});
+
+					if (res.success) {
+						digestsSent++;
+					}
+				} catch (emailErr) {
+					console.warn(
+						`Failed to send weekly digest email to user ${profile.id}:`,
+						emailErr,
+					);
+				}
 			}
 		}
 
 		console.log(
-			`✅ Weekly digest completed: ${digestsSent}/${profiles.length} users emailed.`,
+			`✅ Weekly digest completed. Sent ${digestsSent} digests to ${profiles.length} users.`,
 		);
 
 		return {
@@ -178,21 +191,26 @@ export async function sendWeeklyDigest(
 			totalUsers: profiles.length,
 		};
 	} catch (err: any) {
-		console.error('❌ Error executing weekly digest:', err);
+		console.error('❌ Error in sendWeeklyDigest:', err);
 		return {
 			success: false,
 			digestsSent: 0,
 			totalUsers: 0,
-			error: err.message || 'Failed to dispatch weekly digests',
+			error: err.message || 'Unknown error occurred',
 		};
 	}
 }
 
-// CLI Execution Support
+// Standalone execution if called directly
 if (require.main === module) {
 	const simulate = process.argv.includes('--simulate');
-	sendWeeklyDigest({ simulate }).then((res) => {
-		console.log('Result:', res);
-		process.exit(res.success ? 0 : 1);
-	});
+	sendWeeklyDigest({ simulate })
+		.then((res) => {
+			console.log('✅ Weekly digest pipeline completed:', res);
+			process.exit(res.success ? 0 : 1);
+		})
+		.catch((err) => {
+			console.error('💥 Fatal error in weekly digest script:', err);
+			process.exit(1);
+		});
 }

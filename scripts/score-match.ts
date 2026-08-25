@@ -19,211 +19,148 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 	},
 });
 
-async function run() {
-	const args = process.argv.slice(2);
-	const hasSimulate = args.includes('--simulate');
-	const hasRecalc = args.includes('--recalc');
-	const hasResolve = args.includes('--resolve');
+export async function resolveMarketResult(
+	marketId: number | string,
+	homeScore: number,
+	awayScore: number,
+	status: 'provisional' | 'final' = 'final',
+) {
+	console.log(
+		`⚽ Setting result on market ${marketId}: ${homeScore}-${awayScore} (${status})...`,
+	);
 
-	const matchdayArg = args.find((arg) => arg.startsWith('--matchday='));
-	const matchday = matchdayArg ? parseInt(matchdayArg.split('=')[1]) : 12;
+	const { data: market, error: mErr } = await supabase
+		.from('event_markets')
+		.select('*, events(*)')
+		.eq('id', Number(marketId))
+		.single();
 
-	const matchIdArg = args.find((arg) => arg.startsWith('--matchId='));
-	const matchId = matchIdArg ? matchIdArg.split('=')[1] : null;
+	if (mErr || !market) {
+		throw new Error(`Market not found: ${marketId}`);
+	}
 
-	const homeScoreArg = args.find((arg) => arg.startsWith('--homeScore='));
-	const homeScore = homeScoreArg ? parseInt(homeScoreArg.split('=')[1]) : null;
+	// 1. Lock market if not locked
+	await supabase
+		.from('event_markets')
+		.update({ status: 'locked' })
+		.eq('id', Number(marketId));
 
-	const awayScoreArg = args.find((arg) => arg.startsWith('--awayScore='));
-	const awayScore = awayScoreArg ? parseInt(awayScoreArg.split('=')[1]) : null;
+	// 2. Insert/Update market result
+	const { data: res, error: resErr } = await supabase
+		.from('market_results')
+		.upsert({
+			event_market_id: Number(marketId),
+			result: {
+				kind: market.market_kind,
+				version: market.payload_schema_version,
+				home: homeScore,
+				away: awayScore,
+			},
+			revision: 1,
+			status,
+			source_kind: 'manual',
+			source_priority: 10,
+			finalized_at: status === 'final' ? new Date().toISOString() : null,
+			updated_at: new Date().toISOString(),
+		})
+		.select()
+		.single();
 
-	if (hasSimulate) {
-		console.log(`🎲 Simulating match outcomes for Matchday ${matchday}...`);
-		await simulateMatchday(matchday);
-	} else if (hasResolve) {
-		if (!matchId || homeScore === null || awayScore === null) {
-			console.error(
-				'❌ Missing arguments for resolution. Required: --matchId=<uuid> --homeScore=<int> --awayScore=<int>',
-			);
-			process.exit(1);
+	if (resErr) throw resErr;
+
+	// 3. Mark market as settled and event as completed if final
+	if (status === 'final') {
+		await supabase
+			.from('event_markets')
+			.update({ status: 'settled' })
+			.eq('id', Number(marketId));
+
+		if (market.event_id) {
+			await supabase
+				.from('events')
+				.update({ status: 'completed' })
+				.eq('id', market.event_id);
 		}
-		console.log(
-			`⚽ Resolving match ${matchId} with score ${homeScore}-${awayScore}...`,
-		);
-		await resolveMatch(matchId, homeScore, awayScore);
-	} else if (hasRecalc) {
-		console.log('🔄 Triggering global database points recalculation...');
-		await recalculateScores();
-	} else {
-		printHelp();
-	}
-}
-
-function printHelp() {
-	console.log(`
-🏆 KudoMatch Scoring Engine CLI
-
-Available Operations:
-  --simulate                 Simulates outcomes for scheduled matches on a matchday with random scores.
-                             Optional parameter: --matchday=<int> (default is 12)
-  --resolve                  Resolves a single match with a specific score.
-                             Required parameters: --matchId=<uuid> --homeScore=<int> --awayScore=<int>
-  --recalc                   Invokes the database procedure to recalculate all scores from scratch.
-
-Examples:
-  npm run score:simulate -- --matchday=12
-  npm run score:resolve -- --matchId=11111111-1111-4111-a111-111111111111 --homeScore=2 --awayScore=1
-  npm run score:recalc
-`);
-}
-
-async function simulateMatchday(matchdayNum: number) {
-	// 1. Fetch scheduled matches for this matchday
-	const { data: matches, error } = await supabase
-		.from('matches')
-		.select(
-			'id, status, home_team:teams!matches_home_team_id_fkey(name), away_team:teams!matches_away_team_id_fkey(name)',
-		)
-		.eq('matchday', matchdayNum);
-
-	if (error) {
-		console.error('❌ Failed to fetch matches:', error);
-		process.exit(1);
 	}
 
-	if (!matches || matches.length === 0) {
-		console.log(
-			`⚠️ No matches found in the database for Matchday ${matchdayNum}. Have you run npm run seed first?`,
-		);
+	console.log(`✅ Market ${marketId} settled. Result recorded.`);
+	return res;
+}
+
+export async function simulateRound(roundLabel: string = 'Round 12') {
+	console.log(`🎲 Simulating outcomes for ${roundLabel}...`);
+
+	const { data: events, error } = await supabase
+		.from('events')
+		.select('id, round_label, event_markets(id, market_kind, is_current)')
+		.eq('round_label', roundLabel);
+
+	if (error || !events || events.length === 0) {
+		console.warn(`No events found for ${roundLabel}`);
 		return;
 	}
 
-	console.log(`Found ${matches.length} matches for Matchday ${matchdayNum}.`);
+	for (const ev of events) {
+		const currentMarket =
+			(ev as any).event_markets?.find((m: any) => m.is_current) ??
+			(ev as any).event_markets?.[0];
+		if (!currentMarket) continue;
 
-	// Realistic soccer outcomes distribution (weighted slightly towards low scores and home wins)
-	const scoresPool = [
-		[1, 0],
-		[2, 1],
-		[1, 1],
-		[0, 0],
-		[0, 1],
-		[0, 2],
-		[2, 0],
-		[3, 1],
-		[1, 2],
-		[2, 2],
-		[3, 2],
-		[1, 3],
-	];
-
-	let updatedCount = 0;
-
-	for (const match of matches) {
-		const randomPair =
-			scoresPool[Math.floor(Math.random() * scoresPool.length)];
-		const simulatedHome = randomPair[0];
-		const simulatedAway = randomPair[1];
-
-		const homeName = (match.home_team as any)?.name || 'Home Team';
-		const awayName = (match.away_team as any)?.name || 'Away Team';
-
-		console.log(
-			`   👉 Resolving: ${homeName} vs ${awayName} ➔ ${simulatedHome} - ${simulatedAway}`,
+		const randomHome = Math.floor(Math.random() * 4);
+		const randomAway = Math.floor(Math.random() * 4);
+		await resolveMarketResult(
+			currentMarket.id,
+			randomHome,
+			randomAway,
+			'final',
 		);
+	}
 
-		const { error: updateErr } = await supabase
-			.from('matches')
-			.update({
-				home_score: simulatedHome,
-				away_score: simulatedAway,
-				status: 'finished',
-				updated_at: new Date().toISOString(),
-			})
-			.eq('id', match.id);
+	console.log(`✅ Completed simulation for ${roundLabel}`);
+}
 
-		if (updateErr) {
+async function run() {
+	const args = process.argv.slice(2);
+	const hasSimulate = args.includes('--simulate');
+	const hasResolve = args.includes('--resolve');
+
+	const roundArg = args.find((a) => a.startsWith('--round='));
+	const round = roundArg ? roundArg.split('=')[1] : 'Round 12';
+
+	const marketIdArg = args.find((a) => a.startsWith('--marketId='));
+	const marketId = marketIdArg ? marketIdArg.split('=')[1] : null;
+
+	const homeScoreArg = args.find((a) => a.startsWith('--homeScore='));
+	const homeScore = homeScoreArg ? parseInt(homeScoreArg.split('=')[1]) : null;
+
+	const awayScoreArg = args.find((a) => a.startsWith('--awayScore='));
+	const awayScore = awayScoreArg ? parseInt(awayScoreArg.split('=')[1]) : null;
+
+	if (hasSimulate) {
+		await simulateRound(round);
+	} else if (hasResolve) {
+		if (!marketId || homeScore === null || awayScore === null) {
 			console.error(
-				`   ❌ Failed to update match ${match.id}:`,
-				updateErr.message,
+				'Usage: --resolve --marketId=<id> --homeScore=<int> --awayScore=<int>',
 			);
-		} else {
-			updatedCount++;
+			process.exit(1);
 		}
+		await resolveMarketResult(marketId, homeScore, awayScore, 'final');
+	} else {
+		console.log(`
+🏆 KudoMatch Score Settlement CLI
+Usage:
+  --simulate [--round="Round 12"]
+  --resolve --marketId=<id> --homeScore=<n> --awayScore=<n>
+`);
 	}
-
-	console.log(
-		`\n🎉 Successfully simulated and scored ${updatedCount}/${matches.length} matches!`,
-	);
-	console.log(
-		'💡 Trigger ' +
-			'trigger_process_match_scoring'.bold() +
-			' was successfully fired for each match update, recalculating user prediction scores and profiles.',
-	);
 }
 
-async function resolveMatch(matchUuid: string, home: number, away: number) {
-	const { data: match, error: fetchErr } = await supabase
-		.from('matches')
-		.select(
-			'id, home_team:teams!matches_home_team_id_fkey(name), away_team:teams!matches_away_team_id_fkey(name)',
-		)
-		.eq('id', matchUuid)
-		.single();
-
-	if (fetchErr || !match) {
-		console.error(
-			`❌ Match with ID ${matchUuid} not found:`,
-			fetchErr?.message || 'Empty response',
-		);
-		process.exit(1);
-	}
-
-	const homeName = (match.home_team as any)?.name || 'Home Team';
-	const awayName = (match.away_team as any)?.name || 'Away Team';
-
-	const { error: updateErr } = await supabase
-		.from('matches')
-		.update({
-			home_score: home,
-			away_score: away,
-			status: 'finished',
-			updated_at: new Date().toISOString(),
-		})
-		.eq('id', matchUuid);
-
-	if (updateErr) {
-		console.error(`❌ Failed to update match score:`, updateErr.message);
-		process.exit(1);
-	}
-
-	console.log(
-		`✅ Successfully resolved: ${homeName} vs ${awayName} as ${home} - ${away} (Finished).`,
-	);
-	console.log(
-		'✨ All prediction points and profile point tallies updated atomically!',
-	);
+if (require.main === module) {
+	run()
+		.then(() => process.exit(0))
+		.catch((err) => {
+			console.error('Error:', err);
+			process.exit(1);
+		});
 }
-
-async function recalculateScores() {
-	const { error } = await supabase.rpc('recalculate_all_scores');
-
-	if (error) {
-		console.error('❌ Failed to run recalculate_all_scores:', error);
-		process.exit(1);
-	}
-
-	console.log(
-		'✅ Global point recalculation complete. All prediction points and user profiles are fully synchronized.',
-	);
-}
-
-// Support bold printing helper
-Object.defineProperty(String.prototype, 'bold', {
-	value: function () {
-		return `\x1b[1m${this}\x1b[22m`;
-	},
-	writable: true,
-	configurable: true,
-});
-
-run();

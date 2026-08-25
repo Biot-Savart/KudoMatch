@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createPool } from '@/lib/queries/pools';
+import { PoolScopeKind, PoolScoringMode } from '@/types';
 import { motion } from 'framer-motion';
-import { Lock, Trophy, Unlock, X } from 'lucide-react';
+import { Globe, Lock, Trophy, X } from 'lucide-react';
 import { useState } from 'react';
 
-interface CreatePoolModalProps {
+export interface CreatePoolModalProps {
 	userId: string;
 	isOpen: boolean;
 	onClose: () => void;
@@ -22,12 +23,21 @@ export function CreatePoolModal({
 	onSuccess,
 }: CreatePoolModalProps) {
 	const [name, setName] = useState('');
-	const [description, setDescription] = useState('');
-	const [isPublic, setIsPublic] = useState(false);
+	const [scopeKind, setScopeKind] = useState<PoolScopeKind>('sport');
+	const [sportSlug, setSportSlug] = useState<string>('football');
+	const [scoringMode, setScoringMode] = useState<PoolScoringMode>('raw');
+	const [isPrivate, setIsPrivate] = useState(true);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
 	if (!isOpen) return null;
+
+	const handleScopeChange = (scope: PoolScopeKind) => {
+		setScopeKind(scope);
+		if (scope === 'all_sports') {
+			setScoringMode('normalized');
+		}
+	};
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
@@ -40,12 +50,14 @@ export function CreatePoolModal({
 		setError(null);
 
 		try {
-			const pool = await createPool(
-				userId,
-				name.trim(),
-				description.trim() || null,
-				isPublic,
-			);
+			const pool = await createPool({
+				name: name.trim(),
+				created_by: userId,
+				scope_kind: scopeKind,
+				sport_slug: scopeKind === 'all_sports' ? null : sportSlug,
+				scoring_mode: scopeKind === 'all_sports' ? 'normalized' : scoringMode,
+				is_private: isPrivate,
+			});
 
 			if (pool) {
 				onSuccess(pool.id);
@@ -75,7 +87,7 @@ export function CreatePoolModal({
 				initial={{ opacity: 0, scale: 0.95, y: 20 }}
 				animate={{ opacity: 1, scale: 1, y: 0 }}
 				exit={{ opacity: 0, scale: 0.95, y: 20 }}
-				className="relative w-full max-w-md overflow-hidden rounded-2xl glass-card border border-white/10 p-6 shadow-2xl z-10 text-white"
+				className="relative w-full max-w-md overflow-hidden rounded-2xl glass-card border border-white/10 p-6 shadow-2xl z-10 text-white max-h-[90vh] overflow-y-auto"
 			>
 				{/* Close Button */}
 				<button
@@ -95,7 +107,7 @@ export function CreatePoolModal({
 							Create Prediction Pool
 						</h3>
 						<p className="text-xs text-slate-400">
-							Compete with friends or co-workers
+							Compete with friends across sports or specific leagues
 						</p>
 					</div>
 				</div>
@@ -120,81 +132,147 @@ export function CreatePoolModal({
 						</Label>
 						<Input
 							id="pool-name"
-							placeholder="e.g., Office Derby Rivals"
 							value={name}
 							onChange={(e) => setName(e.target.value)}
-							disabled={loading}
-							className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 rounded-xl"
+							placeholder="e.g. Champions League Lounge"
 							required
-							maxLength={60}
+							className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-indigo-500"
 						/>
 					</div>
 
+					{/* Scope Selector */}
 					<div className="space-y-1.5">
-						<Label
-							htmlFor="pool-desc"
-							className="text-xs text-slate-300 font-semibold uppercase tracking-wider"
-						>
-							Description (Optional)
+						<Label className="text-xs text-slate-300 font-semibold uppercase tracking-wider">
+							Pool Scope
 						</Label>
-						<Input
-							id="pool-desc"
-							placeholder="e.g., Premier League 2026 Season Bragging Rights"
-							value={description}
-							onChange={(e) => setDescription(e.target.value)}
-							disabled={loading}
-							className="bg-white/5 border-white/10 text-white placeholder-slate-500 focus:border-indigo-500 rounded-xl"
-						/>
+						<div className="grid grid-cols-2 gap-2">
+							<button
+								type="button"
+								onClick={() => handleScopeChange('sport')}
+								className={`p-3 rounded-xl border text-left transition flex flex-col gap-1 ${
+									scopeKind === 'sport'
+										? 'bg-indigo-600/20 border-indigo-500 text-white'
+										: 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+								}`}
+							>
+								<span className="text-xs font-bold">⚽ Single Sport</span>
+								<span className="text-[10px] opacity-70">
+									Target specific sport (e.g. Football)
+								</span>
+							</button>
+
+							<button
+								type="button"
+								onClick={() => handleScopeChange('all_sports')}
+								className={`p-3 rounded-xl border text-left transition flex flex-col gap-1 ${
+									scopeKind === 'all_sports'
+										? 'bg-indigo-600/20 border-indigo-500 text-white'
+										: 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+								}`}
+							>
+								<span className="text-xs font-bold">🌐 All Sports</span>
+								<span className="text-[10px] opacity-70">
+									Multi-sport normalized leaderboard
+								</span>
+							</button>
+						</div>
 					</div>
 
-					{/* Visibility toggle */}
-					<div className="flex items-center justify-between p-3.5 rounded-xl bg-white/5 border border-white/5">
-						<div className="flex items-center gap-3">
-							{isPublic ? (
-								<Unlock className="h-5 w-5 text-emerald-400" />
-							) : (
-								<Lock className="h-5 w-5 text-indigo-400" />
-							)}
-							<div className="text-left">
-								<p className="text-sm font-bold">
-									{isPublic ? 'Public Pool' : 'Private Pool'}
-								</p>
-								<p className="text-[10px] text-slate-400">
-									{isPublic
-										? 'Anyone can find and join this pool'
-										: 'Requires unique 6-character code to join'}
-								</p>
+					{/* Sport Selection if scope is sport */}
+					{scopeKind === 'sport' && (
+						<div className="space-y-1.5">
+							<Label className="text-xs text-slate-300 font-semibold uppercase tracking-wider">
+								Sport
+							</Label>
+							<select
+								value={sportSlug}
+								onChange={(e) => setSportSlug(e.target.value)}
+								className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+							>
+								<option value="football">Football (Soccer)</option>
+								<option value="rugby_union">Rugby Union</option>
+							</select>
+						</div>
+					)}
+
+					{/* Scoring Mode if single sport */}
+					{scopeKind !== 'all_sports' && (
+						<div className="space-y-1.5">
+							<Label className="text-xs text-slate-300 font-semibold uppercase tracking-wider">
+								Scoring Format
+							</Label>
+							<div className="grid grid-cols-2 gap-2">
+								<button
+									type="button"
+									onClick={() => setScoringMode('raw')}
+									className={`p-2.5 rounded-xl border text-xs font-semibold transition ${
+										scoringMode === 'raw'
+											? 'bg-indigo-600 border-indigo-500 text-white'
+											: 'bg-white/5 border-white/10 text-slate-400'
+									}`}
+								>
+									Standard Raw Points (0-3 pts)
+								</button>
+								<button
+									type="button"
+									onClick={() => setScoringMode('normalized')}
+									className={`p-2.5 rounded-xl border text-xs font-semibold transition ${
+										scoringMode === 'normalized'
+											? 'bg-indigo-600 border-indigo-500 text-white'
+											: 'bg-white/5 border-white/10 text-slate-400'
+									}`}
+								>
+									Normalized (10,000 basis pts)
+								</button>
 							</div>
 						</div>
-						<button
-							type="button"
-							onClick={() => setIsPublic(!isPublic)}
-							className={`relative inline-flex h-6 w-11 items-center rounded-full transition duration-300 focus:outline-none ${
-								isPublic ? 'bg-emerald-500' : 'bg-slate-700'
-							}`}
-						>
-							<span
-								className={`inline-block h-4 w-4 transform rounded-full bg-white transition duration-300 ${
-									isPublic ? 'translate-x-6' : 'translate-x-1'
-								}`}
-							/>
-						</button>
-					</div>
+					)}
 
-					<div className="flex gap-2 pt-2">
+					{/* Privacy Setting */}
+					<div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between">
+						<div className="flex items-center gap-2.5">
+							{isPrivate ? (
+								<Lock className="h-4 w-4 text-amber-400" />
+							) : (
+								<Globe className="h-4 w-4 text-indigo-400" />
+							)}
+							<div>
+								<div className="text-xs font-bold text-slate-200">
+									{isPrivate ? 'Private Pool' : 'Public Pool'}
+								</div>
+								<div className="text-[10px] text-slate-400">
+									{isPrivate
+										? 'Invite code required to join'
+										: 'Visible on discovery directory'}
+								</div>
+							</div>
+						</div>
+
 						<Button
 							type="button"
-							variant="ghost"
+							variant="outline"
+							size="sm"
+							onClick={() => setIsPrivate(!isPrivate)}
+							className="text-xs border-white/10 hover:bg-white/10 text-slate-300"
+						>
+							Switch to {isPrivate ? 'Public' : 'Private'}
+						</Button>
+					</div>
+
+					{/* Actions */}
+					<div className="pt-4 flex gap-2">
+						<Button
+							type="button"
+							variant="outline"
 							onClick={onClose}
-							disabled={loading}
-							className="flex-1 py-5 rounded-xl text-slate-300 hover:bg-white/5"
+							className="w-1/2 border-white/10 hover:bg-white/5 text-slate-300"
 						>
 							Cancel
 						</Button>
 						<Button
 							type="submit"
 							disabled={loading}
-							className="flex-1 py-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+							className="w-1/2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold"
 						>
 							{loading ? 'Creating...' : 'Create Pool'}
 						</Button>
@@ -204,3 +282,5 @@ export function CreatePoolModal({
 		</div>
 	);
 }
+
+export default CreatePoolModal;

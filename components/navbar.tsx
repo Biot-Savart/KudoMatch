@@ -2,7 +2,9 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { fetchUserScoreSummary, scoringQueryKeys } from '@/lib/queries/scoring';
 import { createClient } from '@/lib/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
 	Compass,
@@ -88,6 +90,15 @@ export function Navbar() {
 		};
 	}, [supabase]);
 
+	// Fetch dynamic score summary
+	const { data: scoreSummary } = useQuery({
+		queryKey: user?.id
+			? scoringQueryKeys.userSummary(user.id)
+			: ['scoring', 'summary', 'anon'],
+		queryFn: () => (user?.id ? fetchUserScoreSummary(user.id) : null),
+		enabled: !!user?.id,
+	});
+
 	const handleSignOut = async () => {
 		await supabase.auth.signOut();
 		setDropdownOpen(false);
@@ -96,7 +107,6 @@ export function Navbar() {
 		router.refresh();
 	};
 
-	// Active link check helper
 	const isActive = (path: string) => pathname === path;
 
 	const navLinks = [
@@ -105,7 +115,6 @@ export function Navbar() {
 		{ name: 'Pools', href: '/leagues', icon: Users },
 	];
 
-	// Hide Navbar completely on login/signup pages for full focus
 	if (
 		pathname === '/login' ||
 		pathname === '/signup' ||
@@ -113,6 +122,8 @@ export function Navbar() {
 	) {
 		return null;
 	}
+
+	const displayPoints = scoreSummary?.total_raw_points ?? 0;
 
 	return (
 		<header className="glass-nav fixed top-0 left-0 right-0 z-50 h-16 flex items-center px-4 md:px-8 justify-between border-b border-white/10 shadow-lg">
@@ -159,10 +170,10 @@ export function Navbar() {
 					<div className="h-8 w-24 bg-white/5 animate-pulse rounded-full" />
 				) : user ? (
 					<div className="flex items-center gap-3">
-						{/* Global Points Luminous Badge */}
+						{/* Global Points Badge */}
 						<div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-indigo-500/15 to-purple-500/15 border border-indigo-500/30 text-indigo-300 font-bold text-xs shadow-sm hover:border-indigo-400/50 transition-colors tabular-numbers">
 							<Trophy className="h-3.5 w-3.5 text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-							<span>{profile?.total_points ?? 0} pts</span>
+							<span>{displayPoints} pts</span>
 						</div>
 
 						{/* Profile Dropdown */}
@@ -174,7 +185,7 @@ export function Navbar() {
 								<Avatar className="h-9 w-9 border border-indigo-500/30 shadow-md">
 									<AvatarImage src={profile?.avatar_url || ''} />
 									<AvatarFallback className="bg-gradient-to-tr from-indigo-600 to-purple-600 text-white font-bold text-sm">
-										{(profile?.full_name || profile?.username || 'U')
+										{(profile?.full_name || profile?.email || 'U')
 											.substring(0, 2)
 											.toUpperCase()}
 									</AvatarFallback>
@@ -201,7 +212,7 @@ export function Navbar() {
 													{profile?.full_name || 'Kudo Predictor'}
 												</p>
 												<p className="text-xs text-slate-400 truncate">
-													@{profile?.username || 'username'}
+													{user.email}
 												</p>
 											</div>
 
@@ -251,7 +262,7 @@ export function Navbar() {
 				{user && (
 					<div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-indigo-500/15 to-purple-500/15 border border-indigo-500/30 text-indigo-300 font-bold text-xs tabular-numbers">
 						<Trophy className="h-3 w-3 text-amber-400" />
-						<span>{profile?.total_points ?? 0}</span>
+						<span>{displayPoints}</span>
 					</div>
 				)}
 				<button
@@ -313,7 +324,7 @@ export function Navbar() {
 										<Avatar className="h-10 w-10 border border-white/10">
 											<AvatarImage src={profile?.avatar_url || ''} />
 											<AvatarFallback className="bg-indigo-600 text-white font-bold">
-												{(profile?.full_name || profile?.username || 'U')
+												{(profile?.full_name || user.email || 'U')
 													.substring(0, 2)
 													.toUpperCase()}
 											</AvatarFallback>
@@ -322,9 +333,7 @@ export function Navbar() {
 											<p className="text-sm font-bold text-white">
 												{profile?.full_name || 'Kudo Predictor'}
 											</p>
-											<p className="text-xs text-slate-400">
-												@{profile?.username || 'username'}
-											</p>
+											<p className="text-xs text-slate-400">{user.email}</p>
 										</div>
 									</Link>
 
@@ -338,21 +347,29 @@ export function Navbar() {
 									</Button>
 								</div>
 							) : (
-								<div className="grid grid-cols-2 gap-2">
+								<div className="flex flex-col gap-2">
 									<Button
-										variant="outline"
-										className="py-5 font-bold rounded-xl border-white/10 hover:bg-white/5"
-										onClick={() => setMobileMenuOpen(false)}
+										className="w-full bg-indigo-600 hover:bg-indigo-700 font-bold py-5 rounded-xl text-white"
 										asChild
 									>
-										<Link href="/login">Sign In</Link>
+										<Link
+											href="/login"
+											onClick={() => setMobileMenuOpen(false)}
+										>
+											Sign In
+										</Link>
 									</Button>
 									<Button
-										className="py-5 font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700"
-										onClick={() => setMobileMenuOpen(false)}
+										variant="outline"
+										className="w-full border-white/10 hover:bg-white/5 font-bold py-5 rounded-xl text-slate-300"
 										asChild
 									>
-										<Link href="/signup">Sign Up</Link>
+										<Link
+											href="/signup"
+											onClick={() => setMobileMenuOpen(false)}
+										>
+											Create Account
+										</Link>
 									</Button>
 								</div>
 							)}
@@ -363,3 +380,5 @@ export function Navbar() {
 		</header>
 	);
 }
+
+export default Navbar;

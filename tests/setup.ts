@@ -55,9 +55,15 @@ export class MockQueryBuilder {
 	lte = vi.fn().mockImplementation(() => this);
 	or = vi.fn().mockImplementation(() => this);
 	in = vi.fn().mockImplementation(() => this);
+	is = vi.fn().mockImplementation(() => this);
+	not = vi.fn().mockImplementation(() => this);
 	order = vi.fn().mockImplementation(() => this);
 	limit = vi.fn().mockImplementation(() => this);
 	single = vi.fn().mockImplementation(() => {
+		const singleData = Array.isArray(this.data) ? this.data[0] : this.data;
+		return Promise.resolve({ data: singleData || null, error: this.error });
+	});
+	maybeSingle = vi.fn().mockImplementation(() => {
 		const singleData = Array.isArray(this.data) ? this.data[0] : this.data;
 		return Promise.resolve({ data: singleData || null, error: this.error });
 	});

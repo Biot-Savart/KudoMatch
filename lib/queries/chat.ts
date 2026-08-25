@@ -1,39 +1,63 @@
 import { createClient } from '@/lib/supabase/client';
 import { PoolMessage } from '@/types';
 
-/**
- * Fetches the most recent pool messages (up to a limit)
- */
+export const chatQueryKeys = {
+	all: ['chat'] as const,
+	messages: (poolId: string) =>
+		[...chatQueryKeys.all, 'messages', poolId] as const,
+};
+
 export async function fetchPoolMessages(
 	poolId: string,
 	limit: number = 50,
 ): Promise<PoolMessage[]> {
 	const supabase = createClient();
 
-	try {
-		const { data, error } = await supabase
-			.from('pool_messages')
-			.select(
-				`
-				*,
-				profile:profiles (*)
-			`,
+	const { data, error } = await supabase
+		.from('pool_messages')
+		.select(
+			`
+			id,
+			pool_id,
+			user_id,
+			message,
+			created_at,
+			profiles:profiles(
+				id,
+				full_name,
+				avatar_url
 			)
-			.eq('pool_id', poolId)
-			.order('created_at', { ascending: true })
-			.limit(limit);
+		`,
+		)
+		.eq('pool_id', poolId)
+		.order('created_at', { ascending: false })
+		.limit(limit);
 
-		if (error) throw error;
-		return (data || []) as unknown as PoolMessage[];
-	} catch (err) {
-		console.error(`⚠️ Failed to fetch messages for pool ${poolId}:`, err);
-		throw err;
+	if (error) {
+		console.error(`Error fetching chat messages for pool ${poolId}:`, error);
+		throw error;
 	}
+
+	return (data ?? [])
+		.map((row: any) => ({
+			id: row.id,
+			pool_id: row.pool_id,
+			user_id: row.user_id,
+			message: row.message,
+			created_at: row.created_at,
+			profile: row.profiles
+				? {
+						id: row.profiles.id,
+						full_name: row.profiles.full_name,
+						avatar_url: row.profiles.avatar_url,
+						created_at: '',
+						updated_at: '',
+					}
+				: undefined,
+		}))
+		.reverse(); // Return in chronological order
 }
 
-/**
- * Sends a message in a specific pool
- */
 export async function sendPoolMessage(
 	poolId: string,
 	userId: string,
@@ -41,46 +65,69 @@ export async function sendPoolMessage(
 ): Promise<PoolMessage> {
 	const supabase = createClient();
 
-	try {
-		const { data, error } = await supabase
-			.from('pool_messages')
-			.insert({
-				pool_id: poolId,
-				user_id: userId,
-				message: message.trim(),
-			})
-			.select(
-				`
-				*,
-				profile:profiles (*)
-			`,
+	const { data, error } = await supabase
+		.from('pool_messages')
+		.insert({
+			pool_id: poolId,
+			user_id: userId,
+			message: message.trim(),
+		})
+		.select(
+			`
+			id,
+			pool_id,
+			user_id,
+			message,
+			created_at,
+			profiles:profiles(
+				id,
+				full_name,
+				avatar_url
 			)
-			.single();
+		`,
+		)
+		.single();
 
-		if (error) throw error;
-		return data as unknown as PoolMessage;
-	} catch (err) {
-		console.error(`⚠️ Failed to send message to pool ${poolId}:`, err);
-		throw err;
+	if (error) {
+		console.error('Error sending pool message:', error);
+		throw error;
 	}
+
+	return {
+		id: (data as any).id,
+		pool_id: (data as any).pool_id,
+		user_id: (data as any).user_id,
+		message: (data as any).message,
+		created_at: (data as any).created_at,
+		profile: (data as any).profiles
+			? {
+					id: (data as any).profiles.id,
+					full_name: (data as any).profiles.full_name,
+					avatar_url: (data as any).profiles.avatar_url,
+					created_at: '',
+					updated_at: '',
+				}
+			: undefined,
+	};
 }
 
-/**
- * Deletes a pool message by ID
- */
-export async function deletePoolMessage(messageId: string): Promise<boolean> {
+export async function deletePoolMessage(
+	messageId: string,
+	userId?: string,
+): Promise<boolean> {
 	const supabase = createClient();
 
-	try {
-		const { error } = await supabase
-			.from('pool_messages')
-			.delete()
-			.eq('id', messageId);
-
-		if (error) throw error;
-		return true;
-	} catch (err) {
-		console.error(`⚠️ Failed to delete pool message ${messageId}:`, err);
-		throw err;
+	let query = supabase.from('pool_messages').delete().eq('id', messageId);
+	if (userId) {
+		query = query.eq('user_id', userId);
 	}
+
+	const { error } = await query;
+
+	if (error) {
+		console.error(`Error deleting pool message ${messageId}:`, error);
+		throw error;
+	}
+
+	return true;
 }

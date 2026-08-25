@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { simulatePoolStandings } from '@/lib/utils/scoring';
-import { Match, PoolLeaderboardEntry, Prediction } from '@/types';
+import { PoolLeaderboardEntry, SportEvent } from '@/types';
 import { motion } from 'framer-motion';
 import {
 	ArrowDown,
@@ -12,17 +12,17 @@ import {
 	Minus,
 	RotateCcw,
 	Sparkles,
-	Trophy,
 	X,
 } from 'lucide-react';
 import { useState } from 'react';
 
-interface WhatIfSimulatorProps {
+export interface WhatIfSimulatorProps {
 	isOpen: boolean;
 	onClose: () => void;
-	matches: Match[];
-	leaderboard: PoolLeaderboardEntry[];
-	predictionsByMember: Record<string, Record<string, Prediction>>;
+	events?: SportEvent[];
+	matches?: any[];
+	leaderboard?: PoolLeaderboardEntry[];
+	predictionsByMember?: Record<string, Record<string, any>>;
 	currentUserId?: string | null;
 	poolName?: string;
 }
@@ -30,22 +30,28 @@ interface WhatIfSimulatorProps {
 export function WhatIfScenarioSimulator({
 	isOpen,
 	onClose,
-	matches,
-	leaderboard,
-	predictionsByMember,
+	events = [],
+	matches = [],
+	leaderboard = [],
+	predictionsByMember = {},
 	currentUserId,
 	poolName,
 }: WhatIfSimulatorProps) {
-	// Simulated scores state: matchId -> { home_score, away_score }
+	const items = events.length > 0 ? events : matches;
+
+	// Simulated scores state: eventId -> { home_score, away_score }
 	const [simulatedScores, setSimulatedScores] = useState<
 		Record<string, { home_score: number; away_score: number }>
 	>(() => {
 		const initial: Record<string, { home_score: number; away_score: number }> =
 			{};
-		matches.forEach((m) => {
-			initial[m.id] = {
-				home_score: m.home_score ?? 1,
-				away_score: m.away_score ?? 1,
+		items.forEach((ev) => {
+			const res = ev.current_market?.result?.result as
+				| { home: number; away: number }
+				| undefined;
+			initial[ev.id] = {
+				home_score: res?.home ?? ev.home_score ?? 1,
+				away_score: res?.away ?? ev.away_score ?? 1,
 			};
 		});
 		return initial;
@@ -54,12 +60,12 @@ export function WhatIfScenarioSimulator({
 	if (!isOpen) return null;
 
 	const handleScoreChange = (
-		matchId: string,
+		eventId: string,
 		team: 'home' | 'away',
 		delta: number,
 	) => {
 		setSimulatedScores((prev) => {
-			const current = prev[matchId] || { home_score: 1, away_score: 1 };
+			const current = prev[eventId] || { home_score: 1, away_score: 1 };
 			const newHome =
 				team === 'home'
 					? Math.max(0, current.home_score + delta)
@@ -70,7 +76,7 @@ export function WhatIfScenarioSimulator({
 					: current.away_score;
 			return {
 				...prev,
-				[matchId]: { home_score: newHome, away_score: newAway },
+				[eventId]: { home_score: newHome, away_score: newAway },
 			};
 		});
 	};
@@ -78,10 +84,13 @@ export function WhatIfScenarioSimulator({
 	const handleReset = () => {
 		const initial: Record<string, { home_score: number; away_score: number }> =
 			{};
-		matches.forEach((m) => {
-			initial[m.id] = {
-				home_score: m.home_score ?? 1,
-				away_score: m.away_score ?? 1,
+		items.forEach((ev) => {
+			const res = ev.current_market?.result?.result as
+				| { home: number; away: number }
+				| undefined;
+			initial[ev.id] = {
+				home_score: res?.home ?? ev.home_score ?? 1,
+				away_score: res?.away ?? ev.away_score ?? 1,
 			};
 		});
 		setSimulatedScores(initial);
@@ -91,7 +100,7 @@ export function WhatIfScenarioSimulator({
 	const { simulatedLeaderboard } = simulatePoolStandings(
 		leaderboard,
 		predictionsByMember,
-		matches,
+		items,
 		simulatedScores,
 	);
 
@@ -126,19 +135,22 @@ export function WhatIfScenarioSimulator({
 				</button>
 
 				{/* Header */}
-				<div className="flex items-center justify-between gap-4 mb-5 border-b border-white/5 pb-4 shrink-0">
+				<div className="flex items-center justify-between pb-4 border-b border-white/10 mb-4 shrink-0">
 					<div className="flex items-center gap-3">
 						<div className="p-2.5 rounded-xl bg-purple-600/20 border border-purple-500/30 text-purple-400">
 							<Calculator className="h-5 w-5" />
 						</div>
 						<div>
-							<h3 className="text-lg font-extrabold tracking-tight">
-								&quot;What-If&quot; Scenario Simulator
+							<h3 className="text-xl font-extrabold tracking-tight flex items-center gap-2">
+								<span>{`"What-If"`} Scenario Simulator</span>
+								<span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+									Live Sandbox
+								</span>
 							</h3>
 							<p className="text-xs text-slate-400">
 								{poolName
 									? `Simulate standings for ${poolName}`
-									: 'Test hypothetical match results'}
+									: 'Tweak upcoming/live match scorelines to see how pool ranks would shake out'}
 							</p>
 						</div>
 					</div>
@@ -147,154 +159,112 @@ export function WhatIfScenarioSimulator({
 						variant="outline"
 						size="sm"
 						onClick={handleReset}
-						className="border-white/10 hover:bg-white/5 text-slate-300 font-bold text-xs gap-1.5"
+						className="border-white/10 hover:bg-white/5 text-slate-300 gap-1.5 text-xs mr-8"
 					>
 						<RotateCcw className="h-3.5 w-3.5" />
-						<span>Reset Scores</span>
+						<span>Reset</span>
 					</Button>
 				</div>
 
-				{/* CURRENT USER SIMULATION HIGHLIGHT BANNER */}
-				{currentUserSim && (
-					<div className="p-4 rounded-xl bg-gradient-to-r from-purple-900/30 via-indigo-900/20 to-slate-900/40 border border-purple-500/30 mb-5 shrink-0 flex items-center justify-between">
-						<div className="flex items-center gap-3">
-							<div className="p-2 rounded-lg bg-purple-500/20 border border-purple-500/30 text-purple-300">
-								<Sparkles className="h-5 w-5 animate-pulse" />
-							</div>
-							<div>
-								<p className="text-xs text-purple-200 font-bold uppercase tracking-wider">
-									Simulated Projection For You
-								</p>
-								<p className="text-sm text-white font-extrabold flex items-center gap-2">
-									<span>
-										Rank #{currentUserSim.rank}{' '}
-										<span className="text-xs text-slate-400 font-normal">
-											(was #{currentUserSim.originalRank})
-										</span>
-									</span>
-									{currentUserSim.rankDelta > 0 ? (
-										<span className="inline-flex items-center gap-0.5 text-xs text-emerald-400 font-black bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-											<ArrowUp className="h-3 w-3" /> +
-											{currentUserSim.rankDelta} spots
-										</span>
-									) : currentUserSim.rankDelta < 0 ? (
-										<span className="inline-flex items-center gap-0.5 text-xs text-red-400 font-black bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20">
-											<ArrowDown className="h-3 w-3" />{' '}
-											{currentUserSim.rankDelta} spots
-										</span>
-									) : (
-										<span className="inline-flex items-center gap-0.5 text-xs text-slate-400 font-black bg-white/5 px-2 py-0.5 rounded-full">
-											<Minus className="h-3 w-3" /> No Change
-										</span>
-									)}
-								</p>
-							</div>
+				{/* Two-Column Layout: Controls on Left, Standings on Right */}
+				<div className="grid md:grid-cols-12 gap-6 overflow-y-auto flex-1 pr-1">
+					{/* LEFT: Match Scoreline Steppers (7 Cols) */}
+					<div className="md:col-span-7 space-y-3">
+						<div className="flex items-center justify-between px-1">
+							<span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+								Hypothetical Match Outcomes
+							</span>
+							<span className="text-[11px] text-slate-500">
+								{items.length} match{items.length !== 1 ? 'es' : ''} available
+							</span>
 						</div>
 
-						<div className="text-right">
-							<span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-								Projected Points
-							</span>
-							<span className="text-xl font-black text-white">
-								{currentUserSim.simulatedPoints} pts
-							</span>
-							{currentUserSim.pointsDelta !== 0 && (
-								<span
-									className={`text-xs font-bold block ${currentUserSim.pointsDelta > 0 ? 'text-emerald-400' : 'text-red-400'}`}
-								>
-									{currentUserSim.pointsDelta > 0 ? '+' : ''}
-									{currentUserSim.pointsDelta} pts vs current
-								</span>
-							)}
-						</div>
-					</div>
-				)}
+						{items.length === 0 ? (
+							<div className="p-8 text-center glass-card rounded-xl border border-white/5 text-slate-400 text-xs">
+								No matches available for simulation in this round.
+							</div>
+						) : (
+							items.map((ev) => {
+								const homeComp =
+									ev.competitors?.find(
+										(c: any) => c.slot === 1 || c.role === 'home',
+									)?.competitor ??
+									ev.competitors?.[0]?.competitor ??
+									ev.home_team;
+								const awayComp =
+									ev.competitors?.find(
+										(c: any) => c.slot === 2 || c.role === 'away',
+									)?.competitor ??
+									ev.competitors?.[1]?.competitor ??
+									ev.away_team;
 
-				{/* TWO COLUMN GRID: MATCH SCORE ADJUSTERS ON LEFT, SIMULATED LEADERBOARD ON RIGHT */}
-				<div className="grid md:grid-cols-2 gap-5 overflow-y-auto flex-grow pr-1">
-					{/* LEFT: MATCH ADJUSTERS */}
-					<div className="space-y-3">
-						<h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 sticky top-0 bg-slate-950/80 backdrop-blur-sm py-1 z-10">
-							<span>1. Tweak Match Scores</span>
-						</h4>
-
-						<div className="space-y-2.5">
-							{matches.map((match) => {
-								const sim = simulatedScores[match.id] || {
-									home_score: 0,
-									away_score: 0,
+								const sim = simulatedScores[ev.id] || {
+									home_score: 1,
+									away_score: 1,
 								};
-								const homeShort =
-									match.home_team?.short_name ||
-									match.home_team?.name.substring(0, 3).toUpperCase() ||
-									'HOM';
-								const awayShort =
-									match.away_team?.short_name ||
-									match.away_team?.name.substring(0, 3).toUpperCase() ||
-									'AWY';
 
 								return (
 									<div
-										key={match.id}
-										className="p-3 rounded-xl bg-white/[0.02] border border-white/5 flex items-center justify-between hover:bg-white/[0.04] transition"
+										key={ev.id}
+										className="p-3.5 rounded-xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition flex items-center justify-between gap-3"
 									>
 										{/* Home Team */}
-										<div className="flex items-center gap-2 w-28">
-											{match.home_team?.logo_url && (
-												<img
-													src={match.home_team.logo_url}
-													alt={match.home_team.name}
-													className="h-5 w-5 object-contain shrink-0"
-												/>
-											)}
-											<span className="text-xs font-black text-white truncate">
-												{homeShort}
+										<div className="flex items-center gap-2 flex-1 min-w-0">
+											<div className="h-7 w-7 rounded-lg bg-white/5 p-1 flex items-center justify-center shrink-0">
+												{homeComp?.media_url || homeComp?.logo_url ? (
+													<img
+														src={homeComp.media_url || homeComp.logo_url}
+														alt={homeComp.name}
+														className="max-h-full max-w-full object-contain"
+													/>
+												) : (
+													<span className="text-[10px] font-bold">
+														{homeComp?.short_name || 'H'}
+													</span>
+												)}
+											</div>
+											<span className="text-xs font-bold text-slate-200 truncate">
+												{homeComp?.name || 'Home Team'}
 											</span>
 										</div>
 
 										{/* Stepper Controls */}
-										<div className="flex items-center gap-2">
-											{/* Home score buttons */}
+										<div className="flex items-center gap-1.5 shrink-0 bg-slate-900/80 px-2 py-1 rounded-xl border border-white/10">
+											{/* Home Controls */}
 											<div className="flex items-center gap-1">
 												<button
-													onClick={() =>
-														handleScoreChange(match.id, 'home', -1)
-													}
-													className="h-6 w-6 rounded bg-white/5 hover:bg-white/10 text-white font-bold text-xs"
+													onClick={() => handleScoreChange(ev.id, 'home', -1)}
+													className="h-6 w-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 text-xs transition"
 												>
 													-
 												</button>
-												<span className="w-5 text-center font-black text-sm text-white">
+												<span className="text-sm font-black w-5 text-center text-white">
 													{sim.home_score}
 												</span>
 												<button
-													onClick={() => handleScoreChange(match.id, 'home', 1)}
-													className="h-6 w-6 rounded bg-white/5 hover:bg-white/10 text-white font-bold text-xs"
+													onClick={() => handleScoreChange(ev.id, 'home', 1)}
+													className="h-6 w-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 text-xs transition"
 												>
 													+
 												</button>
 											</div>
 
-											<span className="text-slate-500 font-bold text-xs">
-												:
-											</span>
+											<span className="text-slate-500 font-bold px-0.5">-</span>
 
-											{/* Away score buttons */}
+											{/* Away Controls */}
 											<div className="flex items-center gap-1">
 												<button
-													onClick={() =>
-														handleScoreChange(match.id, 'away', -1)
-													}
-													className="h-6 w-6 rounded bg-white/5 hover:bg-white/10 text-white font-bold text-xs"
+													onClick={() => handleScoreChange(ev.id, 'away', -1)}
+													className="h-6 w-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 text-xs transition"
 												>
 													-
 												</button>
-												<span className="w-5 text-center font-black text-sm text-white">
+												<span className="text-sm font-black w-5 text-center text-white">
 													{sim.away_score}
 												</span>
 												<button
-													onClick={() => handleScoreChange(match.id, 'away', 1)}
-													className="h-6 w-6 rounded bg-white/5 hover:bg-white/10 text-white font-bold text-xs"
+													onClick={() => handleScoreChange(ev.id, 'away', 1)}
+													className="h-6 w-6 rounded-md bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 text-xs transition"
 												>
 													+
 												</button>
@@ -302,90 +272,124 @@ export function WhatIfScenarioSimulator({
 										</div>
 
 										{/* Away Team */}
-										<div className="flex items-center justify-end gap-2 w-28 text-right">
-											<span className="text-xs font-black text-white truncate">
-												{awayShort}
+										<div className="flex items-center justify-end gap-2 flex-1 min-w-0">
+											<span className="text-xs font-bold text-slate-200 truncate text-right">
+												{awayComp?.name || 'Away Team'}
 											</span>
-											{match.away_team?.logo_url && (
-												<img
-													src={match.away_team.logo_url}
-													alt={match.away_team.name}
-													className="h-5 w-5 object-contain shrink-0"
-												/>
-											)}
+											<div className="h-7 w-7 rounded-lg bg-white/5 p-1 flex items-center justify-center shrink-0">
+												{awayComp?.media_url || awayComp?.logo_url ? (
+													<img
+														src={awayComp.media_url || awayComp.logo_url}
+														alt={awayComp.name}
+														className="max-h-full max-w-full object-contain"
+													/>
+												) : (
+													<span className="text-[10px] font-bold">
+														{awayComp?.short_name || 'A'}
+													</span>
+												)}
+											</div>
 										</div>
 									</div>
 								);
-							})}
-						</div>
+							})
+						)}
 					</div>
 
-					{/* RIGHT: SIMULATED STANDINGS */}
-					<div className="space-y-3">
-						<h4 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 sticky top-0 bg-slate-950/80 backdrop-blur-sm py-1 z-10">
-							<Trophy className="h-3.5 w-3.5 text-yellow-500" />
-							<span>2. Simulated Standings</span>
-						</h4>
+					{/* RIGHT: Live Simulated Standings (5 Cols) */}
+					<div className="md:col-span-5 space-y-3">
+						<div className="flex items-center justify-between px-1">
+							<span className="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+								<Sparkles className="h-3.5 w-3.5" />
+								<span>Projected Standings</span>
+							</span>
+							<span className="text-[11px] font-bold text-slate-400">
+								Projected Points
+							</span>
+						</div>
 
-						<div className="rounded-xl border border-white/5 overflow-hidden divide-y divide-white/5 bg-slate-950/40">
-							{simulatedLeaderboard.map((item) => {
-								const isUser = item.user_id === currentUserId;
+						<div className="glass-card rounded-2xl border border-white/10 p-3 space-y-2 max-h-[480px] overflow-y-auto">
+							{simulatedLeaderboard.map((member) => {
+								const isCurrent = member.user_id === currentUserId;
+								const rankDelta = member.rank_delta;
 
 								return (
 									<div
-										key={item.user_id}
-										className={`p-2.5 flex items-center justify-between text-xs transition ${
-											isUser ? 'bg-indigo-500/15 font-bold' : 'hover:bg-white/5'
+										key={member.user_id}
+										className={`p-2.5 rounded-xl transition flex items-center justify-between ${
+											isCurrent
+												? 'bg-purple-600/20 border border-purple-500/40 shadow-inner'
+												: 'bg-white/[0.02] border border-white/5 hover:bg-white/5'
 										}`}
 									>
-										<div className="flex items-center gap-2.5">
-											{/* Rank badge */}
-											<span
-												className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-black ${
-													item.rank === 1
-														? 'bg-yellow-500 text-slate-950'
-														: item.rank === 2
-															? 'bg-slate-300 text-slate-950'
-															: item.rank === 3
-																? 'bg-amber-600 text-white'
-																: 'bg-white/5 text-slate-400'
-												}`}
-											>
-												{item.rank}
-											</span>
+										{/* Left: Rank & User */}
+										<div className="flex items-center gap-2.5 min-w-0">
+											<div className="flex items-center justify-center w-6 font-black text-xs text-slate-400">
+												#{member.simulated_rank}
+											</div>
 
-											<Avatar className="h-6 w-6 border border-white/10">
-												<AvatarImage src={item.avatar_url || ''} />
-												<AvatarFallback className="bg-indigo-600 text-[10px] text-white font-bold">
-													{item.username?.substring(0, 2).toUpperCase() || 'U'}
+											<Avatar className="h-7 w-7 border border-white/10 shrink-0">
+												<AvatarImage src={member.avatar_url ?? undefined} />
+												<AvatarFallback className="text-[10px] bg-slate-800 text-slate-200">
+													{member.full_name?.charAt(0) ?? 'U'}
 												</AvatarFallback>
 											</Avatar>
 
-											<span className="text-white truncate max-w-[110px]">
-												@{item.username} {isUser && '(You)'}
-											</span>
+											<div className="min-w-0">
+												<span
+													className={`text-xs font-bold truncate block ${
+														isCurrent ? 'text-purple-300' : 'text-slate-200'
+													}`}
+												>
+													{member.full_name || 'Member'}{' '}
+													{isCurrent && (
+														<span className="text-[10px] opacity-80">
+															(You)
+														</span>
+													)}
+												</span>
+												<span className="text-[10px] text-slate-400">
+													{member.simulated_exact_count} exact
+												</span>
+											</div>
 										</div>
 
-										<div className="flex items-center gap-3">
-											{/* Rank Shift pill */}
-											{item.rankDelta > 0 ? (
-												<span className="text-[10px] font-black text-emerald-400 flex items-center">
-													<ArrowUp className="h-3 w-3" /> +{item.rankDelta}
-												</span>
-											) : item.rankDelta < 0 ? (
-												<span className="text-[10px] font-black text-red-400 flex items-center">
-													<ArrowDown className="h-3 w-3" /> {item.rankDelta}
-												</span>
-											) : (
-												<span className="text-[10px] text-slate-600 font-bold">
-													-
-												</span>
-											)}
+										{/* Right: Projected Points & Delta */}
+										<div className="flex items-center gap-2.5 shrink-0">
+											<div className="text-right">
+												<div className="text-xs font-black text-white">
+													{member.simulated_points} PTS
+												</div>
+												<div className="text-[10px] text-slate-400">
+													{member.simulated_points - member.total_points >= 0
+														? `+${member.simulated_points - member.total_points}`
+														: `${member.simulated_points - member.total_points}`}{' '}
+													sim
+												</div>
+											</div>
 
-											{/* Simulated Points */}
-											<span className="font-black text-white w-14 text-right">
-												{item.simulatedPoints} pts
-											</span>
+											{/* Rank Shift Indicator */}
+											<div className="w-5 flex justify-center">
+												{rankDelta > 0 ? (
+													<span
+														className="text-emerald-400 flex items-center text-[10px] font-black"
+														title={`Up ${rankDelta} spot${rankDelta > 1 ? 's' : ''}`}
+													>
+														<ArrowUp className="h-3 w-3" />
+														{rankDelta}
+													</span>
+												) : rankDelta < 0 ? (
+													<span
+														className="text-rose-400 flex items-center text-[10px] font-black"
+														title={`Down ${Math.abs(rankDelta)} spot${Math.abs(rankDelta) > 1 ? 's' : ''}`}
+													>
+														<ArrowDown className="h-3 w-3" />
+														{Math.abs(rankDelta)}
+													</span>
+												) : (
+													<Minus className="h-3 w-3 text-slate-600" />
+												)}
+											</div>
 										</div>
 									</div>
 								);
@@ -394,10 +398,16 @@ export function WhatIfScenarioSimulator({
 					</div>
 				</div>
 
-				<div className="mt-5 pt-3 border-t border-white/5 flex justify-end shrink-0">
+				{/* Footer */}
+				<div className="pt-4 border-t border-white/10 flex justify-between items-center mt-4 shrink-0">
+					<span className="text-[11px] text-slate-500">
+						💡 Simulations do not alter official leaderboard scores.
+					</span>
 					<Button
+						variant="outline"
+						size="sm"
 						onClick={onClose}
-						className="w-full py-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold"
+						className="border-white/10 hover:bg-white/5 text-slate-300 text-xs"
 					>
 						Done Simulating
 					</Button>
@@ -406,3 +416,5 @@ export function WhatIfScenarioSimulator({
 		</div>
 	);
 }
+
+export default WhatIfScenarioSimulator;
