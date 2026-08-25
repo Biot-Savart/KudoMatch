@@ -1,31 +1,73 @@
 name: Scheduled Live Score Sync
 
 on:
-    schedule:
-        - cron: "*/15 * * * *"
-    workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      simulate:
+        description: "Run in simulation mode (mock score updates)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
-    sync-scores:
-        name: Fetch & Sync Live Scores
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout Repository
-              uses: actions/checkout@v4
+  sync-scores:
+    name: Fetch & Sync Live Scores
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-            - name: Setup Node.js Environment
-              uses: actions/setup-node@v4
-              with:
-                  node-version: 22
-                  cache: "npm"
+      - name: Validate Repository Secrets
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" ]; then
+            echo "::warning::Required secrets NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY are not configured."
+            echo "has_secrets=false" >> $GITHUB_OUTPUT
+            if [ "${{ github.event_name }}" = "schedule" ]; then
+              echo "Scheduled run skipped to avoid repeated failure notifications until secrets are configured."
+            fi
+          else
+            echo "has_secrets=true" >> $GITHUB_OUTPUT
+          fi
 
-            - name: Install Dependencies
-              run: npm ci
+      - name: Setup Node.js Environment
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
 
-            - name: Execute Score Ingestion
-              run: npm run scores:sync
-              env:
-                  NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-                  SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-                  FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
-                  RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+      - name: Install Dependencies
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        run: npm ci
+
+      - name: Execute Score Ingestion
+        if: steps.check-secrets.outputs.has_secrets == 'true'
+        run: |
+          if [ "${{ github.event.inputs.simulate }}" = "true" ]; then
+            npm run scores:simulate-sync
+          else
+            npm run scores:sync
+          fi
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          CI: "true"
+
+      - name: Notice for Missing Secrets
+        if: steps.check-secrets.outputs.has_secrets != 'true'
+        run: |
+          echo "===================================================================================="
+          echo "⚠️ ACTION REQUIRED: GitHub Repository Secrets are missing."
+          echo "To enable automated live score synchronization, please configure:"
+          echo "  1. NEXT_PUBLIC_SUPABASE_URL"
+          echo "  2. SUPABASE_SERVICE_ROLE_KEY"
+          echo "  3. (Optional) FOOTBALL_DATA_API_KEY"
+          echo "  4. (Optional) RAPIDAPI_KEY"
+          echo ""
+          echo "Navigate to: Repository Settings -> Secrets and variables -> Actions -> New repository secret"
+          echo "===================================================================================="

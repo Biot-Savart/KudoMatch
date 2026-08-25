@@ -1,28 +1,34 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 
-// Load env variables
+// Load environment variables for standalone Node CLI execution
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config();
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const RAPIDAPI_KEY =
-	process.env.RAPIDAPI_KEY || process.env.NEXT_PUBLIC_RAPIDAPI_KEY;
-const FOOTBALL_DATA_API_KEY =
-	process.env.FOOTBALL_DATA_API_KEY ||
-	process.env.NEXT_PUBLIC_FOOTBALL_DATA_API_KEY;
+function getSupabaseClient() {
+	const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+	const key =
+		process.env.SUPABASE_SERVICE_ROLE_KEY ||
+		process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-	console.error('❌ Missing Supabase environment variables. Check .env.local');
-	process.exit(1);
+	if (!url || !key) {
+		const isCI = Boolean(process.env.CI || process.env.GITHUB_ACTIONS);
+		const locationHelp = isCI
+			? 'Please configure NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in GitHub Repository Secrets (Settings -> Secrets and variables -> Actions).'
+			: 'Please verify your .env.local file has NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set.';
+
+		throw new Error(
+			`❌ Missing Supabase environment variables. ${locationHelp}`,
+		);
+	}
+
+	return createSupabaseClient(url, key, {
+		auth: {
+			persistSession: false,
+		},
+	});
 }
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-	auth: {
-		persistSession: false,
-	},
-});
 
 // Helper to find real-world API fixture matching a database match
 function findMatchingFootballDataFixture(dbMatch: any, apiMatches: any[]) {
@@ -79,8 +85,25 @@ function findMatchingFootballDataFixture(dbMatch: any, apiMatches: any[]) {
 	});
 }
 
-export async function fetchLiveScores(options: { simulate?: boolean } = {}) {
+export async function fetchLiveScores(
+	options: { simulate?: boolean } = {},
+	client?: any,
+) {
 	console.log('📡 Starting Live Score Ingestion...');
+
+	const rapidApiKey =
+		process.env.RAPIDAPI_KEY || process.env.NEXT_PUBLIC_RAPIDAPI_KEY;
+	const footballDataApiKey =
+		process.env.FOOTBALL_DATA_API_KEY ||
+		process.env.NEXT_PUBLIC_FOOTBALL_DATA_API_KEY;
+
+	let supabase: any;
+	try {
+		supabase = client || getSupabaseClient();
+	} catch (err: any) {
+		console.error(err.message);
+		return { success: false, error: err.message };
+	}
 
 	// 1. Fetch active, live, or scheduled matches whose kickoff time is in the past
 	const now = new Date();
@@ -110,15 +133,12 @@ export async function fetchLiveScores(options: { simulate?: boolean } = {}) {
 	// Option A: Live API Sync
 	if (!options.simulate) {
 		// Try Football-Data.org
-		if (
-			FOOTBALL_DATA_API_KEY &&
-			!FOOTBALL_DATA_API_KEY.includes('placeholder')
-		) {
+		if (footballDataApiKey && !footballDataApiKey.includes('placeholder')) {
 			try {
 				console.log('📡 Synchronizing scores with Football-Data.org API...');
 				const url = 'https://api.football-data.org/v4/competitions/PL/matches';
 				const res = await fetch(url, {
-					headers: { 'X-Auth-Token': FOOTBALL_DATA_API_KEY },
+					headers: { 'X-Auth-Token': footballDataApiKey },
 				});
 
 				if (res.ok) {
@@ -184,18 +204,14 @@ export async function fetchLiveScores(options: { simulate?: boolean } = {}) {
 		}
 
 		// Try API-Football
-		if (
-			!usingLiveApi &&
-			RAPIDAPI_KEY &&
-			!RAPIDAPI_KEY.includes('placeholder')
-		) {
+		if (!usingLiveApi && rapidApiKey && !rapidApiKey.includes('placeholder')) {
 			try {
 				console.log('📡 Synchronizing scores with RapidAPI API-Football...');
 				const url =
 					'https://api-football-v1.p.rapidapi.com/v3/fixtures?league=39&season=2024';
 				const res = await fetch(url, {
 					headers: {
-						'x-rapidapi-key': RAPIDAPI_KEY,
+						'x-rapidapi-key': rapidApiKey,
 						'x-rapidapi-host': 'api-football-v1.p.rapidapi.com',
 					},
 				});
@@ -324,13 +340,18 @@ export async function fetchLiveScores(options: { simulate?: boolean } = {}) {
 // Support executing from terminal direct call
 if (require.main === module) {
 	const simulate = process.argv.includes('--simulate');
-	fetchLiveScores({ simulate }).then((res) => {
-		if (res.success) {
-			console.log('✅ Success!');
-			process.exit(0);
-		} else {
-			console.error('❌ Failed!');
+	fetchLiveScores({ simulate })
+		.then((res) => {
+			if (res.success) {
+				console.log('✅ Score sync completed successfully!');
+				process.exit(0);
+			} else {
+				console.error(`❌ Score sync failed: ${res.error}`);
+				process.exit(1);
+			}
+		})
+		.catch((err) => {
+			console.error('❌ Unhandled error during score sync execution:', err);
 			process.exit(1);
-		}
-	});
+		});
 }
