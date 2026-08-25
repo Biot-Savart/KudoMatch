@@ -1,9 +1,154 @@
+// Phase 11: Multi-Sport Core Domain Models & Schemas
+
+export interface Sport {
+	slug: string;
+	name: string;
+	icon_key: string | null;
+	default_score_unit: string;
+	is_active: boolean;
+	display_order: number;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface Competition {
+	id: string; // bigint mapped to string
+	sport_slug: string;
+	slug: string;
+	name: string;
+	kind: 'league' | 'cup' | 'tour' | 'race_series';
+	country: string | null;
+	logo_url: string | null;
+	is_active: boolean;
+	created_at: string;
+	updated_at: string;
+	sport?: Sport;
+}
+
+export interface CompetitionEdition {
+	id: string; // bigint mapped to string
+	competition_id: string;
+	season_key: string;
+	name: string;
+	starts_at: string;
+	ends_at: string;
+	status: 'planned' | 'active' | 'completed' | 'cancelled';
+	metadata: Record<string, any>;
+	created_at: string;
+	updated_at: string;
+	competition?: Competition;
+}
+
+export interface Competitor {
+	id: string; // bigint mapped to string
+	sport_slug: string;
+	kind: 'team' | 'person' | 'constructor';
+	name: string;
+	short_name: string | null;
+	media_url: string | null;
+	country_code: string | null;
+	is_active: boolean;
+	created_at: string;
+	updated_at: string;
+	sport?: Sport;
+}
+
+export interface EditionCompetitor {
+	edition_id: string;
+	competitor_id: string;
+	seed: number | null;
+	group_conference: string | null;
+	display_order: number;
+	created_at: string;
+	competitor?: Competitor;
+}
+
+export interface SportEvent {
+	id: string; // bigint mapped to string
+	edition_id: string;
+	kind: 'match' | 'race' | 'session' | 'bout';
+	starts_at: string;
+	status:
+		| 'scheduled'
+		| 'live'
+		| 'completed'
+		| 'postponed'
+		| 'cancelled'
+		| 'abandoned';
+	round_label: string | null;
+	sequence_number: number | null;
+	venue_name: string | null;
+	is_neutral_venue: boolean;
+	metadata: Record<string, any>;
+	created_at: string;
+	updated_at: string;
+	edition?: CompetitionEdition;
+	competitors?: EventCompetitor[];
+}
+
+export interface EventCompetitor {
+	event_id: string;
+	competitor_id: string;
+	slot: number;
+	role: 'home' | 'away' | 'participant' | null;
+	created_at: string;
+	competitor?: Competitor;
+}
+
+export interface DataProvider {
+	slug: string;
+	name: string;
+	server_config_id: string | null;
+	is_active: boolean;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface ExternalEntityRef {
+	id: string; // bigint mapped to string
+	provider_slug: string;
+	entity_kind: 'competition' | 'edition' | 'competitor' | 'event';
+	external_key: string;
+	competition_id: string | null;
+	edition_id: string | null;
+	competitor_id: string | null;
+	event_id: string | null;
+	is_primary: boolean;
+	metadata: Record<string, any>;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface IngestionQuarantine {
+	id: string; // bigint mapped to string
+	provider_slug: string;
+	entity_kind:
+		| 'competition'
+		| 'edition'
+		| 'competitor'
+		| 'event'
+		| 'result'
+		| 'unknown';
+	external_key: string | null;
+	reason_code: string;
+	error_summary: string;
+	payload_fingerprint: string | null;
+	occurrence_count: number;
+	status: 'unresolved' | 'resolved' | 'ignored';
+	first_seen_at: string;
+	last_seen_at: string;
+	created_at: string;
+	updated_at: string;
+}
+
+// Legacy Application Types (Retained for application stability until Phase 13 Refactor)
+
 export interface Profile {
 	id: string;
-	username: string | null;
+	username?: string | null;
 	full_name: string | null;
 	avatar_url: string | null;
-	total_points: number;
+	total_points?: number;
 	created_at: string;
 	updated_at: string;
 }
