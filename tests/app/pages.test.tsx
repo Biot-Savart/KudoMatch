@@ -149,7 +149,7 @@ describe('App Router Pages', () => {
 	});
 
 	describe('Pool Detail Page (app/leagues/[id]/page.tsx)', () => {
-		it('renders pool standings and members leaderboard', async () => {
+		it('renders pool standings and members leaderboard and supports matchweek navigation', async () => {
 			vi.spyOn(poolsQueries, 'fetchPoolDetails').mockResolvedValue({
 				id: 'pool-123',
 				name: 'Elite Pool',
@@ -173,6 +173,10 @@ describe('App Router Pages', () => {
 				},
 			]);
 			vi.spyOn(poolsQueries, 'fetchPoolMembers').mockResolvedValue([]);
+			vi.spyOn(matchesQueries, 'fetchAvailableMatchdays').mockResolvedValue([
+				10, 11, 12,
+			]);
+			vi.spyOn(matchesQueries, 'fetchActiveMatchday').mockResolvedValue(12);
 			vi.spyOn(poolsQueries, 'fetchPoolPicksMatrix').mockResolvedValue({
 				matches: [],
 				predictions: {},

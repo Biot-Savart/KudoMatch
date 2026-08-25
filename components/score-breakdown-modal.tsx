@@ -14,7 +14,7 @@ import {
 	Sparkles,
 	Trophy,
 	X,
-	XCircle
+	XCircle,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -264,7 +264,7 @@ export function ScoreBreakdownModal({
 										<span
 											className={`font-bold ${explanation?.outcomeMatched ? 'text-emerald-400' : 'text-slate-500'}`}
 										>
-											{explanation?.outcomeMatched ? 'PASS (+1)' : 'FAIL'}
+											{explanation?.outcomeMatched ? 'HIT (+1)' : 'MISS'}
 										</span>
 									</div>
 
@@ -301,7 +301,7 @@ export function ScoreBreakdownModal({
 										<span
 											className={`font-bold ${explanation?.goalDiffMatched ? 'text-emerald-400' : 'text-slate-500'}`}
 										>
-											{explanation?.goalDiffMatched ? 'PASS (+1)' : 'FAIL'}
+											{explanation?.goalDiffMatched ? 'HIT (+1)' : 'MISS'}
 										</span>
 									</div>
 
@@ -331,7 +331,7 @@ export function ScoreBreakdownModal({
 										<span
 											className={`font-bold ${explanation?.exactScoreMatched ? 'text-emerald-400' : 'text-slate-500'}`}
 										>
-											{explanation?.exactScoreMatched ? 'PASS (+1)' : 'FAIL'}
+											{explanation?.exactScoreMatched ? 'HIT (+1)' : 'MISS'}
 										</span>
 									</div>
 								</div>

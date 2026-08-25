@@ -22,10 +22,18 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { Match, Prediction } from '@/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, BookOpen, Clock, Compass, Trophy } from 'lucide-react';
+import {
+	AlertCircle,
+	BookOpen,
+	ChevronLeft,
+	ChevronRight,
+	Clock,
+	Compass,
+	Trophy,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 function PredictContent() {
@@ -33,12 +41,22 @@ function PredictContent() {
 	const queryClient = useQueryClient();
 	const router = useRouter();
 	const searchParams = useSearchParams();
+	const railRef = useRef<HTMLDivElement>(null);
 
 	const [user, setUser] = useState<any>(null);
 	const [userLoading, setUserLoading] = useState(true);
 	const [activeMatch, setActiveMatch] = useState<Match | null>(null);
 	const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 	const [matchday, setMatchday] = useState<number>(12);
+
+	const scrollRail = (direction: 'left' | 'right') => {
+		if (railRef.current) {
+			railRef.current.scrollBy({
+				left: direction === 'left' ? -260 : 260,
+				behavior: 'smooth',
+			});
+		}
+	};
 
 	// Modal States for Phase 9
 	const [breakdownMatch, setBreakdownMatch] = useState<Match | null>(null);
@@ -333,9 +351,22 @@ function PredictContent() {
 				</div>
 			</div>
 
-			{/* Horizontal Gameweek Rail */}
-			<div className="relative">
-				<div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none no-scrollbar">
+			{/* Horizontal Gameweek Rail with Quick Scroll Controls */}
+			<div className="relative flex items-center gap-1.5">
+				<button
+					type="button"
+					onClick={() => scrollRail('left')}
+					aria-label="Scroll matchweeks left"
+					title="Scroll matchweeks left"
+					className="h-9 w-9 shrink-0 rounded-xl glass-card border border-white/10 flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition active:scale-90 shadow-md"
+				>
+					<ChevronLeft className="h-4 w-4" />
+				</button>
+
+				<div
+					ref={railRef}
+					className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none no-scrollbar flex-1 scroll-smooth"
+				>
 					{availableMatchdays.map((day) => {
 						const isSelected = day === matchday;
 						const isCurrent = day === activeMatchday;
@@ -361,6 +392,16 @@ function PredictContent() {
 						);
 					})}
 				</div>
+
+				<button
+					type="button"
+					onClick={() => scrollRail('right')}
+					aria-label="Scroll matchweeks right"
+					title="Scroll matchweeks right"
+					className="h-9 w-9 shrink-0 rounded-xl glass-card border border-white/10 flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition active:scale-90 shadow-md"
+				>
+					<ChevronRight className="h-4 w-4" />
+				</button>
 			</div>
 
 			{/* Live In-Play Match Ticker Banner (if active live matches exist in current round) */}

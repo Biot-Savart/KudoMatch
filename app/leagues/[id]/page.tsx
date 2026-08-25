@@ -10,6 +10,10 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WhatIfScenarioSimulator } from '@/components/what-if-simulator';
 import {
+	fetchActiveMatchday,
+	fetchAvailableMatchdays,
+} from '@/lib/queries/matches';
+import {
 	fetchPoolDetails,
 	fetchPoolLeaderboard,
 	fetchPoolMembers,
@@ -24,6 +28,9 @@ import {
 	ArrowLeft,
 	BookOpen,
 	Calculator,
+	Calendar,
+	ChevronLeft,
+	ChevronRight,
 	Copy,
 	Crown,
 	Info,
@@ -34,16 +41,20 @@ import {
 	Users,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 export default function PoolDetailPage() {
 	const params = useParams();
 	const router = useRouter();
+	const searchParams = useSearchParams();
 	const queryClient = useQueryClient();
 	const supabase = createClient();
 	const poolId = params.id as string;
+
+	const pillRailRef = useRef<HTMLDivElement>(null);
+	const matrixScrollRef = useRef<HTMLDivElement>(null);
 
 	const [user, setUser] = useState<any>(null);
 	const [userLoading, setUserLoading] = useState(true);
@@ -52,6 +63,25 @@ export default function PoolDetailPage() {
 	const [selectedOpponentId, setSelectedOpponentId] = useState<
 		string | undefined
 	>(undefined);
+	const [matchday, setMatchday] = useState<number>(12);
+
+	const scrollPills = (direction: 'left' | 'right') => {
+		if (pillRailRef.current) {
+			pillRailRef.current.scrollBy({
+				left: direction === 'left' ? -260 : 260,
+				behavior: 'smooth',
+			});
+		}
+	};
+
+	const scrollMatrix = (direction: 'left' | 'right') => {
+		if (matrixScrollRef.current) {
+			matrixScrollRef.current.scrollBy({
+				left: direction === 'left' ? -360 : 360,
+				behavior: 'smooth',
+			});
+		}
+	};
 
 	// Phase 9 Modals State
 	const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
@@ -147,6 +177,40 @@ export default function PoolDetailPage() {
 		};
 	}, [supabase, queryClient, poolId]);
 
+	// Fetch available and active matchday
+	const { data: availableMatchdays = [12] } = useQuery({
+		queryKey: ['available-matchdays'],
+		queryFn: fetchAvailableMatchdays,
+	});
+
+	const { data: activeMatchday } = useQuery({
+		queryKey: ['active-matchday'],
+		queryFn: fetchActiveMatchday,
+	});
+
+	// Sync matchday state from query parameter or activeMatchday query
+	useEffect(() => {
+		const paramMatchday =
+			searchParams.get('matchday') || searchParams.get('round');
+		if (paramMatchday) {
+			const parsed = parseInt(paramMatchday, 10);
+			if (!isNaN(parsed)) {
+				setMatchday(parsed);
+				return;
+			}
+		}
+		if (activeMatchday !== undefined && activeMatchday !== null) {
+			setMatchday(activeMatchday);
+		}
+	}, [searchParams, activeMatchday]);
+
+	const handleMatchdayChange = (newDay: number) => {
+		setMatchday(newDay);
+		const params = new URLSearchParams(window.location.search);
+		params.set('matchday', newDay.toString());
+		router.push(`${window.location.pathname}?${params.toString()}`);
+	};
+
 	// Queries
 	const { data: pool, isLoading: poolLoading } = useQuery({
 		queryKey: ['pool-details', poolId],
@@ -167,8 +231,8 @@ export default function PoolDetailPage() {
 	});
 
 	const { data: matrixData, isLoading: matrixLoading } = useQuery({
-		queryKey: ['pool-matrix', poolId, 12],
-		queryFn: () => fetchPoolPicksMatrix(poolId, 12),
+		queryKey: ['pool-matrix', poolId, matchday],
+		queryFn: () => fetchPoolPicksMatrix(poolId, matchday),
 		enabled: !!poolId,
 	});
 
@@ -575,7 +639,11 @@ export default function PoolDetailPage() {
 														.map((m) => {
 															const p =
 																matrixData.predictions[row.user_id]?.[m.id];
-															return p?.points_earned ?? null;
+															return {
+																match: m,
+																prediction: p || null,
+																points: p?.points_earned ?? null,
+															};
 														}) || [];
 
 												return (
@@ -638,34 +706,76 @@ export default function PoolDetailPage() {
 
 														{/* Phase 9: Recent Form Mini Badges */}
 														<td className="py-4 px-4 text-center">
-															<div className="flex items-center justify-center gap-1">
+															<div className="inline-flex items-center justify-center gap-1.5 p-1 rounded-xl bg-black/30 border border-white/5">
 																{memberRecentPicks.length > 0 ? (
-																	memberRecentPicks.map((pts, i) => (
-																		<span
-																			key={i}
-																			title={
-																				pts !== null
-																					? `${pts} points earned`
-																					: 'No prediction'
+																	memberRecentPicks.map((item, i) => {
+																		const homeName =
+																			item.match.home_team?.short_name ||
+																			item.match.home_team?.name ||
+																			'Home';
+																		const awayName =
+																			item.match.away_team?.short_name ||
+																			item.match.away_team?.name ||
+																			'Away';
+																		const pts = item.points;
+
+																		const getPillStyle = () => {
+																			if (pts === 3) {
+																				return 'bg-emerald-500 text-slate-950 ring-1 ring-emerald-400/50 shadow-sm shadow-emerald-500/20';
 																			}
-																			className={`h-4.5 w-4.5 rounded-full flex items-center justify-center text-[9px] font-black ${
+																			if (pts === 2) {
+																				return 'bg-teal-500 text-slate-950 ring-1 ring-teal-400/50 shadow-sm shadow-teal-500/20';
+																			}
+																			if (pts === 1) {
+																				return 'bg-indigo-500 text-white ring-1 ring-indigo-400/50 shadow-sm shadow-indigo-500/20';
+																			}
+																			if (pts === 0) {
+																				return 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+																			}
+																			return 'bg-white/[0.04] text-slate-500 border border-dashed border-white/10';
+																		};
+
+																		const getPillTooltip = () => {
+																			const teamsStr = `${homeName} vs ${awayName}`;
+																			const scoreStr = `Final: ${item.match.home_score ?? 0} - ${item.match.away_score ?? 0}`;
+																			const pickStr = item.prediction
+																				? `Pick: ${item.prediction.predicted_home_score} - ${item.prediction.predicted_away_score}`
+																				: 'Pick: None';
+																			const ptsStr =
 																				pts === 3
-																					? 'bg-emerald-500 text-slate-950'
+																					? '+3 PTS (Exact Score)'
 																					: pts === 2
-																						? 'bg-teal-500 text-slate-950'
+																						? '+2 PTS (Goal Diff Margin)'
 																						: pts === 1
-																							? 'bg-blue-500 text-white'
+																							? '+1 PT (Match Winner)'
 																							: pts === 0
-																								? 'bg-slate-700 text-slate-400'
-																								: 'bg-white/5 text-slate-600'
-																			}`}
-																		>
-																			{pts !== null ? pts : '-'}
-																		</span>
-																	))
+																								? '0 PTS (Missed)'
+																								: 'No Pick Placed';
+																			return `${teamsStr}\n${scoreStr}\n${pickStr} • ${ptsStr}\n(Click to view full breakdown)`;
+																		};
+
+																		return (
+																			<button
+																				key={i}
+																				type="button"
+																				onClick={() =>
+																					handleOpenCellBreakdown(
+																						item.match,
+																						item.prediction,
+																						row.username || undefined,
+																					)
+																				}
+																				title={getPillTooltip()}
+																				aria-label={`${homeName} vs ${awayName}: ${getPillTooltip()}`}
+																				className={`h-5 w-5 rounded-full inline-flex items-center justify-center text-[10px] font-black transition-all duration-150 hover:scale-125 active:scale-95 focus:outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer ${getPillStyle()}`}
+																			>
+																				{pts !== null ? pts : '—'}
+																			</button>
+																		);
+																	})
 																) : (
-																	<span className="text-slate-600 text-xs">
-																		-
+																	<span className="text-slate-600 text-xs px-2 py-0.5">
+																		—
 																	</span>
 																)}
 															</div>
@@ -808,7 +918,105 @@ export default function PoolDetailPage() {
 						className="outline-none"
 					>
 						<div className="overflow-hidden rounded-2xl glass-card border border-white/10 shadow-xl p-6 space-y-4">
-							<div className="flex items-center justify-between gap-2 text-sm text-slate-400 bg-white/5 p-3 rounded-xl border border-white/5 flex-wrap">
+							{/* Matchweek Selection Header & Rail */}
+							<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+								<div>
+									<h2 className="text-base font-black text-white tracking-tight flex items-center gap-2">
+										<Calendar className="h-4 w-4 text-indigo-400" />
+										<span>Matchweek {matchday} Picks Matrix</span>
+									</h2>
+									<p className="text-xs text-slate-400">
+										View how pool members predicted every fixture across
+										matchweeks.
+									</p>
+								</div>
+
+								{/* Matchweek Select Dropdown for quick navigation */}
+								<div className="flex items-center gap-2 self-start sm:self-auto">
+									<span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
+										Round:
+									</span>
+									<select
+										value={matchday}
+										aria-label="Select Matchweek"
+										onChange={(e) =>
+											handleMatchdayChange(parseInt(e.target.value, 10))
+										}
+										className="bg-white/[0.04] border border-white/10 rounded-xl px-3 py-1.5 text-xs font-extrabold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer hover:bg-white/[0.08] transition"
+									>
+										{availableMatchdays.map((day) => (
+											<option
+												key={day}
+												value={day}
+												className="bg-slate-950 text-white font-bold"
+											>
+												Matchweek {day}{' '}
+												{day === activeMatchday ? '(Current)' : ''}
+											</option>
+										))}
+									</select>
+								</div>
+							</div>
+
+							{/* Horizontal Gameweek Pill Rail with Quick Scroll Arrows */}
+							<div className="relative flex items-center gap-1.5">
+								<button
+									type="button"
+									onClick={() => scrollPills('left')}
+									aria-label="Scroll matchweeks left"
+									title="Scroll matchweeks left"
+									className="h-8 w-8 shrink-0 rounded-xl glass-card border border-white/10 flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition active:scale-90 shadow-md"
+								>
+									<ChevronLeft className="h-4 w-4" />
+								</button>
+
+								<div
+									ref={pillRailRef}
+									className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none no-scrollbar flex-1 scroll-smooth"
+								>
+									{availableMatchdays.map((day) => {
+										const isSelected = day === matchday;
+										const isCurrent = day === activeMatchday;
+										return (
+											<button
+												key={day}
+												type="button"
+												onClick={() => handleMatchdayChange(day)}
+												className={`shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all duration-200 active:scale-95 ${
+													isSelected
+														? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40'
+														: 'glass-pill text-slate-400 hover:text-white hover:bg-white/10 hover:border-white/20'
+												}`}
+											>
+												<span>MW {day}</span>
+												{isCurrent && (
+													<span
+														className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold uppercase tracking-wider ${
+															isSelected
+																? 'bg-white/20 text-white'
+																: 'bg-indigo-500/20 text-indigo-300'
+														}`}
+													>
+														Live
+													</span>
+												)}
+											</button>
+										);
+									})}
+								</div>
+
+								<button
+									type="button"
+									onClick={() => scrollPills('right')}
+									aria-label="Scroll matchweeks right"
+									title="Scroll matchweeks right"
+									className="h-8 w-8 shrink-0 rounded-xl glass-card border border-white/10 flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition active:scale-90 shadow-md"
+								>
+									<ChevronRight className="h-4 w-4" />
+								</button>
+							</div>
+
+							<div className="flex items-center justify-between gap-3 text-sm text-slate-400 bg-white/5 p-3 rounded-xl border border-white/5 flex-wrap">
 								<div className="flex items-center gap-2">
 									<Info className="h-4 w-4 text-indigo-400 shrink-0" />
 									<span>
@@ -816,196 +1024,263 @@ export default function PoolDetailPage() {
 										view scoring breakdown.
 									</span>
 								</div>
-								<span className="text-xs text-indigo-300 font-bold">
-									Tap column headers for Community Stats 📊
-								</span>
+
+								<div className="flex items-center gap-3">
+									<span className="text-xs text-indigo-300 font-bold hidden sm:inline">
+										Tap headers for Community Stats 📊
+									</span>
+
+									{/* Quick Scroll Fixtures Controls */}
+									<div className="flex items-center gap-1.5 bg-white/5 border border-white/10 rounded-xl px-2 py-1">
+										<span className="text-[11px] font-bold text-slate-300">
+											Scroll:
+										</span>
+										<button
+											type="button"
+											onClick={() => scrollMatrix('left')}
+											aria-label="Scroll matrix left"
+											title="Scroll matrix left"
+											className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition active:scale-90"
+										>
+											<ChevronLeft className="h-4 w-4" />
+										</button>
+										<button
+											type="button"
+											onClick={() => scrollMatrix('right')}
+											aria-label="Scroll matrix right"
+											title="Scroll matrix right"
+											className="p-1 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition active:scale-90"
+										>
+											<ChevronRight className="h-4 w-4" />
+										</button>
+									</div>
+								</div>
 							</div>
 
-							<div className="overflow-x-auto rounded-xl border border-white/5 bg-slate-950/40">
-								<table className="w-full text-left border-collapse min-w-[800px]">
-									<thead>
-										<tr className="border-b border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-wider text-slate-400">
-											<th className="py-4 px-5 min-w-[200px] sticky left-0 z-20 bg-slate-950/95 backdrop-blur-md">
-												Predictor
-											</th>
-											{matrixData?.matches.map((match) => {
-												const homeName =
-													match.home_team?.short_name ||
-													match.home_team?.name.substring(0, 3).toUpperCase();
-												const awayName =
-													match.away_team?.short_name ||
-													match.away_team?.name.substring(0, 3).toUpperCase();
-												return (
-													<th
-														key={match.id}
-														onClick={() => handleOpenMatchInsights(match)}
-														className="py-4 px-3 text-center min-w-[105px] border-l border-white/5 cursor-pointer hover:bg-white/5 transition group"
-														title="Click to view match prediction insights"
-													>
-														<div className="flex flex-col items-center justify-center space-y-1">
-															<span className="text-white text-xs font-black group-hover:text-indigo-300 transition">
-																{homeName} vs {awayName}
-															</span>
-															{match.status === 'finished' ? (
-																<span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold">
-																	{match.home_score} - {match.away_score}
+							<div className="relative group">
+								<div
+									ref={matrixScrollRef}
+									className="overflow-x-auto rounded-xl border border-white/5 bg-slate-950/40 scroll-smooth"
+								>
+									<table className="w-full text-left border-collapse min-w-[800px]">
+										<thead>
+											<tr className="border-b border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-wider text-slate-400">
+												<th className="py-4 px-5 min-w-[200px] sticky left-0 z-20 bg-slate-950/95 backdrop-blur-md">
+													Predictor
+												</th>
+												{matrixData?.matches.map((match) => {
+													const homeName =
+														match.home_team?.short_name ||
+														match.home_team?.name.substring(0, 3).toUpperCase();
+													const awayName =
+														match.away_team?.short_name ||
+														match.away_team?.name.substring(0, 3).toUpperCase();
+													return (
+														<th
+															key={match.id}
+															onClick={() => handleOpenMatchInsights(match)}
+															className="py-4 px-3 text-center min-w-[105px] border-l border-white/5 cursor-pointer hover:bg-white/5 transition group"
+															title="Click to view match prediction insights"
+														>
+															<div className="flex flex-col items-center justify-center space-y-1">
+																<span className="text-white text-xs font-black group-hover:text-indigo-300 transition">
+																	{homeName} vs {awayName}
 																</span>
-															) : match.status === 'live' ? (
-																<span className="text-[9px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded-full font-bold animate-pulse">
-																	{match.home_score ?? 0} -{' '}
-																	{match.away_score ?? 0} Live
-																</span>
-															) : (
-																<span className="text-[9px] text-slate-500 font-bold">
-																	{new Date(
-																		match.kickoff_time,
-																	).toLocaleDateString(undefined, {
-																		month: 'short',
-																		day: 'numeric',
-																	})}
-																</span>
-															)}
-														</div>
-													</th>
-												);
-											})}
-										</tr>
-									</thead>
-									<tbody className="divide-y divide-white/5">
-										{leaderboard &&
-											leaderboard.map((row) => {
-												const isCurrentUser = row.user_id === user?.id;
-												return (
-													<tr
-														key={row.user_id}
-														className={`transition duration-150 ${isCurrentUser ? 'bg-indigo-500/10' : 'hover:bg-white/5'}`}
-													>
-														<td className="py-4 px-5 sticky left-0 z-10 bg-slate-950/95 backdrop-blur-md">
-															<div className="flex items-center gap-3">
-																<Avatar className="h-8 w-8 border border-white/5">
-																	<AvatarImage src={row.avatar_url || ''} />
-																	<AvatarFallback className="bg-indigo-600 text-white font-bold text-xs">
-																		{row.username
-																			?.substring(0, 2)
-																			.toUpperCase() || 'U'}
-																	</AvatarFallback>
-																</Avatar>
-																<div>
-																	<p className="text-sm font-bold text-white flex items-center gap-1.5">
-																		@{row.username}
-																		{isCurrentUser && (
-																			<span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-md border border-indigo-500/30">
-																				You
-																			</span>
-																		)}
-																	</p>
-																	<p className="text-[10px] text-slate-400">
-																		Rank {row.rank} • {row.total_points} pts
-																	</p>
-																</div>
+																{match.status === 'finished' ? (
+																	<span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded-full font-bold">
+																		{match.home_score} - {match.away_score}
+																	</span>
+																) : match.status === 'live' ? (
+																	<span className="text-[9px] bg-red-500/10 text-red-400 px-1.5 py-0.5 rounded-full font-bold animate-pulse">
+																		{match.home_score ?? 0} -{' '}
+																		{match.away_score ?? 0} Live
+																	</span>
+																) : (
+																	<span className="text-[9px] text-slate-500 font-bold">
+																		{new Date(
+																			match.kickoff_time,
+																		).toLocaleDateString(undefined, {
+																			month: 'short',
+																			day: 'numeric',
+																		})}
+																	</span>
+																)}
 															</div>
-														</td>
-
-														{matrixData?.matches.map((match) => {
-															const pred =
-																matrixData.predictions[row.user_id]?.[match.id];
-															const isMatchLocked =
-																new Date(match.kickoff_time) <= new Date() ||
-																match.status === 'finished' ||
-																match.status === 'live';
-															const isCurrentUserCell =
-																row.user_id === user?.id;
-
-															// Decides whether cell content should be masked
-															const canReveal =
-																isMatchLocked || isCurrentUserCell;
-
-															let cellBg = '';
-															let cellText = 'text-slate-400';
-															let contentStr = '-';
-
-															if (pred) {
-																if (canReveal) {
-																	contentStr = `${pred.predicted_home_score} - ${pred.predicted_away_score}`;
-																	if (match.status === 'finished') {
-																		if (pred.points_earned === 3) {
-																			cellBg =
-																				'bg-emerald-500/10 border border-emerald-500/20';
-																			cellText =
-																				'text-emerald-400 font-extrabold';
-																		} else if (pred.points_earned === 2) {
-																			cellBg =
-																				'bg-teal-500/10 border border-teal-500/20';
-																			cellText = 'text-teal-400 font-extrabold';
-																		} else if (pred.points_earned === 1) {
-																			cellBg =
-																				'bg-blue-500/10 border border-blue-500/20';
-																			cellText = 'text-blue-400 font-extrabold';
-																		} else {
-																			cellBg = 'bg-slate-500/5';
-																			cellText = 'text-slate-400';
-																		}
-																	} else {
-																		cellText = 'text-slate-200 font-bold';
-																	}
-																} else {
-																	// Match is in future, and it's someone else's pick
-																	contentStr = '🔒 Hidden';
-																	cellBg = 'bg-white/[0.01]';
-																	cellText =
-																		'text-slate-500 text-xs font-semibold';
-																}
-															}
-
-															return (
-																<td
-																	key={match.id}
-																	onClick={() => {
-																		if (pred && canReveal) {
-																			handleOpenCellBreakdown(
-																				match,
-																				pred,
-																				row.username || undefined,
-																			);
-																		}
-																	}}
-																	className={`py-4 px-3 text-center border-l border-white/5 transition duration-150 ${cellBg} ${pred && canReveal ? 'cursor-pointer hover:opacity-80' : ''}`}
-																>
-																	<div className="flex flex-col items-center justify-center">
-																		<span className={`text-xs ${cellText}`}>
-																			{contentStr}
-																		</span>
-																		{pred &&
-																			match.status === 'finished' &&
-																			canReveal && (
-																				<span className="text-[8px] opacity-80 block mt-0.5">
-																					+{pred.points_earned} pts
+														</th>
+													);
+												})}
+											</tr>
+										</thead>
+										<tbody className="divide-y divide-white/5">
+											{leaderboard &&
+												leaderboard.map((row) => {
+													const isCurrentUser = row.user_id === user?.id;
+													return (
+														<tr
+															key={row.user_id}
+															className={`transition duration-150 ${isCurrentUser ? 'bg-indigo-500/10' : 'hover:bg-white/5'}`}
+														>
+															<td className="py-4 px-5 sticky left-0 z-10 bg-slate-950/95 backdrop-blur-md">
+																<div className="flex items-center gap-3">
+																	<Avatar className="h-8 w-8 border border-white/5">
+																		<AvatarImage src={row.avatar_url || ''} />
+																		<AvatarFallback className="bg-indigo-600 text-white font-bold text-xs">
+																			{row.username
+																				?.substring(0, 2)
+																				.toUpperCase() || 'U'}
+																		</AvatarFallback>
+																	</Avatar>
+																	<div>
+																		<p className="text-sm font-bold text-white flex items-center gap-1.5">
+																			@{row.username}
+																			{isCurrentUser && (
+																				<span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-md border border-indigo-500/30">
+																					You
 																				</span>
 																			)}
+																		</p>
+																		<p className="text-[10px] text-slate-400">
+																			Rank {row.rank} • {row.total_points} pts
+																		</p>
 																	</div>
-																</td>
-															);
-														})}
-													</tr>
-												);
-											})}
+																</div>
+															</td>
 
-										{(!leaderboard || leaderboard.length === 0) && (
-											<tr>
-												<td
-													colSpan={
-														matrixData?.matches.length
-															? matrixData.matches.length + 1
-															: 2
-													}
-													className="py-12 text-center text-slate-400 text-sm"
-												>
-													No matrix data available.
-												</td>
-											</tr>
-										)}
-									</tbody>
-								</table>
+															{matrixData?.matches.map((match) => {
+																const pred =
+																	matrixData.predictions[row.user_id]?.[
+																		match.id
+																	];
+																const isMatchLocked =
+																	new Date(match.kickoff_time) <= new Date() ||
+																	match.status === 'finished' ||
+																	match.status === 'live';
+																const isCurrentUserCell =
+																	row.user_id === user?.id;
+
+																// Decides whether cell content should be masked
+																const canReveal =
+																	isMatchLocked || isCurrentUserCell;
+
+																let cellBg = '';
+																let cellText = 'text-slate-400';
+																let contentStr = '-';
+
+																if (pred) {
+																	if (canReveal) {
+																		contentStr = `${pred.predicted_home_score} - ${pred.predicted_away_score}`;
+																		if (match.status === 'finished') {
+																			if (pred.points_earned === 3) {
+																				cellBg =
+																					'bg-emerald-500/10 border border-emerald-500/20';
+																				cellText =
+																					'text-emerald-400 font-extrabold';
+																			} else if (pred.points_earned === 2) {
+																				cellBg =
+																					'bg-teal-500/10 border border-teal-500/20';
+																				cellText =
+																					'text-teal-400 font-extrabold';
+																			} else if (pred.points_earned === 1) {
+																				cellBg =
+																					'bg-blue-500/10 border border-blue-500/20';
+																				cellText =
+																					'text-blue-400 font-extrabold';
+																			} else {
+																				cellBg = 'bg-slate-500/5';
+																				cellText = 'text-slate-400';
+																			}
+																		} else {
+																			cellText = 'text-slate-200 font-bold';
+																		}
+																	} else {
+																		// Match is in future, and it's someone else's pick
+																		contentStr = '🔒 Hidden';
+																		cellBg = 'bg-white/[0.01]';
+																		cellText =
+																			'text-slate-500 text-xs font-semibold';
+																	}
+																}
+
+																return (
+																	<td
+																		key={match.id}
+																		onClick={() => {
+																			if (pred && canReveal) {
+																				handleOpenCellBreakdown(
+																					match,
+																					pred,
+																					row.username || undefined,
+																				);
+																			}
+																		}}
+																		className={`py-4 px-3 text-center border-l border-white/5 transition duration-150 ${cellBg} ${pred && canReveal ? 'cursor-pointer hover:opacity-80' : ''}`}
+																	>
+																		<div className="flex flex-col items-center justify-center">
+																			<span className={`text-xs ${cellText}`}>
+																				{contentStr}
+																			</span>
+																			{pred &&
+																				match.status === 'finished' &&
+																				canReveal && (
+																					<span className="text-[8px] opacity-80 block mt-0.5">
+																						+{pred.points_earned} pts
+																					</span>
+																				)}
+																		</div>
+																	</td>
+																);
+															})}
+														</tr>
+													);
+												})}
+
+											{(!matrixData?.matches ||
+												matrixData.matches.length === 0) && (
+												<tr>
+													<td
+														colSpan={2}
+														className="py-12 text-center text-slate-400 text-sm"
+													>
+														No fixtures scheduled for Matchweek {matchday}.
+													</td>
+												</tr>
+											)}
+											{leaderboard &&
+												leaderboard.length === 0 &&
+												matrixData?.matches &&
+												matrixData.matches.length > 0 && (
+													<tr>
+														<td
+															colSpan={matrixData.matches.length + 1}
+															className="py-12 text-center text-slate-400 text-sm"
+														>
+															No members in this league yet.
+														</td>
+													</tr>
+												)}
+										</tbody>
+									</table>
+								</div>
+
+								{/* Floating Scroll Arrows on Edge of Table */}
+								<button
+									type="button"
+									onClick={() => scrollMatrix('left')}
+									aria-label="Scroll fixtures left"
+									title="Scroll fixtures left"
+									className="absolute left-[208px] top-1/2 -translate-y-1/2 z-30 p-2 rounded-xl bg-slate-900/90 hover:bg-indigo-600 text-white border border-white/15 shadow-2xl backdrop-blur-md transition-all duration-200 active:scale-90 opacity-75 hover:opacity-100 hover:scale-105 hidden sm:flex items-center justify-center"
+								>
+									<ChevronLeft className="h-5 w-5" />
+								</button>
+								<button
+									type="button"
+									onClick={() => scrollMatrix('right')}
+									aria-label="Scroll fixtures right"
+									title="Scroll fixtures right"
+									className="absolute right-2 top-1/2 -translate-y-1/2 z-30 p-2 rounded-xl bg-slate-900/90 hover:bg-indigo-600 text-white border border-white/15 shadow-2xl backdrop-blur-md transition-all duration-200 active:scale-90 opacity-75 hover:opacity-100 hover:scale-105 hidden sm:flex items-center justify-center"
+								>
+									<ChevronRight className="h-5 w-5" />
+								</button>
 							</div>
 						</div>
 					</TabsContent>
