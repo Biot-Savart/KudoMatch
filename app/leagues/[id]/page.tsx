@@ -442,10 +442,10 @@ export default function PoolDetailPage() {
 						value="standings"
 						className="space-y-6 outline-none"
 					>
-						{/* Podium for Top 3 */}
+						{/* Olympic 3D Pedestal Podium for Top 3 */}
 						{podium.length > 0 && (
-							<div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-4 pb-2">
-								{/* 2nd place (renders left on desktop) */}
+							<div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-6 pb-4 max-w-2xl mx-auto">
+								{/* 2nd place (Silver pedestal, renders left on desktop) */}
 								{podium[1] && (
 									<motion.div
 										initial={{ opacity: 0, scale: 0.9, y: 15 }}
@@ -454,57 +454,61 @@ export default function PoolDetailPage() {
 										className="order-2 md:order-1 flex flex-col items-center"
 									>
 										<div className="relative mb-3 flex flex-col items-center">
-											<Avatar className="h-14 w-14 border-2 border-slate-300 shadow-lg">
+											<Avatar className="h-16 w-16 border-2 border-slate-300 shadow-xl ring-4 ring-slate-400/20">
 												<AvatarImage src={podium[1].avatar_url || ''} />
-												<AvatarFallback className="bg-slate-700 text-white font-bold text-sm">
+												<AvatarFallback className="bg-slate-700 text-white font-black text-sm">
 													{podium[1].username?.substring(0, 2).toUpperCase() ||
 														'U'}
 												</AvatarFallback>
 											</Avatar>
-											<div className="absolute -bottom-1 bg-slate-300 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-full shadow">
-												2nd
+											<div className="absolute -bottom-1.5 bg-gradient-to-r from-slate-200 to-slate-400 text-slate-950 font-black text-[10px] px-2.5 py-0.5 rounded-full shadow-md">
+												🥈 2nd
 											</div>
 										</div>
-										<p className="text-sm font-bold truncate max-w-[150px]">
-											{podium[1].username}
-										</p>
-										<p className="text-xs text-indigo-400 font-extrabold">
-											{podium[1].total_points} pts
-										</p>
+										<div className="w-full flex flex-col items-center pt-3 pb-4 px-4 rounded-t-2xl bg-gradient-to-b from-slate-400/15 via-slate-800/40 to-slate-900/60 border-t border-x border-slate-400/20 h-28 justify-center shadow-lg">
+											<p className="text-sm font-bold truncate max-w-[140px] text-white">
+												{podium[1].username}
+											</p>
+											<p className="text-xs text-slate-300 font-black tabular-numbers mt-0.5">
+												{podium[1].total_points} pts
+											</p>
+										</div>
 									</motion.div>
 								)}
 
-								{/* 1st place (center, larger) */}
+								{/* 1st place (Gold pedestal, center, tallest) */}
 								{podium[0] && (
 									<motion.div
 										initial={{ opacity: 0, scale: 0.9, y: 25 }}
 										animate={{ opacity: 1, scale: 1, y: 0 }}
 										transition={{ type: 'spring', delay: 0, duration: 0.5 }}
-										className="order-1 md:order-2 flex flex-col items-center bg-gradient-to-b from-indigo-500/10 to-indigo-500/0 border border-indigo-500/20 rounded-2xl p-4 shadow-xl"
+										className="order-1 md:order-2 flex flex-col items-center"
 									>
 										<div className="relative mb-3 flex flex-col items-center">
-											<Crown className="h-5 w-5 text-yellow-500 absolute -top-4 animate-bounce" />
-											<Avatar className="h-18 w-18 border-2 border-yellow-500 shadow-lg shadow-yellow-500/20">
+											<Crown className="h-6 w-6 text-amber-400 absolute -top-5 animate-bounce drop-shadow-[0_0_8px_rgba(245,158,11,0.6)]" />
+											<Avatar className="h-20 w-20 border-2 border-amber-400 shadow-2xl ring-4 ring-amber-400/30">
 												<AvatarImage src={podium[0].avatar_url || ''} />
-												<AvatarFallback className="bg-yellow-600 text-white font-bold text-lg">
+												<AvatarFallback className="bg-gradient-to-tr from-amber-600 to-yellow-500 text-slate-950 font-black text-xl">
 													{podium[0].username?.substring(0, 2).toUpperCase() ||
 														'U'}
 												</AvatarFallback>
 											</Avatar>
-											<div className="absolute -bottom-1 bg-yellow-500 text-slate-950 font-black text-xs px-2.5 py-0.5 rounded-full shadow">
-												1st
+											<div className="absolute -bottom-2 bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-black text-xs px-3 py-0.5 rounded-full shadow-lg">
+												👑 1st
 											</div>
 										</div>
-										<p className="text-base font-extrabold truncate max-w-[160px]">
-											{podium[0].username}
-										</p>
-										<p className="text-sm text-yellow-500 font-extrabold">
-											{podium[0].total_points} pts
-										</p>
+										<div className="w-full flex flex-col items-center pt-4 pb-5 px-5 rounded-t-3xl bg-gradient-to-b from-amber-500/20 via-amber-900/20 to-slate-900/80 border-t border-x border-amber-500/30 h-36 justify-center shadow-xl">
+											<p className="text-base font-black truncate max-w-[150px] text-white">
+												{podium[0].username}
+											</p>
+											<p className="text-sm text-amber-400 font-black tabular-numbers mt-0.5 drop-shadow-[0_0_6px_rgba(245,158,11,0.4)]">
+												{podium[0].total_points} pts
+											</p>
+										</div>
 									</motion.div>
 								)}
 
-								{/* 3rd place (renders right on desktop) */}
+								{/* 3rd place (Bronze pedestal, renders right on desktop) */}
 								{podium[2] && (
 									<motion.div
 										initial={{ opacity: 0, scale: 0.9, y: 15 }}
@@ -513,23 +517,25 @@ export default function PoolDetailPage() {
 										className="order-3 flex flex-col items-center"
 									>
 										<div className="relative mb-3 flex flex-col items-center">
-											<Avatar className="h-14 w-14 border-2 border-amber-600 shadow-lg">
+											<Avatar className="h-16 w-16 border-2 border-amber-700 shadow-xl ring-4 ring-amber-700/20">
 												<AvatarImage src={podium[2].avatar_url || ''} />
-												<AvatarFallback className="bg-slate-700 text-white font-bold text-sm">
+												<AvatarFallback className="bg-slate-700 text-white font-black text-sm">
 													{podium[2].username?.substring(0, 2).toUpperCase() ||
 														'U'}
 												</AvatarFallback>
 											</Avatar>
-											<div className="absolute -bottom-1 bg-amber-600 text-white font-black text-[10px] px-2 py-0.5 rounded-full shadow">
-												3rd
+											<div className="absolute -bottom-1.5 bg-gradient-to-r from-amber-600 to-amber-800 text-white font-black text-[10px] px-2.5 py-0.5 rounded-full shadow-md">
+												🥉 3rd
 											</div>
 										</div>
-										<p className="text-sm font-bold truncate max-w-[150px]">
-											{podium[2].username}
-										</p>
-										<p className="text-xs text-indigo-400 font-extrabold">
-											{podium[2].total_points} pts
-										</p>
+										<div className="w-full flex flex-col items-center pt-3 pb-4 px-4 rounded-t-2xl bg-gradient-to-b from-amber-800/15 via-slate-800/40 to-slate-900/60 border-t border-x border-amber-800/20 h-24 justify-center shadow-lg">
+											<p className="text-sm font-bold truncate max-w-[140px] text-white">
+												{podium[2].username}
+											</p>
+											<p className="text-xs text-amber-500 font-black tabular-numbers mt-0.5">
+												{podium[2].total_points} pts
+											</p>
+										</div>
 									</motion.div>
 								)}
 							</div>
@@ -819,7 +825,9 @@ export default function PoolDetailPage() {
 								<table className="w-full text-left border-collapse min-w-[800px]">
 									<thead>
 										<tr className="border-b border-white/10 bg-white/5 text-[10px] font-black uppercase tracking-wider text-slate-400">
-											<th className="py-4 px-5 min-w-[200px]">Predictor</th>
+											<th className="py-4 px-5 min-w-[200px] sticky left-0 z-20 bg-slate-950/95 backdrop-blur-md">
+												Predictor
+											</th>
 											{matrixData?.matches.map((match) => {
 												const homeName =
 													match.home_team?.short_name ||
@@ -872,7 +880,7 @@ export default function PoolDetailPage() {
 														key={row.user_id}
 														className={`transition duration-150 ${isCurrentUser ? 'bg-indigo-500/10' : 'hover:bg-white/5'}`}
 													>
-														<td className="py-4 px-5">
+														<td className="py-4 px-5 sticky left-0 z-10 bg-slate-950/95 backdrop-blur-md">
 															<div className="flex items-center gap-3">
 																<Avatar className="h-8 w-8 border border-white/5">
 																	<AvatarImage src={row.avatar_url || ''} />

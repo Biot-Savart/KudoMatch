@@ -138,50 +138,54 @@ export function MatchCard({
 
 	return (
 		<Card
-			className={`relative overflow-hidden transition-all duration-300 rounded-2xl border-white/5 bg-white/[0.02] shadow-xl ${
+			className={`relative overflow-hidden transition-all duration-300 rounded-2xl glass-card ${
 				isLive
-					? 'ring-1 ring-red-500/30 bg-red-500/[0.02]'
+					? 'ring-1 ring-red-500/50 shadow-glow-live bg-gradient-to-b from-red-500/[0.08] to-transparent'
 					: isLocked
-						? 'opacity-85'
-						: 'hover:border-white/10 hover:bg-white/[0.03]'
+						? 'opacity-85 border-white/5'
+						: 'hover:border-indigo-500/30 hover:shadow-glow-indigo'
 			}`}
 		>
 			{/* Top Details / Time-Lock Row */}
-			<div className="px-4 py-2 bg-black/20 border-b border-white/5 flex justify-between items-center text-xs font-semibold">
-				<span className="text-slate-400">Matchweek {match.matchday}</span>
+			<div className="px-4 py-2.5 bg-black/30 border-b border-white/5 flex justify-between items-center text-xs font-semibold">
+				<div className="flex items-center gap-2">
+					<span className="text-slate-400 font-medium">
+						Matchweek {match.matchday}
+					</span>
+				</div>
 				<div
 					className={`flex items-center gap-1.5 ${
 						isLive
 							? 'text-red-400 font-extrabold'
 							: isLocked
 								? 'text-slate-400'
-								: 'text-indigo-300'
+								: 'text-indigo-300 font-semibold'
 					}`}
 				>
 					{isLive ? (
-						<>
+						<div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/30">
 							<span className="relative flex h-2 w-2">
 								<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
 								<span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
 							</span>
-							<span className="tracking-wide">LIVE</span>
-						</>
+							<span className="tracking-wider text-[10px] font-black">
+								LIVE
+							</span>
+						</div>
 					) : isLocked ? (
 						<div
-							className="relative flex items-center gap-1 group/lock cursor-help"
+							className="relative flex items-center gap-1.5 group/lock cursor-help px-2 py-0.5 rounded-full bg-white/5 border border-white/5"
 							title={`Match ${isFinished ? 'Finished' : 'Locked'} • ${kickoffFormatted}`}
 						>
-							<Lock className="h-3 w-3" />
-							<span className="tracking-wide group-hover/lock:text-slate-200 transition">
+							<Lock className="h-3 w-3 text-slate-400" />
+							<span className="tracking-wide text-[11px] group-hover/lock:text-slate-200 transition">
 								{timeLeft}
 							</span>
 
-							{/* Hover Tooltip displaying exact date and time */}
+							{/* Hover Tooltip */}
 							<div className="absolute right-0 top-full mt-1.5 hidden group-hover/lock:flex flex-col z-30 px-3 py-2 rounded-xl bg-slate-900/95 border border-white/10 text-[10px] text-slate-200 shadow-2xl backdrop-blur-md whitespace-nowrap pointer-events-none transition-all">
 								<span className="font-bold text-white flex items-center gap-1">
-									<span>
-										{isFinished ? '🏁 Final Result' : '🔒 Predictions Locked'}
-									</span>
+									{isFinished ? '🏁 Final Result' : '🔒 Predictions Locked'}
 								</span>
 								<span className="text-slate-400 text-[9px] mt-0.5">
 									Kickoff: {kickoffFormatted}
@@ -189,10 +193,12 @@ export function MatchCard({
 							</div>
 						</div>
 					) : (
-						<>
-							<Timer className="h-3 w-3 animate-pulse" />
-							<span className="tracking-wide">{timeLeft}</span>
-						</>
+						<div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300">
+							<Timer className="h-3 w-3 animate-pulse text-indigo-400" />
+							<span className="tracking-wide text-[11px] font-medium">
+								{timeLeft}
+							</span>
+						</div>
 					)}
 				</div>
 			</div>
@@ -201,17 +207,19 @@ export function MatchCard({
 				{/* Teams Display Row */}
 				<div className="flex items-center justify-between text-center relative">
 					{/* Home team */}
-					<div className="flex flex-col items-center gap-1.5 w-24">
-						{match.home_team?.logo_url ? (
-							<img
-								src={match.home_team.logo_url}
-								alt={match.home_team.name}
-								className="h-10 w-10 object-contain"
-							/>
-						) : (
-							<span className="text-3xl">🔵</span>
-						)}
-						<span className="font-extrabold text-xs text-white truncate w-full">
+					<div className="flex flex-col items-center gap-2 w-24">
+						<div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/5 p-2 flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform duration-200">
+							{match.home_team?.logo_url ? (
+								<img
+									src={match.home_team.logo_url}
+									alt={match.home_team.name}
+									className="h-9 w-9 object-contain drop-shadow"
+								/>
+							) : (
+								<span className="text-2xl">🔵</span>
+							)}
+						</div>
+						<span className="font-bold text-xs text-white truncate w-full tracking-tight">
 							{match.home_team?.name}
 						</span>
 					</div>
@@ -222,17 +230,17 @@ export function MatchCard({
 							// Actual result if finished or in-play
 							<div className="flex flex-col items-center gap-1.5">
 								<div
-									className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border ${
+									className={`flex items-center gap-2.5 px-4 py-2 rounded-2xl border shadow-inner tabular-numbers ${
 										isLive
-											? 'bg-red-500/10 border-red-500/30 ring-1 ring-red-500/20'
-											: 'bg-black/45 border-white/5'
+											? 'bg-red-500/15 border-red-500/40 ring-1 ring-red-500/30'
+											: 'bg-black/50 border-white/10'
 									}`}
 								>
-									<span className="text-xl font-black text-white">
+									<span className="text-2xl font-black text-white tracking-tight">
 										{match.home_score ?? 0}
 									</span>
 									<span className="text-xs font-bold text-slate-500">:</span>
-									<span className="text-xl font-black text-white">
+									<span className="text-2xl font-black text-white tracking-tight">
 										{match.away_score ?? 0}
 									</span>
 								</div>
@@ -243,10 +251,10 @@ export function MatchCard({
 											onBreakdownClick?.(match, existingPrediction)
 										}
 										title="Click to view full scoring breakdown"
-										className="flex flex-col items-center mt-1 group cursor-pointer"
+										className="flex flex-col items-center mt-1 group cursor-pointer focus:outline-none"
 									>
 										<div
-											className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase border flex items-center gap-1 transition group-hover:scale-105 ${scoringExplanation.badgeBg} ${scoringExplanation.badgeBorder} ${scoringExplanation.colorClass}`}
+											className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase border flex items-center gap-1.5 shadow-sm transition-all group-hover:scale-105 ${scoringExplanation.badgeBg} ${scoringExplanation.badgeBorder} ${scoringExplanation.colorClass}`}
 										>
 											{isLive && (
 												<span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -255,9 +263,9 @@ export function MatchCard({
 												{isLive ? 'In-Play: ' : '+'}
 												{livePoints} PTS
 											</span>
-											<Info className="h-2.5 w-2.5 opacity-70" />
+											<Info className="h-3 w-3 opacity-70" />
 										</div>
-										<span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 flex items-center gap-0.5">
+										<span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mt-0.5 flex items-center gap-0.5">
 											<span>{scoringExplanation.tierLabel}</span>
 										</span>
 									</button>
@@ -269,21 +277,25 @@ export function MatchCard({
 								variant={existingPrediction ? 'glass' : 'outline'}
 								disabled={isLocked && !existingPrediction}
 								onClick={() => onPredict(match)}
-								className={`flex items-center gap-1 rounded-xl py-1.5 px-3 h-auto text-xs font-bold transition duration-200 border-white/5 ${
+								className={`flex items-center gap-1.5 rounded-2xl py-2 px-4 h-auto text-xs font-bold transition-all duration-200 border-white/10 ${
 									existingPrediction
-										? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-200 shadow-md shadow-indigo-500/5 hover:bg-indigo-500/20'
-										: 'hover:bg-white/5 text-slate-400 hover:text-white'
+										? 'bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border-indigo-500/40 text-white shadow-md shadow-indigo-500/10 hover:border-indigo-400/60'
+										: 'hover:bg-white/10 text-slate-300 hover:text-white border-white/10'
 								}`}
 							>
 								{existingPrediction ? (
-									<span className="text-base font-black">
+									<span className="text-base font-black tracking-tight tabular-numbers text-indigo-300">
 										{existingPrediction.predicted_home_score} -{' '}
 										{existingPrediction.predicted_away_score}
 									</span>
 								) : (
 									<>
-										<span>{isLocked ? 'No Pick' : 'Predict'}</span>
-										{!isLocked && <ChevronRight className="h-3 w-3 ml-0.5" />}
+										<span className="font-semibold">
+											{isLocked ? 'No Pick' : 'Predict'}
+										</span>
+										{!isLocked && (
+											<ChevronRight className="h-3.5 w-3.5 ml-0.5 text-indigo-400" />
+										)}
 									</>
 								)}
 							</Button>
@@ -291,17 +303,19 @@ export function MatchCard({
 					</div>
 
 					{/* Away team */}
-					<div className="flex flex-col items-center gap-1.5 w-24">
-						{match.away_team?.logo_url ? (
-							<img
-								src={match.away_team.logo_url}
-								alt={match.away_team.name}
-								className="h-10 w-10 object-contain"
-							/>
-						) : (
-							<span className="text-3xl">🔴</span>
-						)}
-						<span className="font-extrabold text-xs text-white truncate w-full">
+					<div className="flex flex-col items-center gap-2 w-24">
+						<div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/5 p-2 flex items-center justify-center shadow-inner group-hover:scale-105 transition-transform duration-200">
+							{match.away_team?.logo_url ? (
+								<img
+									src={match.away_team.logo_url}
+									alt={match.away_team.name}
+									className="h-9 w-9 object-contain drop-shadow"
+								/>
+							) : (
+								<span className="text-2xl">🔴</span>
+							)}
+						</div>
+						<span className="font-bold text-xs text-white truncate w-full tracking-tight">
 							{match.away_team?.name}
 						</span>
 					</div>
@@ -309,14 +323,14 @@ export function MatchCard({
 
 				{/* Bottom Section */}
 				{isResolvedOrLive ? (
-					<div className="border-t border-white/5 pt-3 flex items-center justify-between text-xs">
+					<div className="border-t border-white/5 pt-3.5 flex items-center justify-between text-xs">
 						{existingPrediction ? (
 							<button
 								onClick={() => onBreakdownClick?.(match, existingPrediction)}
 								className="flex items-center gap-1.5 text-slate-400 hover:text-white transition group text-[11px]"
 							>
-								<span className="font-bold">Your Pick:</span>
-								<span className="text-white font-black bg-white/5 px-2 py-0.5 rounded-md border border-white/5 group-hover:border-indigo-500/30">
+								<span className="font-semibold">Your Pick:</span>
+								<span className="text-white font-black bg-white/10 px-2 py-0.5 rounded-lg border border-white/10 group-hover:border-indigo-500/40 tabular-numbers">
 									{existingPrediction.predicted_home_score} -{' '}
 									{existingPrediction.predicted_away_score}
 								</span>
@@ -330,24 +344,24 @@ export function MatchCard({
 						{onInsightsClick && (
 							<button
 								onClick={() => onInsightsClick(match)}
-								className="flex items-center gap-1 text-[11px] font-bold text-indigo-400 hover:text-indigo-300 hover:underline transition"
+								className="flex items-center gap-1 text-[11px] font-bold text-indigo-400 hover:text-indigo-300 transition"
 							>
-								<Users className="h-3 w-3" />
+								<Users className="h-3.5 w-3.5" />
 								<span>Pool Picks</span>
 							</button>
 						)}
 					</div>
 				) : (
 					/* Quick outcome 1 / X / 2 pills selector */
-					<div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-4">
+					<div className="grid grid-cols-3 gap-2 border-t border-white/5 pt-3.5">
 						<button
 							onClick={() => handleQuickSelection('home')}
 							disabled={isLocked || !userId}
 							aria-label={`Predict Home Win: ${match.home_team?.name || 'Home team'}`}
-							className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
+							className={`py-2 px-3 rounded-xl font-black text-xs border transition-all duration-150 active:scale-95 ${
 								activeOption === 'home'
-									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-									: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none'
+									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/50'
+									: 'bg-white/[0.03] border-white/5 text-slate-400 hover:bg-white/10 hover:text-white hover:border-white/10 disabled:pointer-events-none'
 							}`}
 						>
 							1
@@ -356,10 +370,10 @@ export function MatchCard({
 							onClick={() => handleQuickSelection('draw')}
 							disabled={isLocked || !userId}
 							aria-label="Predict Draw Match"
-							className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
+							className={`py-2 px-3 rounded-xl font-black text-xs border transition-all duration-150 active:scale-95 ${
 								activeOption === 'draw'
-									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-									: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none'
+									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/50'
+									: 'bg-white/[0.03] border-white/5 text-slate-400 hover:bg-white/10 hover:text-white hover:border-white/10 disabled:pointer-events-none'
 							}`}
 						>
 							X
@@ -368,10 +382,10 @@ export function MatchCard({
 							onClick={() => handleQuickSelection('away')}
 							disabled={isLocked || !userId}
 							aria-label={`Predict Away Win: ${match.away_team?.name || 'Away team'}`}
-							className={`py-2 px-3 rounded-xl font-bold text-xs border transition-all duration-200 ${
+							className={`py-2 px-3 rounded-xl font-black text-xs border transition-all duration-150 active:scale-95 ${
 								activeOption === 'away'
-									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-									: 'bg-white/[0.02] border-white/5 text-slate-400 hover:bg-white/5 hover:text-white disabled:pointer-events-none'
+									? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/30 ring-1 ring-indigo-400/50'
+									: 'bg-white/[0.03] border-white/5 text-slate-400 hover:bg-white/10 hover:text-white hover:border-white/10 disabled:pointer-events-none'
 							}`}
 						>
 							2

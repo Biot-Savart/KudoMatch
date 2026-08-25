@@ -4,9 +4,9 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-    deletePoolMessage,
-    fetchPoolMessages,
-    sendPoolMessage,
+	deletePoolMessage,
+	fetchPoolMessages,
+	sendPoolMessage,
 } from '@/lib/queries/chat';
 import { createClient } from '@/lib/supabase/client';
 import { PoolMessage } from '@/types';
@@ -272,6 +272,28 @@ export default function PoolChat({
 				<div ref={messagesEndRef} />
 			</div>
 
+			{/* Quick Emoji Reactions Bar */}
+			<div className="bg-black/30 px-4 py-1.5 border-t border-white/5 flex items-center justify-between gap-1 overflow-x-auto scrollbar-none">
+				<span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0 mr-1">
+					Quick Banter:
+				</span>
+				<div className="flex items-center gap-1">
+					{['🔥', '💀', '🎯', '🤡', '⚽', '🍿', '👑'].map((emoji) => (
+						<button
+							key={emoji}
+							type="button"
+							onClick={() =>
+								setMessageText((prev) => `${prev} ${emoji}`.trim())
+							}
+							className="px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/15 text-xs transition active:scale-90"
+							title={`Add ${emoji}`}
+						>
+							{emoji}
+						</button>
+					))}
+				</div>
+			</div>
+
 			{/* Chat Input */}
 			<form
 				onSubmit={handleSend}
@@ -282,12 +304,12 @@ export default function PoolChat({
 					onChange={(e) => setMessageText(e.target.value)}
 					placeholder="Throw some banter..."
 					maxLength={1000}
-					className="bg-slate-900 border-white/10 focus-visible:ring-indigo-500 rounded-xl py-5 text-sm"
+					className="bg-slate-900/90 border-white/10 focus-visible:ring-indigo-500 rounded-xl py-5 text-sm placeholder:text-slate-500 shadow-inner"
 				/>
 				<Button
 					type="submit"
 					disabled={!messageText.trim() || sendMutation.isPending}
-					className="bg-indigo-600 hover:bg-indigo-700 h-10 w-10 p-0 rounded-xl shrink-0"
+					className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-600/20 h-10 w-10 p-0 rounded-xl shrink-0 active:scale-95 transition-transform"
 				>
 					<Send className="h-4 w-4" />
 				</Button>
