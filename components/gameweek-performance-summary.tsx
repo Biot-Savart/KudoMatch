@@ -73,21 +73,21 @@ export function GameweekPerformanceSummary({
 		<motion.div
 			initial={{ opacity: 0, y: 10 }}
 			animate={{ opacity: 1, y: 0 }}
-			className="rounded-2xl glass-card border border-white/10 p-6 bg-gradient-to-r from-indigo-950/40 via-slate-900/60 to-purple-950/30 relative overflow-hidden shadow-xl space-y-5"
+			className="rounded-3xl glass-card border border-white/10 p-6 bg-gradient-to-r from-indigo-950/40 via-slate-900/60 to-purple-950/40 relative overflow-hidden shadow-2xl space-y-5"
 		>
-			<div className="absolute -top-16 -right-16 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+			<div className="absolute -top-16 -right-16 w-44 h-44 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
 
 			{/* Top Header Row */}
-			<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+			<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
 				<div className="flex items-center gap-3">
-					<div className="p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 shadow-sm">
+					<div className="p-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-sm drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]">
 						<Trophy className="h-5 w-5" />
 					</div>
 					<div>
-						<h3 className="text-base font-extrabold text-white tracking-tight flex items-center gap-2">
+						<h3 className="text-base font-black text-white tracking-tight flex items-center gap-2">
 							<span>Matchweek {matchday} Performance</span>
 							{liveMatches.length > 0 && (
-								<span className="px-2 py-0.5 rounded-full bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-black uppercase animate-pulse">
+								<span className="px-2.5 py-0.5 rounded-full bg-red-500/20 border border-red-500/40 text-red-400 text-[10px] font-black uppercase animate-pulse shadow-glow-live">
 									{liveMatches.length} Live In-Play
 								</span>
 							)}
@@ -126,12 +126,12 @@ export function GameweekPerformanceSummary({
 			{/* Main Metrics Grid */}
 			<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
 				{/* 1. Final Points & In-Play */}
-				<div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-1">
+				<div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1 shadow-inner">
 					<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
 						Total Round Points
 					</span>
 					<div className="flex items-baseline gap-2">
-						<span className="text-2xl font-black text-white">
+						<span className="text-3xl font-black text-white tabular-numbers">
 							{finishedPoints + inPlayPoints}
 						</span>
 						<span className="text-xs text-slate-400 font-bold">PTS</span>
@@ -145,12 +145,12 @@ export function GameweekPerformanceSummary({
 				</div>
 
 				{/* 2. Exact Hits */}
-				<div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-1">
+				<div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1 shadow-inner">
 					<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
 						Exact 3-Pointers
 					</span>
 					<div className="flex items-baseline gap-2">
-						<span className="text-2xl font-black text-emerald-400">
+						<span className="text-3xl font-black text-emerald-400 tabular-numbers drop-shadow-[0_0_8px_rgba(16,185,129,0.35)]">
 							{exactHitsCount}
 						</span>
 						<span className="text-xs text-slate-400 font-bold">🎯</span>
@@ -163,12 +163,12 @@ export function GameweekPerformanceSummary({
 				</div>
 
 				{/* 3. Outcome & Margin */}
-				<div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-1">
+				<div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1 shadow-inner">
 					<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
 						Outcome & Diff
 					</span>
 					<div className="flex items-baseline gap-2">
-						<span className="text-2xl font-black text-teal-400">
+						<span className="text-3xl font-black text-teal-400 tabular-numbers">
 							{outcomeDiffCount}
 						</span>
 						<span className="text-xs text-slate-400 font-bold">↔️</span>
@@ -179,16 +179,16 @@ export function GameweekPerformanceSummary({
 				</div>
 
 				{/* 4. Winner Only & Misses */}
-				<div className="p-4 rounded-xl bg-white/[0.02] border border-white/5 space-y-1">
+				<div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1 shadow-inner">
 					<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
 						Winner / Miss
 					</span>
-					<div className="flex items-baseline gap-2">
-						<span className="text-2xl font-black text-blue-400">
+					<div className="flex items-baseline gap-2 tabular-numbers">
+						<span className="text-3xl font-black text-blue-400">
 							{winnerOnlyCount}
 						</span>
 						<span className="text-xs text-slate-400 font-bold">/</span>
-						<span className="text-lg font-black text-slate-500">
+						<span className="text-xl font-black text-slate-500">
 							{missesCount}
 						</span>
 					</div>

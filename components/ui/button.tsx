@@ -21,6 +21,9 @@ const buttonVariants = cva(
 				link: 'text-primary underline-offset-4 hover:underline',
 				glass:
 					'glass-card hover:bg-white/10 active:bg-white/5 text-foreground transition-all duration-200',
+				gradient:
+					'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-lg shadow-indigo-600/25',
+				glow: 'bg-indigo-600 text-white font-bold shadow-glow-indigo hover:bg-indigo-500 transition-all',
 			},
 			size: {
 				default: 'h-9 px-4 py-2',
@@ -58,3 +61,4 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = 'Button';
 
 export { Button, buttonVariants };
+

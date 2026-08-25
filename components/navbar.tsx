@@ -115,35 +115,38 @@ export function Navbar() {
 	}
 
 	return (
-		<header className="glass-nav fixed top-0 left-0 right-0 z-50 h-16 flex items-center px-4 md:px-8 justify-between">
+		<header className="glass-nav fixed top-0 left-0 right-0 z-50 h-16 flex items-center px-4 md:px-8 justify-between border-b border-white/10 shadow-lg">
 			{/* Brand Logo */}
 			<Link
 				href="/"
-				className="flex items-center gap-2 relative z-50"
+				className="flex items-center gap-2 relative z-50 group"
 			>
-				<div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-black text-white shadow-lg shadow-indigo-500/20">
+				<div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center font-black text-white shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform duration-200">
 					K
 				</div>
-				<span className="font-extrabold text-xl tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+				<span className="font-black text-xl tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
 					Kudo<span className="text-indigo-400">Match</span>
 				</span>
 			</Link>
 
 			{/* Desktop Navigation Links */}
-			<nav className="hidden md:flex items-center gap-1">
+			<nav className="hidden md:flex items-center gap-1.5 p-1 rounded-full bg-black/20 border border-white/5 backdrop-blur-md">
 				{navLinks.map((link) => {
 					const Icon = link.icon;
+					const active = isActive(link.href);
 					return (
 						<Link
 							key={link.href}
 							href={link.href}
-							className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold tracking-wide transition-all duration-200 ${
-								isActive(link.href)
-									? 'bg-white/10 text-white shadow-inner'
-									: 'text-slate-400 hover:bg-white/5 hover:text-white'
+							className={`relative flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold tracking-wide transition-all duration-200 ${
+								active
+									? 'text-white font-bold bg-white/10 shadow-sm border border-white/10'
+									: 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
 							}`}
 						>
-							<Icon className="h-4 w-4" />
+							<Icon
+								className={`h-4 w-4 ${active ? 'text-indigo-400' : 'text-slate-400'}`}
+							/>
 							{link.name}
 						</Link>
 					);
@@ -151,14 +154,14 @@ export function Navbar() {
 			</nav>
 
 			{/* Desktop Right Panel (Points, Profile, Auth state) */}
-			<div className="hidden md:flex items-center gap-4">
+			<div className="hidden md:flex items-center gap-3">
 				{loading ? (
-					<div className="h-8 w-24 bg-white/5 animate-pulse rounded-lg" />
+					<div className="h-8 w-24 bg-white/5 animate-pulse rounded-full" />
 				) : user ? (
-					<div className="flex items-center gap-4">
-						{/* Global Points Badge */}
-						<div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-bold text-xs shadow-sm">
-							<Trophy className="h-3.5 w-3.5 text-yellow-500" />
+					<div className="flex items-center gap-3">
+						{/* Global Points Luminous Badge */}
+						<div className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-indigo-500/15 to-purple-500/15 border border-indigo-500/30 text-indigo-300 font-bold text-xs shadow-sm hover:border-indigo-400/50 transition-colors tabular-numbers">
+							<Trophy className="h-3.5 w-3.5 text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
 							<span>{profile?.total_points ?? 0} pts</span>
 						</div>
 
@@ -166,11 +169,11 @@ export function Navbar() {
 						<div className="relative">
 							<button
 								onClick={() => setDropdownOpen(!dropdownOpen)}
-								className="flex items-center gap-1 focus:outline-none"
+								className="flex items-center gap-2 p-1 rounded-full hover:bg-white/5 border border-transparent hover:border-white/10 transition duration-200 focus:outline-none"
 							>
-								<Avatar className="h-9 w-9 border border-white/10 hover:border-white/30 transition duration-200 cursor-pointer">
+								<Avatar className="h-9 w-9 border border-indigo-500/30 shadow-md">
 									<AvatarImage src={profile?.avatar_url || ''} />
-									<AvatarFallback className="bg-indigo-600 text-white font-bold text-sm">
+									<AvatarFallback className="bg-gradient-to-tr from-indigo-600 to-purple-600 text-white font-bold text-sm">
 										{(profile?.full_name || profile?.username || 'U')
 											.substring(0, 2)
 											.toUpperCase()}
@@ -191,7 +194,7 @@ export function Navbar() {
 											animate={{ opacity: 1, scale: 1, y: 0 }}
 											exit={{ opacity: 0, scale: 0.95, y: 10 }}
 											transition={{ duration: 0.15 }}
-											className="absolute right-0 mt-2 w-56 rounded-xl glass-card border border-white/10 p-2 shadow-2xl z-40"
+											className="absolute right-0 mt-2 w-60 rounded-2xl glass-card border border-white/15 p-2.5 shadow-2xl z-40"
 										>
 											<div className="px-3 py-2 border-b border-white/5 mb-1.5">
 												<p className="text-sm font-bold text-white truncate">
@@ -205,15 +208,15 @@ export function Navbar() {
 											<Link
 												href="/profile"
 												onClick={() => setDropdownOpen(false)}
-												className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-white/10 hover:text-white transition"
+												className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-slate-300 hover:bg-white/10 hover:text-white transition"
 											>
-												<UserIcon className="h-4 w-4 text-slate-400" />
+												<UserIcon className="h-4 w-4 text-indigo-400" />
 												My Profile
 											</Link>
 
 											<button
 												onClick={handleSignOut}
-												className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition"
+												className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 hover:text-red-300 transition"
 											>
 												<LogOut className="h-4 w-4" />
 												Sign Out
@@ -228,13 +231,13 @@ export function Navbar() {
 					<div className="flex items-center gap-2">
 						<Button
 							variant="ghost"
-							className="text-slate-300 hover:text-white"
+							className="text-slate-300 hover:text-white rounded-full text-xs font-semibold"
 							asChild
 						>
 							<Link href="/login">Sign In</Link>
 						</Button>
 						<Button
-							className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold tracking-wide"
+							className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold tracking-wide rounded-full text-xs px-4 shadow-lg shadow-indigo-500/20"
 							asChild
 						>
 							<Link href="/signup">Sign Up</Link>
@@ -243,17 +246,18 @@ export function Navbar() {
 				)}
 			</div>
 
-			{/* Mobile Menu Button */}
-			<div className="md:hidden flex items-center gap-3">
+			{/* Mobile Header Right */}
+			<div className="md:hidden flex items-center gap-2">
 				{user && (
-					<div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-bold text-xs">
-						<Trophy className="h-3 w-3 text-yellow-500" />
+					<div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-indigo-500/15 to-purple-500/15 border border-indigo-500/30 text-indigo-300 font-bold text-xs tabular-numbers">
+						<Trophy className="h-3 w-3 text-amber-400" />
 						<span>{profile?.total_points ?? 0}</span>
 					</div>
 				)}
 				<button
 					onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-					className="text-slate-300 hover:text-white focus:outline-none"
+					className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-white/5 focus:outline-none"
+					aria-label="Toggle navigation menu"
 				>
 					{mobileMenuOpen ? (
 						<X className="h-6 w-6" />

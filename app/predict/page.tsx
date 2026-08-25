@@ -275,14 +275,17 @@ function PredictContent() {
 	return (
 		<main className="min-h-screen px-4 py-8 md:px-12 max-w-7xl mx-auto space-y-8">
 			{/* Page Header */}
-			<div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-6">
+			<div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/10 pb-6">
 				<div className="space-y-1">
-					<h1 className="text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-						<Trophy className="h-7 w-7 text-yellow-500" />
-						Detailed Predictions
+					<h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight flex items-center gap-3">
+						<div className="p-2 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-600 shadow-lg shadow-amber-500/20 text-white">
+							<Trophy className="h-6 w-6" />
+						</div>
+						<span>Predictions Hub</span>
 					</h1>
 					<p className="text-sm text-slate-400">
-						Lock in your exact scorelines to win the maximum point weight!
+						Lock in your exact scorelines to climb the global leaderboard and
+						win pool honors!
 					</p>
 				</div>
 
@@ -291,19 +294,20 @@ function PredictContent() {
 					<Button
 						variant="outline"
 						onClick={() => setIsRulesModalOpen(true)}
-						className="border-white/10 hover:bg-white/5 text-slate-300 text-xs font-bold gap-1.5 rounded-xl h-10"
+						className="border-white/10 hover:bg-white/10 text-slate-300 text-xs font-bold gap-1.5 rounded-xl h-10 shadow-sm"
 					>
 						<BookOpen className="h-4 w-4 text-indigo-400" />
 						<span>Point Rules</span>
 					</Button>
 
-					{/* Matchday Selector */}
+					{/* Matchday Select Dropdown for Keyboard/Screen-reader accessibility */}
 					<div className="flex items-center gap-2">
-						<span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+						<span className="text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
 							Round:
 						</span>
 						<select
 							value={matchday}
+							aria-label="Select Matchweek"
 							onChange={(e) =>
 								handleMatchdayChange(parseInt(e.target.value, 10))
 							}
@@ -322,12 +326,85 @@ function PredictContent() {
 					</div>
 
 					{/* Locking Countdown banner */}
-					<div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-xs shadow-inner">
+					<div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/25 text-red-400 font-bold text-xs shadow-inner">
 						<Clock className="h-4 w-4 animate-pulse" />
 						<span>{getRoundLockText()}</span>
 					</div>
 				</div>
 			</div>
+
+			{/* Horizontal Gameweek Rail */}
+			<div className="relative">
+				<div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none no-scrollbar">
+					{availableMatchdays.map((day) => {
+						const isSelected = day === matchday;
+						const isCurrent = day === activeMatchday;
+						return (
+							<button
+								key={day}
+								onClick={() => handleMatchdayChange(day)}
+								className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-black transition-all duration-200 active:scale-95 ${
+									isSelected
+										? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40'
+										: 'glass-pill text-slate-400 hover:text-white hover:bg-white/10 hover:border-white/20'
+								}`}
+							>
+								<span>GW {day}</span>
+								{isCurrent && (
+									<span
+										className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase ${isSelected ? 'bg-white/20 text-white' : 'bg-indigo-500/20 text-indigo-300'}`}
+									>
+										Active
+									</span>
+								)}
+							</button>
+						);
+					})}
+				</div>
+			</div>
+
+			{/* Live In-Play Match Ticker Banner (if active live matches exist in current round) */}
+			{matches && matches.some((m) => m.status === 'live') && (
+				<div className="rounded-2xl p-4 bg-gradient-to-r from-red-950/40 via-slate-900/60 to-red-950/40 border border-red-500/30 shadow-glow-live flex flex-col sm:flex-row items-center justify-between gap-4">
+					<div className="flex items-center gap-3">
+						<span className="relative flex h-3 w-3">
+							<span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+							<span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+						</span>
+						<div>
+							<h4 className="text-xs font-black uppercase text-red-400 tracking-wider">
+								In-Play Action Live Now
+							</h4>
+							<p className="text-xs text-slate-300 font-medium">
+								Live score updates and in-play bonus points are streaming in
+								real-time.
+							</p>
+						</div>
+					</div>
+					<div className="flex items-center gap-2">
+						{matches
+							.filter((m) => m.status === 'live')
+							.map((m) => (
+								<div
+									key={m.id}
+									className="px-3 py-1 rounded-xl bg-black/40 border border-red-500/20 text-xs font-bold text-white flex items-center gap-2"
+								>
+									<span>
+										{m.home_team?.short_name ||
+											m.home_team?.name?.substring(0, 3)}
+									</span>
+									<span className="text-red-400 tabular-numbers font-black">
+										{m.home_score ?? 0} - {m.away_score ?? 0}
+									</span>
+									<span>
+										{m.away_team?.short_name ||
+											m.away_team?.name?.substring(0, 3)}
+									</span>
+								</div>
+							))}
+					</div>
+				</div>
+			)}
 
 			{!user && (
 				<div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-start gap-3 max-w-md mx-auto text-indigo-300 font-semibold text-xs">
