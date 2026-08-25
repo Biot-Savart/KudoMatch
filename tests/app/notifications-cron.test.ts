@@ -48,6 +48,10 @@ vi.mock('@/lib/notifications/push-service', () => ({
 }));
 
 import {
+	GET as getScoresCron,
+	POST as postScoresCron,
+} from '@/app/api/cron/fetch-live-scores/route';
+import {
 	GET as getKickoffCron,
 	POST as postKickoffCron,
 } from '@/app/api/cron/send-kickoff-reminders/route';
@@ -55,6 +59,7 @@ import {
 	GET as getDigestCron,
 	POST as postDigestCron,
 } from '@/app/api/cron/send-weekly-digest/route';
+import * as scoreSyncScript from '@/scripts/fetch-live-scores';
 import * as kickoffScript from '@/scripts/send-kickoff-reminders';
 import * as digestScript from '@/scripts/send-weekly-digest';
 import { NextRequest } from 'next/server';
@@ -72,6 +77,78 @@ describe('Notification Cron Routes & Scripts', () => {
 
 	afterEach(() => {
 		process.env = origEnv;
+	});
+
+	describe('app/api/cron/fetch-live-scores/route', () => {
+		it('should reject unauthorized request when CRON_SECRET is set', async () => {
+			process.env.CRON_SECRET = 'secret-test-token';
+
+			const req = new NextRequest(
+				'http://localhost:3000/api/cron/fetch-live-scores',
+			);
+			const res = await getScoresCron(req);
+			const json = await res.json();
+
+			expect(res.status).toBe(401);
+			expect(json.success).toBe(false);
+			expect(json.error).toContain('Unauthorized');
+		});
+
+		it('should allow authorized request via Bearer header and execute sync', async () => {
+			process.env.CRON_SECRET = 'secret-test-token';
+			vi.spyOn(scoreSyncScript, 'fetchLiveScores').mockResolvedValueOnce({
+				success: true,
+				updated: 4,
+			});
+
+			const req = new NextRequest(
+				'http://localhost:3000/api/cron/fetch-live-scores',
+				{
+					headers: { authorization: 'Bearer secret-test-token' },
+				},
+			);
+			const res = await getScoresCron(req);
+			const json = await res.json();
+
+			expect(res.status).toBe(200);
+			expect(json.success).toBe(true);
+			expect(json.updated).toBe(4);
+		});
+
+		it('should handle POST requests identically', async () => {
+			vi.spyOn(scoreSyncScript, 'fetchLiveScores').mockResolvedValueOnce({
+				success: true,
+				updated: 2,
+			});
+
+			const req = new NextRequest(
+				'http://localhost:3000/api/cron/fetch-live-scores?simulate=true',
+				{
+					method: 'POST',
+				},
+			);
+			const res = await postScoresCron(req);
+			const json = await res.json();
+
+			expect(res.status).toBe(200);
+			expect(json.success).toBe(true);
+		});
+
+		it('should return 500 when fetchLiveScores fails', async () => {
+			vi.spyOn(scoreSyncScript, 'fetchLiveScores').mockResolvedValueOnce({
+				success: false,
+				error: 'Database connection failed',
+			});
+
+			const req = new NextRequest(
+				'http://localhost:3000/api/cron/fetch-live-scores',
+			);
+			const res = await getScoresCron(req);
+			const json = await res.json();
+
+			expect(res.status).toBe(500);
+			expect(json.success).toBe(false);
+		});
 	});
 
 	describe('app/api/cron/send-kickoff-reminders/route', () => {
@@ -300,6 +377,47 @@ describe('Notification Cron Routes & Scripts', () => {
 			);
 			expect(result.success).toBe(true);
 			expect(result.digestsSent).toBeGreaterThanOrEqual(1);
+		});
+
+		it('should execute fetchLiveScores in simulation mode successfully', async () => {
+			const mockMatches = [
+				{
+					id: 'm1',
+					external_id: 12001,
+					status: 'live',
+					matchday: 12,
+					home_score: 0,
+					away_score: 0,
+					home_team: { name: 'Arsenal' },
+					away_team: { name: 'Chelsea' },
+				},
+			];
+
+			(mockSupabaseJsClient.from as any).mockImplementation((table: string) => {
+				if (table === 'matches') {
+					return {
+						select: vi.fn().mockReturnThis(),
+						or: vi.fn().mockReturnThis(),
+						lte: vi
+							.fn()
+							.mockReturnValue(
+								Promise.resolve({ data: mockMatches, error: null }),
+							),
+						update: vi.fn().mockReturnThis(),
+						eq: vi
+							.fn()
+							.mockReturnValue(Promise.resolve({ data: [], error: null })),
+					} as any;
+				}
+				return new MockQueryBuilder();
+			});
+
+			const result = await scoreSyncScript.fetchLiveScores(
+				{ simulate: true },
+				mockSupabaseJsClient,
+			);
+			expect(result.success).toBe(true);
+			expect(result.updated).toBe(1);
 		});
 	});
 });
