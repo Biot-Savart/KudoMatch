@@ -1,0 +1,372 @@
+[
+	{
+		"sport": "football",
+		"evaluator_key": "football_scoreline_v1",
+		"max_raw_points": 3,
+		"description": "Football exact home win",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 2,
+			"away": 1
+		},
+		"result": { "kind": "team_scoreline", "version": 1, "home": 2, "away": 1 },
+		"expected_tier": "exact_score",
+		"expected_raw_points": 3,
+		"expected_normalized_basis_points": 10000
+	},
+	{
+		"sport": "football",
+		"evaluator_key": "football_scoreline_v1",
+		"max_raw_points": 3,
+		"description": "Football exact goalless draw",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 0,
+			"away": 0
+		},
+		"result": { "kind": "team_scoreline", "version": 1, "home": 0, "away": 0 },
+		"expected_tier": "exact_score",
+		"expected_raw_points": 3,
+		"expected_normalized_basis_points": 10000
+	},
+	{
+		"sport": "football",
+		"evaluator_key": "football_scoreline_v1",
+		"max_raw_points": 3,
+		"description": "Football exact score draw",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 2,
+			"away": 2
+		},
+		"result": { "kind": "team_scoreline", "version": 1, "home": 2, "away": 2 },
+		"expected_tier": "exact_score",
+		"expected_raw_points": 3,
+		"expected_normalized_basis_points": 10000
+	},
+	{
+		"sport": "football",
+		"evaluator_key": "football_scoreline_v1",
+		"max_raw_points": 3,
+		"description": "Football exact margin (home win)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 3,
+			"away": 1
+		},
+		"result": { "kind": "team_scoreline", "version": 1, "home": 2, "away": 0 },
+		"expected_tier": "exact_margin",
+		"expected_raw_points": 2,
+		"expected_normalized_basis_points": 6667
+	},
+	{
+		"sport": "football",
+		"evaluator_key": "football_scoreline_v1",
+		"max_raw_points": 3,
+		"description": "Football exact margin (away win)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 1,
+			"away": 3
+		},
+		"result": { "kind": "team_scoreline", "version": 1, "home": 0, "away": 2 },
+		"expected_tier": "exact_margin",
+		"expected_raw_points": 2,
+		"expected_normalized_basis_points": 6667
+	},
+	{
+		"sport": "football",
+		"evaluator_key": "football_scoreline_v1",
+		"max_raw_points": 3,
+		"description": "Football non-exact draw vs draw gives exact_margin",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 1,
+			"away": 1
+		},
+		"result": { "kind": "team_scoreline", "version": 1, "home": 3, "away": 3 },
+		"expected_tier": "exact_margin",
+		"expected_raw_points": 2,
+		"expected_normalized_basis_points": 6667
+	},
+	{
+		"sport": "football",
+		"evaluator_key": "football_scoreline_v1",
+		"max_raw_points": 3,
+		"description": "Football correct outcome only (home win with different GD)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 2,
+			"away": 1
+		},
+		"result": { "kind": "team_scoreline", "version": 1, "home": 4, "away": 0 },
+		"expected_tier": "outcome",
+		"expected_raw_points": 1,
+		"expected_normalized_basis_points": 3333
+	},
+	{
+		"sport": "football",
+		"evaluator_key": "football_scoreline_v1",
+		"max_raw_points": 3,
+		"description": "Football miss (predicted home win, actual away win)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 2,
+			"away": 1
+		},
+		"result": { "kind": "team_scoreline", "version": 1, "home": 0, "away": 1 },
+		"expected_tier": "miss",
+		"expected_raw_points": 0,
+		"expected_normalized_basis_points": 0
+	},
+	{
+		"sport": "football",
+		"evaluator_key": "football_scoreline_v1",
+		"max_raw_points": 3,
+		"description": "Football miss (predicted draw, actual home win)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 1,
+			"away": 1
+		},
+		"result": { "kind": "team_scoreline", "version": 1, "home": 1, "away": 0 },
+		"expected_tier": "miss",
+		"expected_raw_points": 0,
+		"expected_normalized_basis_points": 0
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union exact score home win",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 27,
+			"away": 22
+		},
+		"result": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 27,
+			"away": 22
+		},
+		"expected_tier": "exact_score",
+		"expected_raw_points": 6,
+		"expected_normalized_basis_points": 10000
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union exact score draw",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 18,
+			"away": 18
+		},
+		"result": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 18,
+			"away": 18
+		},
+		"expected_tier": "exact_score",
+		"expected_raw_points": 6,
+		"expected_normalized_basis_points": 10000
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union exact signed margin (home win)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 30,
+			"away": 20
+		},
+		"result": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 25,
+			"away": 15
+		},
+		"expected_tier": "exact_margin",
+		"expected_raw_points": 4,
+		"expected_normalized_basis_points": 6667
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union exact signed margin (away win)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 12,
+			"away": 24
+		},
+		"result": { "kind": "team_scoreline", "version": 1, "home": 6, "away": 18 },
+		"expected_tier": "exact_margin",
+		"expected_raw_points": 4,
+		"expected_normalized_basis_points": 6667
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union non-exact draw vs draw gives exact_margin",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 21,
+			"away": 21
+		},
+		"result": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 15,
+			"away": 15
+		},
+		"expected_tier": "exact_margin",
+		"expected_raw_points": 4,
+		"expected_normalized_basis_points": 6667
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union close margin boundary error = 1 (pred margin 7, act margin 6)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 24,
+			"away": 17
+		},
+		"result": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 27,
+			"away": 21
+		},
+		"expected_tier": "close_margin",
+		"expected_raw_points": 3,
+		"expected_normalized_basis_points": 5000
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union close margin boundary error = 5 (pred margin 10, act margin 5)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 30,
+			"away": 20
+		},
+		"result": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 25,
+			"away": 20
+		},
+		"expected_tier": "close_margin",
+		"expected_raw_points": 3,
+		"expected_normalized_basis_points": 5000
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union outcome only boundary error = 6 (pred margin 10, act margin 4)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 30,
+			"away": 20
+		},
+		"result": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 24,
+			"away": 20
+		},
+		"expected_tier": "outcome",
+		"expected_raw_points": 2,
+		"expected_normalized_basis_points": 3333
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union outcome only large margin error (pred margin 30, act margin 10)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 40,
+			"away": 10
+		},
+		"result": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 20,
+			"away": 10
+		},
+		"expected_tier": "outcome",
+		"expected_raw_points": 2,
+		"expected_normalized_basis_points": 3333
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union miss (predicted home win, actual away win)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 25,
+			"away": 20
+		},
+		"result": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 15,
+			"away": 22
+		},
+		"expected_tier": "miss",
+		"expected_raw_points": 0,
+		"expected_normalized_basis_points": 0
+	},
+	{
+		"sport": "rugby-union",
+		"evaluator_key": "rugby_union_scoreline_v1",
+		"max_raw_points": 6,
+		"description": "Rugby Union miss (predicted away win, actual draw)",
+		"selection": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 15,
+			"away": 22
+		},
+		"result": {
+			"kind": "team_scoreline",
+			"version": 1,
+			"home": 20,
+			"away": 20
+		},
+		"expected_tier": "miss",
+		"expected_raw_points": 0,
+		"expected_normalized_basis_points": 0
+	}
+]

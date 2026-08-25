@@ -311,3 +311,323 @@ select
 from public.competitors c
 where c.sport_slug = 'football' and c.name = 'Chelsea FC'
 on conflict (provider_slug, entity_kind, external_key) do nothing;
+
+-- ============================================================================
+-- PHASE 12 SEEDS: Scoring Rulesets, Markets, Pools, Predictions & Settlement
+-- ============================================================================
+
+-- 10. Test Profiles (for deterministic pool and prediction seeding)
+insert into public.profiles (id, username, display_name, avatar_url)
+values
+  ('11111111-1111-1111-1111-111111111111', 'alice_predictor', 'Alice Walker', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alice'),
+  ('22222222-2222-2222-2222-222222222222', 'bob_tipster', 'Bob Turner', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Bob'),
+  ('33333333-3333-3333-3333-333333333333', 'carol_guru', 'Carol Davis', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Carol')
+on conflict (id) do update set
+  username = excluded.username,
+  display_name = excluded.display_name,
+  avatar_url = excluded.avatar_url;
+
+-- 11. Scoring Rulesets
+insert into public.scoring_rulesets (
+  sport_slug,
+  market_kind,
+  evaluator_key,
+  version,
+  max_raw_points,
+  evaluator_config,
+  ui_config,
+  is_active
+)
+values
+  (
+    'football',
+    'team_scoreline',
+    'football_scoreline_v1',
+    1,
+    3,
+    '{"kind": "team_scoreline", "version": 1}'::jsonb,
+    '{"score_unit": "goals", "limits": {"home": [0, 20], "away": [0, 20]}}'::jsonb,
+    true
+  ),
+  (
+    'rugby-union',
+    'team_scoreline',
+    'rugby_union_scoreline_v1',
+    1,
+    6,
+    '{"kind": "team_scoreline", "version": 1, "margin_close_threshold": 5}'::jsonb,
+    '{"score_unit": "points", "limits": {"home": [0, 100], "away": [0, 100]}}'::jsonb,
+    true
+  )
+on conflict (sport_slug, market_kind, version) do update set
+  evaluator_key = excluded.evaluator_key,
+  max_raw_points = excluded.max_raw_points,
+  evaluator_config = excluded.evaluator_config,
+  ui_config = excluded.ui_config,
+  is_active = excluded.is_active;
+
+-- 12. Scoring Rule Tiers
+-- Football Tiers
+insert into public.scoring_rule_tiers (ruleset_id, tier_code, raw_points, rank_order, label, description, example)
+select
+  r.id,
+  t.tier_code,
+  t.raw_points,
+  t.rank_order,
+  t.label,
+  t.description,
+  t.example
+from public.scoring_rulesets r
+cross join (
+  values
+    ('exact_score', 3, 1, 'Exact Score', 'Exact scoreline matched for both home and away teams', 'Predicted 2-1, actual 2-1'),
+    ('exact_margin', 2, 2, 'Outcome & Margin', 'Correct outcome and exact goal difference', 'Predicted 2-0 (+2), actual 3-1 (+2)'),
+    ('outcome', 1, 3, 'Outcome Only', 'Correct outcome (winner or draw) with different goal difference', 'Predicted 2-1 (+1), actual 4-0 (+4)'),
+    ('miss', 0, 4, 'Miss', 'Incorrect outcome', 'Predicted 2-1, actual 1-1')
+) as t(tier_code, raw_points, rank_order, label, description, example)
+where r.sport_slug = 'football' and r.version = 1
+on conflict (ruleset_id, tier_code) do update set
+  raw_points = excluded.raw_points,
+  rank_order = excluded.rank_order,
+  label = excluded.label,
+  description = excluded.description,
+  example = excluded.example;
+
+-- Rugby Union Tiers
+insert into public.scoring_rule_tiers (ruleset_id, tier_code, raw_points, rank_order, label, description, example)
+select
+  r.id,
+  t.tier_code,
+  t.raw_points,
+  t.rank_order,
+  t.label,
+  t.description,
+  t.example
+from public.scoring_rulesets r
+cross join (
+  values
+    ('exact_score', 6, 1, 'Exact Score', 'Exact points matched for both home and away teams', 'Predicted 27-22, actual 27-22'),
+    ('exact_margin', 4, 2, 'Outcome & Exact Margin', 'Correct outcome and exact signed margin', 'Predicted 30-20 (+10), actual 25-15 (+10)'),
+    ('close_margin', 3, 3, 'Outcome & Close Margin', 'Correct outcome with signed margin error <= 5 points', 'Predicted 24-17 (+7), actual 27-21 (+6)'),
+    ('outcome', 2, 4, 'Outcome Only', 'Correct outcome with signed margin error > 5 points', 'Predicted 40-10 (+30), actual 20-10 (+10)'),
+    ('miss', 0, 5, 'Miss', 'Incorrect outcome', 'Predicted 25-20, actual 15-22')
+) as t(tier_code, raw_points, rank_order, label, description, example)
+where r.sport_slug = 'rugby-union' and r.version = 1
+on conflict (ruleset_id, tier_code) do update set
+  raw_points = excluded.raw_points,
+  rank_order = excluded.rank_order,
+  label = excluded.label,
+  description = excluded.description,
+  example = excluded.example;
+
+-- 13. Event Markets
+-- Markets for Football Events
+insert into public.event_markets (
+  event_id,
+  market_kind,
+  payload_schema_version,
+  ruleset_id,
+  sequence_no,
+  is_current,
+  opens_at,
+  locks_at,
+  status
+)
+select
+  e.id,
+  'team_scoreline',
+  1,
+  r.id,
+  1,
+  true,
+  e.starts_at - interval '7 days',
+  e.starts_at,
+  'open'
+from public.events e
+join public.competition_editions ce on ce.id = e.edition_id
+join public.competitions c on c.id = ce.competition_id
+join public.scoring_rulesets r on r.sport_slug = c.sport_slug and r.market_kind = 'team_scoreline' and r.version = 1
+where c.sport_slug = 'football'
+on conflict (event_id, market_kind, sequence_no) do update set
+  ruleset_id = excluded.ruleset_id,
+  opens_at = excluded.opens_at,
+  locks_at = excluded.locks_at,
+  status = excluded.status;
+
+-- Markets for Rugby Events
+insert into public.event_markets (
+  event_id,
+  market_kind,
+  payload_schema_version,
+  ruleset_id,
+  sequence_no,
+  is_current,
+  opens_at,
+  locks_at,
+  status
+)
+select
+  e.id,
+  'team_scoreline',
+  1,
+  r.id,
+  1,
+  true,
+  e.starts_at - interval '7 days',
+  e.starts_at,
+  'open'
+from public.events e
+join public.competition_editions ce on ce.id = e.edition_id
+join public.competitions c on c.id = ce.competition_id
+join public.scoring_rulesets r on r.sport_slug = c.sport_slug and r.market_kind = 'team_scoreline' and r.version = 1
+where c.sport_slug = 'rugby-union'
+on conflict (event_id, market_kind, sequence_no) do update set
+  ruleset_id = excluded.ruleset_id,
+  opens_at = excluded.opens_at,
+  locks_at = excluded.locks_at,
+  status = excluded.status;
+
+-- 14. Scoped Pools
+insert into public.pools (
+  id,
+  name,
+  created_by,
+  invite_code,
+  scope_kind,
+  sport_slug,
+  competition_id,
+  edition_id,
+  scoring_mode,
+  scoring_starts_at,
+  is_private
+)
+values
+  -- 1. All sports global pool (mandatory normalized scoring)
+  (
+    'a0000000-0000-0000-0000-000000000001',
+    'Global Multi-Sport Championship',
+    '11111111-1111-1111-1111-111111111111',
+    'GLOBAL2026',
+    'all_sports',
+    null,
+    null,
+    null,
+    'normalized',
+    '2025-01-01 00:00:00Z',
+    false
+  ),
+  -- 2. Football Sport Scoped Pool (raw points)
+  (
+    'b0000000-0000-0000-0000-000000000002',
+    'Football Masterminds',
+    '11111111-1111-1111-1111-111111111111',
+    'FOOTY2026',
+    'sport',
+    'football',
+    null,
+    null,
+    'raw',
+    '2025-01-01 00:00:00Z',
+    false
+  ),
+  -- 3. Rugby Union Sport Scoped Pool (raw points)
+  (
+    'c0000000-0000-0000-0000-000000000003',
+    'Rugby Union Arena',
+    '22222222-2222-2222-2222-222222222222',
+    'RUGBY2026',
+    'sport',
+    'rugby-union',
+    null,
+    null,
+    'raw',
+    '2025-01-01 00:00:00Z',
+    false
+  ),
+  -- 4. Premier League Competition Scoped Pool
+  (
+    'd0000000-0000-0000-0000-000000000004',
+    'Premier League Elite',
+    '11111111-1111-1111-1111-111111111111',
+    'EPL2026',
+    'competition',
+    null,
+    (select id from public.competitions where sport_slug = 'football' and slug = 'premier-league'),
+    null,
+    'raw',
+    '2025-01-01 00:00:00Z',
+    true
+  ),
+  -- 5. Six Nations Edition Scoped Pool
+  (
+    'e0000000-0000-0000-0000-000000000005',
+    'Six Nations 2026 Showdown',
+    '22222222-2222-2222-2222-222222222222',
+    'SIXN2026',
+    'edition',
+    null,
+    null,
+    (select ce.id from public.competition_editions ce join public.competitions c on c.id = ce.competition_id where c.slug = 'six-nations' and ce.season_key = '2026'),
+    'raw',
+    '2025-01-01 00:00:00Z',
+    true
+  )
+on conflict (id) do update set
+  name = excluded.name,
+  invite_code = excluded.invite_code,
+  scope_kind = excluded.scope_kind,
+  sport_slug = excluded.sport_slug,
+  competition_id = excluded.competition_id,
+  edition_id = excluded.edition_id,
+  scoring_mode = excluded.scoring_mode;
+
+-- 15. Pool Memberships
+insert into public.pool_members (pool_id, user_id, role, joined_at, left_at)
+values
+  -- Global Pool Members (Alice admin, Bob & Carol members)
+  ('a0000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'admin', '2025-01-01 00:00:00Z', null),
+  ('a0000000-0000-0000-0000-000000000001', '22222222-2222-2222-2222-222222222222', 'member', '2025-01-02 00:00:00Z', null),
+  ('a0000000-0000-0000-0000-000000000001', '33333333-3333-3333-3333-333333333333', 'member', '2025-01-03 00:00:00Z', null),
+
+  -- Football Pool Members
+  ('b0000000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'admin', '2025-01-01 00:00:00Z', null),
+  ('b0000000-0000-0000-0000-000000000002', '22222222-2222-2222-2222-222222222222', 'member', '2025-01-02 00:00:00Z', null),
+
+  -- Rugby Pool Members
+  ('c0000000-0000-0000-0000-000000000003', '22222222-2222-2222-2222-222222222222', 'admin', '2025-01-01 00:00:00Z', null),
+  ('c0000000-0000-0000-0000-000000000003', '33333333-3333-3333-3333-333333333333', 'member', '2025-01-02 00:00:00Z', null),
+
+  -- EPL Pool Members
+  ('d0000000-0000-0000-0000-000000000004', '11111111-1111-1111-1111-111111111111', 'admin', '2025-01-01 00:00:00Z', null),
+  ('d0000000-0000-0000-0000-000000000004', '22222222-2222-2222-2222-222222222222', 'member', '2025-01-02 00:00:00Z', null),
+
+  -- Six Nations Pool Members
+  ('e0000000-0000-0000-0000-000000000005', '22222222-2222-2222-2222-222222222222', 'admin', '2025-01-01 00:00:00Z', null),
+  ('e0000000-0000-0000-0000-000000000005', '33333333-3333-3333-3333-333333333333', 'member', '2025-01-02 00:00:00Z', null)
+on conflict do nothing;
+
+-- 16. Sample Predictions
+-- Match 1 (Arsenal vs Chelsea) predictions
+insert into public.predictions (
+  user_id,
+  event_market_id,
+  selection,
+  settlement_status
+)
+select
+  p.user_id,
+  em.id,
+  p.selection,
+  'pending'
+from public.event_markets em
+join public.events e on e.id = em.event_id
+join public.competition_editions ce on ce.id = e.edition_id
+join public.competitions c on c.id = ce.competition_id
+cross join (
+  values
+    ('11111111-1111-1111-1111-111111111111'::uuid, '{"kind": "team_scoreline", "version": 1, "home": 2, "away": 1}'::jsonb),
+    ('22222222-2222-2222-2222-222222222222'::uuid, '{"kind": "team_scoreline", "version": 1, "home": 3, "away": 1}'::jsonb),
+    ('33333333-3333-3333-3333-333333333333'::uuid, '{"kind": "team_scoreline", "version": 1, "home": 1, "away": 1}'::jsonb)
+) as p(user_id, selection)
+where c.slug = 'premier-league' and e.sequence_number = 1
+on conflict (user_id, event_market_id) do nothing;
