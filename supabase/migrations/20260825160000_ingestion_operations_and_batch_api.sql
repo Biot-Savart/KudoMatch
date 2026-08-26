@@ -42,10 +42,10 @@ create table if not exists public.ingestion_runs (
   updated_at timestamptz not null default now()
 );
 
-create index idx_ingestion_runs_provider on public.ingestion_runs (provider_slug, started_at desc);
-create index idx_ingestion_runs_sport_edition on public.ingestion_runs (sport_slug, edition_id);
-create index idx_ingestion_runs_status on public.ingestion_runs (status);
-create index idx_ingestion_runs_correlation on public.ingestion_runs (correlation_id) where correlation_id is not null;
+create index if not exists idx_ingestion_runs_provider on public.ingestion_runs (provider_slug, started_at desc);
+create index if not exists idx_ingestion_runs_sport_edition on public.ingestion_runs (sport_slug, edition_id);
+create index if not exists idx_ingestion_runs_status on public.ingestion_runs (status);
+create index if not exists idx_ingestion_runs_correlation on public.ingestion_runs (correlation_id) where correlation_id is not null;
 
 create trigger set_ingestion_runs_updated_at
   before update on public.ingestion_runs
@@ -62,7 +62,7 @@ create table if not exists public.ingestion_run_leases (
   updated_at timestamptz not null default now()
 );
 
-create index idx_ingestion_run_leases_expiry on public.ingestion_run_leases (expires_at);
+create index if not exists idx_ingestion_run_leases_expiry on public.ingestion_run_leases (expires_at);
 
 create trigger set_ingestion_run_leases_updated_at
   before update on public.ingestion_run_leases
@@ -155,7 +155,7 @@ $$;
 
 
 -- ============================================================================
--- 4. Transactional Batch RPC: private.apply_canonical_ingestion_batch
+-- 4. Transactional Batch Execution in private schema
 -- ============================================================================
 
 create or replace function private.apply_canonical_ingestion_batch(
@@ -169,31 +169,50 @@ as $$
 declare
   v_provider_slug text;
   v_sport_slug text;
+  v_competitions jsonb;
+  v_editions jsonb;
   v_competitors jsonb;
   v_events jsonb;
+
   v_comp_elem jsonb;
+  v_ed_elem jsonb;
+  v_comp_entity_elem jsonb;
   v_event_elem jsonb;
   v_part_elem jsonb;
   v_market_elem jsonb;
   v_res_elem jsonb;
-  
+  v_res_payload jsonb;
+
+  v_competition_id bigint;
+  v_edition_id bigint;
   v_competitor_id bigint;
   v_event_id bigint;
   v_market_id bigint;
+  v_ruleset_id bigint;
+
   v_inserted_competitors integer := 0;
   v_updated_competitors integer := 0;
   v_inserted_events integer := 0;
   v_updated_events integer := 0;
   v_unchanged_events integer := 0;
   v_settled_results integer := 0;
-  
+
   v_existing_event record;
-  v_existing_ref record;
   v_target_edition_id bigint;
-  v_new_home_score integer;
-  v_new_away_score integer;
-  v_curr_home_score integer;
-  v_curr_away_score integer;
+
+  v_raw_status text;
+  v_event_status text;
+  v_starts_at timestamptz;
+  v_round_label text;
+  v_venue_name text;
+
+  v_market_locks_at timestamptz;
+  v_market_opens_at timestamptz;
+
+  v_result_status text;
+  v_score_home text;
+  v_score_away text;
+  v_clean_result jsonb;
 begin
   if p_batch is null then
     raise exception 'Batch payload cannot be null';
@@ -201,6 +220,8 @@ begin
 
   v_provider_slug := p_batch->>'provider_slug';
   v_sport_slug := p_batch->>'sport_slug';
+  v_competitions := coalesce(p_batch->'competitions', '[]'::jsonb);
+  v_editions := coalesce(p_batch->'editions', '[]'::jsonb);
   v_competitors := coalesce(p_batch->'competitors', '[]'::jsonb);
   v_events := coalesce(p_batch->'events', '[]'::jsonb);
 
@@ -208,18 +229,137 @@ begin
     raise exception 'provider_slug and sport_slug are required in batch payload';
   end if;
 
-  -- 1. Upsert Competitors & External Entity Refs
-  for v_comp_elem in select * from jsonb_array_elements(v_competitors)
+  -- 1. Ensure Competitions (if provided)
+  for v_comp_elem in select * from jsonb_array_elements(v_competitions)
   loop
-    -- Check if external reference exists
-    select target_id into v_competitor_id
+    v_competition_id := null;
+    select competition_id into v_competition_id
+    from public.external_entity_refs
+    where provider_slug = v_provider_slug
+      and entity_kind = 'competition'
+      and external_key = (v_comp_elem->>'external_key');
+
+    if v_competition_id is null then
+      insert into public.competitions (
+        sport_slug,
+        slug,
+        name,
+        kind,
+        country,
+        logo_url,
+        is_active
+      )
+      values (
+        v_sport_slug,
+        v_comp_elem->>'slug',
+        v_comp_elem->>'name',
+        coalesce(v_comp_elem->>'kind', 'league'),
+        v_comp_elem->>'country',
+        v_comp_elem->>'logo_url',
+        coalesce((v_comp_elem->>'is_active')::boolean, true)
+      )
+      on conflict (sport_slug, slug) do update set
+        name = excluded.name,
+        country = coalesce(excluded.country, public.competitions.country),
+        logo_url = coalesce(excluded.logo_url, public.competitions.logo_url),
+        updated_at = clock_timestamp()
+      returning id into v_competition_id;
+
+      insert into public.external_entity_refs (
+        provider_slug,
+        entity_kind,
+        external_key,
+        competition_id,
+        is_primary
+      )
+      values (
+        v_provider_slug,
+        'competition',
+        v_comp_elem->>'external_key',
+        v_competition_id,
+        true
+      )
+      on conflict (provider_slug, entity_kind, external_key) do update
+      set competition_id = excluded.competition_id;
+    end if;
+  end loop;
+
+  -- 2. Ensure Editions (if provided)
+  for v_ed_elem in select * from jsonb_array_elements(v_editions)
+  loop
+    v_edition_id := null;
+    select edition_id into v_edition_id
+    from public.external_entity_refs
+    where provider_slug = v_provider_slug
+      and entity_kind = 'edition'
+      and external_key = (v_ed_elem->>'external_key');
+
+    if v_edition_id is null then
+      v_competition_id := (v_ed_elem->>'competition_id')::bigint;
+      if v_competition_id is null and v_ed_elem ? 'competition_external_key' then
+        select competition_id into v_competition_id
+        from public.external_entity_refs
+        where provider_slug = v_provider_slug
+          and entity_kind = 'competition'
+          and external_key = (v_ed_elem->>'competition_external_key');
+      end if;
+
+      if v_competition_id is not null then
+        insert into public.competition_editions (
+          competition_id,
+          season_key,
+          name,
+          starts_at,
+          ends_at,
+          status,
+          metadata
+        )
+        values (
+          v_competition_id,
+          v_ed_elem->>'season_key',
+          v_ed_elem->>'name',
+          coalesce((v_ed_elem->>'starts_at')::timestamptz, now()),
+          coalesce((v_ed_elem->>'ends_at')::timestamptz, now() + interval '1 year'),
+          coalesce(v_ed_elem->>'status', 'active'),
+          coalesce(v_ed_elem->'metadata', '{}'::jsonb)
+        )
+        on conflict (competition_id, season_key) do update set
+          name = excluded.name,
+          status = excluded.status,
+          updated_at = clock_timestamp()
+        returning id into v_edition_id;
+
+        insert into public.external_entity_refs (
+          provider_slug,
+          entity_kind,
+          external_key,
+          edition_id,
+          is_primary
+        )
+        values (
+          v_provider_slug,
+          'edition',
+          v_ed_elem->>'external_key',
+          v_edition_id,
+          true
+        )
+        on conflict (provider_slug, entity_kind, external_key) do update
+        set edition_id = excluded.edition_id;
+      end if;
+    end if;
+  end loop;
+
+  -- 3. Upsert Competitors & External Entity Refs
+  for v_comp_entity_elem in select * from jsonb_array_elements(v_competitors)
+  loop
+    v_competitor_id := null;
+    select competitor_id into v_competitor_id
     from public.external_entity_refs
     where provider_slug = v_provider_slug
       and entity_kind = 'competitor'
-      and external_key = (v_comp_elem->>'external_key');
+      and external_key = (v_comp_entity_elem->>'external_key');
 
     if v_competitor_id is null then
-      -- Insert competitor
       insert into public.competitors (
         sport_slug,
         kind,
@@ -231,16 +371,15 @@ begin
       )
       values (
         v_sport_slug,
-        coalesce(v_comp_elem->>'kind', 'team'),
-        v_comp_elem->>'name',
-        v_comp_elem->>'short_name',
-        v_comp_elem->>'media_url',
-        v_comp_elem->>'country_code',
-        coalesce((v_comp_elem->>'is_active')::boolean, true)
+        coalesce(v_comp_entity_elem->>'kind', 'team'),
+        v_comp_entity_elem->>'name',
+        v_comp_entity_elem->>'short_name',
+        v_comp_entity_elem->>'media_url',
+        v_comp_entity_elem->>'country_code',
+        coalesce((v_comp_entity_elem->>'is_active')::boolean, true)
       )
       returning id into v_competitor_id;
 
-      -- Insert external reference
       insert into public.external_entity_refs (
         provider_slug,
         entity_kind,
@@ -251,7 +390,7 @@ begin
       values (
         v_provider_slug,
         'competitor',
-        v_comp_elem->>'external_key',
+        v_comp_entity_elem->>'external_key',
         v_competitor_id,
         true
       )
@@ -260,12 +399,11 @@ begin
 
       v_inserted_competitors := v_inserted_competitors + 1;
     else
-      -- Update competitor details if provided
       update public.competitors
-      set name = coalesce(v_comp_elem->>'name', name),
-          short_name = coalesce(v_comp_elem->>'short_name', short_name),
-          media_url = coalesce(v_comp_elem->>'media_url', media_url),
-          country_code = coalesce(v_comp_elem->>'country_code', country_code),
+      set name = coalesce(v_comp_entity_elem->>'name', name),
+          short_name = coalesce(v_comp_entity_elem->>'short_name', short_name),
+          media_url = coalesce(v_comp_entity_elem->>'media_url', media_url),
+          country_code = coalesce(v_comp_entity_elem->>'country_code', country_code),
           updated_at = clock_timestamp()
       where id = v_competitor_id;
 
@@ -273,48 +411,81 @@ begin
     end if;
 
     -- Link to edition if edition_id is passed
-    if v_comp_elem ? 'edition_id' and (v_comp_elem->>'edition_id') is not null then
-      v_target_edition_id := (v_comp_elem->>'edition_id')::bigint;
+    if v_comp_entity_elem ? 'edition_id' and (v_comp_entity_elem->>'edition_id') is not null then
+      v_target_edition_id := (v_comp_entity_elem->>'edition_id')::bigint;
       insert into public.edition_competitors (edition_id, competitor_id)
       values (v_target_edition_id, v_competitor_id)
       on conflict (edition_id, competitor_id) do nothing;
     end if;
   end loop;
 
-  -- 2. Upsert Events, Participants, Markets, and Results
+  -- 4. Upsert Events, Participants, Markets, and Settle Results
   for v_event_elem in select * from jsonb_array_elements(v_events)
   loop
     v_event_id := null;
     v_target_edition_id := (v_event_elem->>'edition_id')::bigint;
 
+    if v_target_edition_id is null and v_event_elem ? 'edition_external_key' then
+      select edition_id into v_target_edition_id
+      from public.external_entity_refs
+      where provider_slug = v_provider_slug
+        and entity_kind = 'edition'
+        and external_key = (v_event_elem->>'edition_external_key');
+    end if;
+
+    if v_target_edition_id is null then
+      raise exception 'Cannot ingest event %: edition_id cannot be resolved', v_event_elem->>'external_key';
+    end if;
+
     -- Resolve canonical event by external key
-    select target_id into v_event_id
+    select event_id into v_event_id
     from public.external_entity_refs
     where provider_slug = v_provider_slug
       and entity_kind = 'event'
       and external_key = (v_event_elem->>'external_key');
 
+    -- Map canonical provider status to database events status
+    v_raw_status := coalesce(v_event_elem->>'status', 'scheduled');
+    case v_raw_status
+      when 'finished' then v_event_status := 'completed';
+      when 'in_progress' then v_event_status := 'live';
+      when 'completed' then v_event_status := 'completed';
+      when 'live' then v_event_status := 'live';
+      when 'postponed' then v_event_status := 'postponed';
+      when 'cancelled' then v_event_status := 'cancelled';
+      when 'abandoned' then v_event_status := 'abandoned';
+      else v_event_status := 'scheduled';
+    end case;
+
+    v_starts_at := coalesce(
+      (v_event_elem->>'starts_at')::timestamptz,
+      (v_event_elem->>'scheduled_start_time')::timestamptz
+    );
+
+    v_round_label := coalesce(v_event_elem->>'round_label', v_event_elem->>'round_name');
+    v_venue_name := coalesce(v_event_elem->>'venue_name', v_event_elem->>'venue');
+
     if v_event_id is null then
-      -- Insert event
       insert into public.events (
         edition_id,
-        round_name,
-        scheduled_start_time,
+        kind,
+        starts_at,
         status,
-        venue,
+        round_label,
+        venue_name,
         metadata
       )
       values (
         v_target_edition_id,
-        v_event_elem->>'round_name',
-        (v_event_elem->>'scheduled_start_time')::timestamptz,
-        coalesce(v_event_elem->>'status', 'scheduled'),
-        v_event_elem->>'venue',
+        coalesce(v_event_elem->>'kind', 'match'),
+        v_starts_at,
+        v_event_status,
+        v_round_label,
+        v_venue_name,
         coalesce(v_event_elem->'metadata', '{}'::jsonb)
       )
       returning id into v_event_id;
 
-      -- Insert external ref
       insert into public.external_entity_refs (
         provider_slug,
         entity_kind,
@@ -334,42 +505,38 @@ begin
 
       v_inserted_events := v_inserted_events + 1;
     else
-      -- Read existing event to detect real mutations
       select * into v_existing_event
       from public.events
       where id = v_event_id;
 
-      -- Check status transition validity: never regress finished/completed to live/scheduled from lower authority
-      if v_existing_event.status = 'finished' and (v_event_elem->>'status') in ('scheduled', 'live') then
-        -- Skip status regression
-        null;
-      else
-        update public.events
-        set scheduled_start_time = coalesce((v_event_elem->>'scheduled_start_time')::timestamptz, scheduled_start_time),
-            status = coalesce(v_event_elem->>'status', status),
-            round_name = coalesce(v_event_elem->>'round_name', round_name),
-            venue = coalesce(v_event_elem->>'venue', venue),
-            metadata = coalesce(v_event_elem->'metadata', metadata),
-            updated_at = clock_timestamp()
-        where id = v_event_id;
+      -- Check status transition validity: never regress completed to live/scheduled
+      if v_existing_event.status = 'completed' and v_event_status in ('scheduled', 'live') then
+        v_event_status := v_existing_event.status;
+      end if;
 
-        if v_existing_event.status != coalesce(v_event_elem->>'status', v_existing_event.status) or
-           v_existing_event.scheduled_start_time != coalesce((v_event_elem->>'scheduled_start_time')::timestamptz, v_existing_event.scheduled_start_time) then
-          v_updated_events := v_updated_events + 1;
-        else
-          v_unchanged_events := v_unchanged_events + 1;
-        end if;
+      update public.events
+      set starts_at = coalesce(v_starts_at, starts_at),
+          status = v_event_status,
+          round_label = coalesce(v_round_label, round_label),
+          venue_name = coalesce(v_venue_name, venue_name),
+          metadata = coalesce(v_event_elem->'metadata', metadata),
+          updated_at = clock_timestamp()
+      where id = v_event_id;
+
+      if v_existing_event.status != v_event_status or v_existing_event.starts_at != coalesce(v_starts_at, v_existing_event.starts_at) then
+        v_updated_events := v_updated_events + 1;
+      else
+        v_unchanged_events := v_unchanged_events + 1;
       end if;
     end if;
 
-    -- Upsert Event Participants / Competitors (Home / Away)
+    -- Upsert Event Participants / Competitors
     if v_event_elem ? 'participants' then
       for v_part_elem in select * from jsonb_array_elements(v_event_elem->'participants')
       loop
-        -- Resolve competitor id from external key if provided
         v_competitor_id := (v_part_elem->>'competitor_id')::bigint;
         if v_competitor_id is null and v_part_elem ? 'competitor_external_key' then
-          select target_id into v_competitor_id
+          select competitor_id into v_competitor_id
           from public.external_entity_refs
           where provider_slug = v_provider_slug
             and entity_kind = 'competitor'
@@ -377,83 +544,125 @@ begin
         end if;
 
         if v_competitor_id is not null then
+          -- Link competitor to the edition if not linked
+          insert into public.edition_competitors (edition_id, competitor_id)
+          values (v_target_edition_id, v_competitor_id)
+          on conflict (edition_id, competitor_id) do nothing;
+
           insert into public.event_competitors (
             event_id,
             competitor_id,
-            role,
-            slot_number
+            slot,
+            role
           )
           values (
             v_event_id,
             v_competitor_id,
-            coalesce(v_part_elem->>'role', 'home'),
-            coalesce((v_part_elem->>'slot_number')::integer, 1)
+            coalesce((v_part_elem->>'slot')::smallint, (v_part_elem->>'slot_number')::smallint, 1::smallint),
+            coalesce(v_part_elem->>'role', 'home')
           )
           on conflict (event_id, competitor_id) do update
-          set role = excluded.role,
-              slot_number = excluded.slot_number;
+          set slot = excluded.slot,
+              role = excluded.role;
         end if;
       end loop;
     end if;
 
-    -- Upsert Market and Result if provided
+    -- Upsert Market and Route Results through settlement engine
     if v_event_elem ? 'market' then
       v_market_elem := v_event_elem->'market';
-      
-      insert into public.event_prediction_markets (
-        event_id,
-        ruleset_id,
-        market_key,
-        status,
-        lock_at,
-        market_schema_version
-      )
-      values (
-        v_event_id,
-        (v_market_elem->>'ruleset_id')::bigint,
-        coalesce(v_market_elem->>'market_key', 'team_scoreline'),
-        coalesce(v_market_elem->>'status', 'open'),
-        coalesce((v_market_elem->>'lock_at')::timestamptz, (v_event_elem->>'scheduled_start_time')::timestamptz),
-        coalesce((v_market_elem->>'market_schema_version')::integer, 1)
-      )
-      on conflict (event_id, market_key) do update
-      set status = case
-            when public.event_prediction_markets.status in ('settled', 'void') and excluded.status in ('open', 'locked') then public.event_prediction_markets.status
-            else excluded.status
-          end,
-          lock_at = excluded.lock_at
-      returning id into v_market_id;
+      v_ruleset_id := (v_market_elem->>'ruleset_id')::bigint;
 
-      -- Handle Market Result if result payload is present
-      if v_event_elem ? 'result' and v_market_id is not null then
-        v_res_elem := v_event_elem->'result';
-        
-        insert into public.market_results (
-          market_id,
-          status,
-          result_payload,
-          verified_at,
-          revision_number,
-          payload_schema_version
+      v_market_locks_at := coalesce(
+        (v_market_elem->>'locks_at')::timestamptz,
+        (v_market_elem->>'lock_at')::timestamptz,
+        v_starts_at
+      );
+
+      if v_market_locks_at > v_starts_at then
+        v_market_locks_at := v_starts_at;
+      end if;
+
+      v_market_opens_at := coalesce((v_market_elem->>'opens_at')::timestamptz, v_market_locks_at - interval '14 days');
+      if v_market_opens_at >= v_market_locks_at then
+        v_market_opens_at := v_market_locks_at - interval '1 hour';
+      end if;
+
+      select id into v_market_id
+      from public.event_markets
+      where event_id = v_event_id
+        and market_kind = coalesce(v_market_elem->>'market_kind', v_market_elem->>'market_key', 'team_scoreline')
+        and is_current = true;
+
+      if v_market_id is null then
+        insert into public.event_markets (
+          event_id,
+          market_kind,
+          payload_schema_version,
+          ruleset_id,
+          sequence_no,
+          is_current,
+          opens_at,
+          locks_at,
+          status
         )
         values (
-          v_market_id,
-          coalesce(v_res_elem->>'status', 'final'),
-          coalesce(v_res_elem->'result_payload', '{}'::jsonb),
-          case when coalesce(v_res_elem->>'status', 'final') = 'final' then clock_timestamp() else null end,
-          coalesce((v_res_elem->>'revision_number')::integer, 1),
-          coalesce((v_res_elem->>'payload_schema_version')::integer, 1)
+          v_event_id,
+          coalesce(v_market_elem->>'market_kind', v_market_elem->>'market_key', 'team_scoreline'),
+          coalesce((v_market_elem->>'market_schema_version')::integer, (v_market_elem->>'payload_schema_version')::integer, 1),
+          v_ruleset_id,
+          1,
+          true,
+          v_market_opens_at,
+          v_market_locks_at,
+          coalesce(v_market_elem->>'status', 'open')
         )
-        on conflict (market_id) do update
-        set status = excluded.status,
-            result_payload = excluded.result_payload,
-            verified_at = excluded.verified_at,
-            revision_number = public.market_results.revision_number + 1,
-            payload_schema_version = excluded.payload_schema_version,
-            updated_at = clock_timestamp();
+        returning id into v_market_id;
+      else
+        update public.event_markets
+        set locks_at = v_market_locks_at,
+            status = case
+              when public.event_markets.status in ('settled', 'void') then public.event_markets.status
+              else coalesce(v_market_elem->>'status', public.event_markets.status)
+            end,
+            updated_at = clock_timestamp()
+        where id = v_market_id;
+      end if;
 
-        if (v_res_elem->>'status') = 'final' then
-          v_settled_results := v_settled_results + 1;
+      -- Handle Result settlement via private.settle_market_result
+      if v_event_elem ? 'result' and v_market_id is not null then
+        v_res_elem := v_event_elem->'result';
+        v_result_status := coalesce(v_res_elem->>'status', 'provisional');
+
+        if v_res_elem ? 'result_payload' then
+          v_res_payload := v_res_elem->'result_payload';
+          v_score_home := coalesce(v_res_payload->>'homeScore', v_res_payload->>'home');
+          v_score_away := coalesce(v_res_payload->>'awayScore', v_res_payload->>'away');
+        else
+          v_score_home := coalesce(v_res_elem->>'home', v_res_elem->>'homeScore');
+          v_score_away := coalesce(v_res_elem->>'away', v_res_elem->>'awayScore');
+        end if;
+
+        if v_score_home is not null and v_score_away is not null then
+          v_clean_result := jsonb_build_object(
+            'away', v_score_away::text,
+            'home', v_score_home::text,
+            'kind', 'team_scoreline',
+            'version', 1
+          );
+
+          perform private.settle_market_result(
+            v_market_id,
+            v_clean_result,
+            v_result_status,
+            'provider',
+            v_provider_slug || ':' || (v_event_elem->>'external_key'),
+            100
+          );
+
+          if v_result_status = 'final' then
+            v_settled_results := v_settled_results + 1;
+          end if;
         end if;
       end if;
     end if;
@@ -475,21 +684,81 @@ $$;
 
 
 -- ============================================================================
--- 5. Row Level Security & Explicit Security Grants
+-- 5. Public Schema RPC Wrappers (Exposed to REST for service_role)
+-- ============================================================================
+
+create or replace function public.acquire_ingestion_lease(
+  p_lease_key text,
+  p_holder_id text,
+  p_ttl_seconds integer default 300
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.role() <> 'service_role' and current_user not in ('postgres', 'service_role', 'supabase_admin') then
+    raise exception 'Access denied: service_role required' using errcode = '42501';
+  end if;
+  return private.acquire_ingestion_lease(p_lease_key, p_holder_id, p_ttl_seconds);
+end;
+$$;
+
+create or replace function public.release_ingestion_lease(
+  p_lease_key text,
+  p_holder_id text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.role() <> 'service_role' and current_user not in ('postgres', 'service_role', 'supabase_admin') then
+    raise exception 'Access denied: service_role required' using errcode = '42501';
+  end if;
+  return private.release_ingestion_lease(p_lease_key, p_holder_id);
+end;
+$$;
+
+create or replace function public.apply_canonical_ingestion_batch(
+  p_batch jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.role() <> 'service_role' and current_user not in ('postgres', 'service_role', 'supabase_admin') then
+    raise exception 'Access denied: service_role required' using errcode = '42501';
+  end if;
+  return private.apply_canonical_ingestion_batch(p_batch);
+end;
+$$;
+
+
+-- ============================================================================
+-- 6. Row Level Security & Explicit Security Grants
 -- ============================================================================
 
 -- RLS
 alter table public.ingestion_runs enable row level security;
 alter table public.ingestion_run_leases enable row level security;
 
--- Revoke all public / client access
+-- Revoke all public / client access on tables
 revoke all on table public.ingestion_runs from public, anon, authenticated;
 revoke all on table public.ingestion_run_leases from public, anon, authenticated;
 
--- Revoke RPC execution from public, anon, authenticated
+-- Revoke function execution from public, anon, authenticated
 revoke execute on function private.acquire_ingestion_lease from public, anon, authenticated;
 revoke execute on function private.release_ingestion_lease from public, anon, authenticated;
 revoke execute on function private.apply_canonical_ingestion_batch from public, anon, authenticated;
+
+revoke execute on function public.acquire_ingestion_lease(text, text, integer) from public, anon, authenticated;
+revoke execute on function public.release_ingestion_lease(text, text) from public, anon, authenticated;
+revoke execute on function public.apply_canonical_ingestion_batch(jsonb) from public, anon, authenticated;
 
 -- Grant service_role and postgres full access to ingestion tables & RPCs
 grant all on table public.ingestion_runs to service_role, postgres;
@@ -498,3 +767,7 @@ grant all on table public.ingestion_run_leases to service_role, postgres;
 grant execute on function private.acquire_ingestion_lease to service_role, postgres;
 grant execute on function private.release_ingestion_lease to service_role, postgres;
 grant execute on function private.apply_canonical_ingestion_batch to service_role, postgres;
+
+grant execute on function public.acquire_ingestion_lease(text, text, integer) to service_role, postgres;
+grant execute on function public.release_ingestion_lease(text, text) to service_role, postgres;
+grant execute on function public.apply_canonical_ingestion_batch(jsonb) to service_role, postgres;

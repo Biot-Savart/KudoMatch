@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { SportProviderAdapter } from './adapter';
 
 export interface CanonicalResolutionContext {
 	providerSlug: string;
@@ -24,7 +25,7 @@ export async function resolveExternalRef(
 ): Promise<number | null> {
 	const { data, error } = await supabase
 		.from('external_entity_refs')
-		.select('competition_id, edition_id, competitor_id, event_id, target_id')
+		.select('competition_id, edition_id, competitor_id, event_id')
 		.eq('provider_slug', providerSlug)
 		.eq('entity_kind', entityKind)
 		.eq('external_key', String(externalKey))
@@ -40,8 +41,6 @@ export async function resolveExternalRef(
 
 	if (!data) return null;
 
-	if (data.target_id) return Number(data.target_id);
-
 	switch (entityKind) {
 		case 'competition':
 			return data.competition_id ? Number(data.competition_id) : null;
@@ -54,6 +53,252 @@ export async function resolveExternalRef(
 		default:
 			return null;
 	}
+}
+
+/**
+ * Ensures the competition exists in public.competitions and has an external entity reference
+ */
+export async function ensureCanonicalCompetition(
+	supabase: SupabaseClient,
+	adapter: SportProviderAdapter,
+	competitionExternalKey?: string,
+): Promise<number> {
+	// 1. Try resolving existing external ref
+	if (competitionExternalKey) {
+		const existingId = await resolveExternalRef(
+			supabase,
+			adapter.providerSlug,
+			'competition',
+			competitionExternalKey,
+		);
+		if (existingId) return existingId;
+	}
+
+	// 2. Fetch competition definition from adapter
+	const competitions = await adapter.fetchCompetitions();
+	const compDto = competitionExternalKey
+		? competitions.find((c) => c.externalKey === competitionExternalKey) ||
+			competitions[0]
+		: competitions[0];
+
+	if (!compDto) {
+		throw new Error(
+			`Unable to find competition from adapter '${adapter.providerSlug}' for key '${competitionExternalKey || 'default'}'`,
+		);
+	}
+
+	// 3. Check if competition already exists by (sport_slug, slug)
+	let canonicalCompId: number | null = null;
+	const { data: existingComp } = await supabase
+		.from('competitions')
+		.select('id')
+		.eq('sport_slug', compDto.sportSlug)
+		.eq('slug', compDto.slug)
+		.maybeSingle();
+
+	if (existingComp?.id) {
+		canonicalCompId = Number(existingComp.id);
+	} else {
+		// Insert competition
+		const { data: insertedComp, error: compErr } = await supabase
+			.from('competitions')
+			.insert({
+				sport_slug: compDto.sportSlug,
+				slug: compDto.slug,
+				name: compDto.name,
+				kind: compDto.kind || 'league',
+				country: compDto.country,
+				logo_url: compDto.logoUrl,
+				is_active: compDto.isActive ?? true,
+			})
+			.select('id')
+			.single();
+
+		if (compErr || !insertedComp) {
+			throw new Error(
+				`Failed to insert competition '${compDto.name}': ${compErr?.message}`,
+			);
+		}
+		canonicalCompId = Number(insertedComp.id);
+	}
+
+	// 4. Upsert external entity reference
+	await supabase.from('external_entity_refs').upsert(
+		{
+			provider_slug: adapter.providerSlug,
+			entity_kind: 'competition',
+			external_key: compDto.externalKey,
+			competition_id: canonicalCompId,
+			is_primary: true,
+		},
+		{ onConflict: 'provider_slug,entity_kind,external_key' },
+	);
+
+	return canonicalCompId;
+}
+
+/**
+ * Ensures the edition exists in public.competition_editions and has an external entity reference
+ */
+export async function ensureCanonicalEdition(
+	supabase: SupabaseClient,
+	adapter: SportProviderAdapter,
+	competitionId: number,
+	editionExternalKey: string,
+	competitionExternalKey?: string,
+	seasonKey?: string,
+): Promise<number> {
+	// 1. Try resolving existing external ref
+	const existingId = await resolveExternalRef(
+		supabase,
+		adapter.providerSlug,
+		'edition',
+		editionExternalKey,
+	);
+	if (existingId) return existingId;
+
+	// 2. Fetch edition definition from adapter
+	const editions = await adapter.fetchEditions(
+		competitionExternalKey || String(competitionId),
+	);
+	const edDto =
+		editions.find((e) => e.externalKey === editionExternalKey) ||
+		(seasonKey ? editions.find((e) => e.seasonKey === seasonKey) : null) ||
+		editions[0];
+
+	if (!edDto) {
+		throw new Error(
+			`Unable to find edition from adapter '${adapter.providerSlug}' for key '${editionExternalKey}'`,
+		);
+	}
+
+	// 3. Check if edition already exists by (competition_id, season_key)
+	let canonicalEditionId: number | null = null;
+	const { data: existingEd } = await supabase
+		.from('competition_editions')
+		.select('id')
+		.eq('competition_id', competitionId)
+		.eq('season_key', edDto.seasonKey)
+		.maybeSingle();
+
+	if (existingEd?.id) {
+		canonicalEditionId = Number(existingEd.id);
+	} else {
+		// Insert edition
+		const { data: insertedEd, error: edErr } = await supabase
+			.from('competition_editions')
+			.insert({
+				competition_id: competitionId,
+				season_key: edDto.seasonKey,
+				name: edDto.name,
+				starts_at: edDto.startsAt || new Date().toISOString(),
+				ends_at:
+					edDto.endsAt ||
+					new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
+				status:
+					edDto.status === 'archived' ? 'completed' : edDto.status || 'active',
+				metadata: edDto.metadata || {},
+			})
+			.select('id')
+			.single();
+
+		if (edErr || !insertedEd) {
+			throw new Error(
+				`Failed to insert competition edition '${edDto.name}': ${edErr?.message}`,
+			);
+		}
+		canonicalEditionId = Number(insertedEd.id);
+	}
+
+	// 4. Upsert external entity reference
+	await supabase.from('external_entity_refs').upsert(
+		{
+			provider_slug: adapter.providerSlug,
+			entity_kind: 'edition',
+			external_key: editionExternalKey,
+			edition_id: canonicalEditionId,
+			is_primary: true,
+		},
+		{ onConflict: 'provider_slug,entity_kind,external_key' },
+	);
+
+	return canonicalEditionId;
+}
+
+/**
+ * Ensures competitors for an edition exist in public.competitors and are linked to edition_competitors
+ */
+export async function ensureCanonicalCompetitors(
+	supabase: SupabaseClient,
+	adapter: SportProviderAdapter,
+	editionId: number,
+	editionExternalKey: string,
+	competitionExternalKey?: string,
+): Promise<Map<string, number>> {
+	const competitorMap = new Map<string, number>();
+
+	const competitors = await adapter.fetchCompetitors(
+		editionExternalKey,
+		competitionExternalKey,
+	);
+
+	for (const comp of competitors) {
+		let competitorId = await resolveExternalRef(
+			supabase,
+			adapter.providerSlug,
+			'competitor',
+			comp.externalKey,
+		);
+
+		if (!competitorId) {
+			const { data: insertedComp, error: compErr } = await supabase
+				.from('competitors')
+				.insert({
+					sport_slug: adapter.sportSlug,
+					kind: comp.kind || 'team',
+					name: comp.name,
+					short_name: comp.shortName,
+					media_url: comp.mediaUrl,
+					country_code: comp.countryCode,
+					is_active: comp.isActive ?? true,
+				})
+				.select('id')
+				.single();
+
+			if (insertedComp?.id) {
+				competitorId = Number(insertedComp.id);
+				await supabase.from('external_entity_refs').upsert(
+					{
+						provider_slug: adapter.providerSlug,
+						entity_kind: 'competitor',
+						external_key: comp.externalKey,
+						competitor_id: competitorId,
+						is_primary: true,
+					},
+					{ onConflict: 'provider_slug,entity_kind,external_key' },
+				);
+			} else if (compErr) {
+				console.warn(
+					`Warning inserting competitor '${comp.name}':`,
+					compErr.message,
+				);
+			}
+		}
+
+		if (competitorId) {
+			competitorMap.set(comp.externalKey, competitorId);
+			// Link to edition
+			await supabase.from('edition_competitors').upsert(
+				{
+					edition_id: editionId,
+					competitor_id: competitorId,
+				},
+				{ onConflict: 'edition_id,competitor_id' },
+			);
+		}
+	}
+
+	return competitorMap;
 }
 
 /**
@@ -105,21 +350,22 @@ export async function quarantineRecord(
 export async function resolveSportRulesetId(
 	supabase: SupabaseClient,
 	sportSlug: string,
-	marketKey = 'team_scoreline',
-): Promise<number | null> {
+	marketKind = 'team_scoreline',
+): Promise<number> {
 	const { data, error } = await supabase
 		.from('scoring_rulesets')
 		.select('id')
 		.eq('sport_slug', sportSlug)
-		.eq('market_key', marketKey)
+		.eq('market_kind', marketKind)
 		.eq('is_active', true)
 		.order('version', { ascending: false })
 		.limit(1)
 		.maybeSingle();
 
-	if (error || !data) {
-		// Fallback to ruleset with id 1 if present
-		return 1;
+	if (error || !data?.id) {
+		throw new Error(
+			`Active scoring ruleset not found for sport '${sportSlug}' and market kind '${marketKind}'`,
+		);
 	}
 
 	return Number(data.id);

@@ -119,6 +119,26 @@ export interface IngestionRunSummary {
 export interface IngestionBatchPayload {
 	provider_slug: string;
 	sport_slug: string;
+	competitions?: Array<{
+		external_key: string;
+		slug: string;
+		name: string;
+		kind?: string;
+		country?: string;
+		logo_url?: string;
+		is_active?: boolean;
+	}>;
+	editions?: Array<{
+		external_key: string;
+		competition_id?: number;
+		competition_external_key?: string;
+		season_key: string;
+		name: string;
+		starts_at?: string;
+		ends_at?: string;
+		status?: string;
+		metadata?: Record<string, unknown>;
+	}>;
 	competitors?: Array<{
 		external_key: string;
 		name: string;
@@ -131,28 +151,39 @@ export interface IngestionBatchPayload {
 	}>;
 	events?: Array<{
 		external_key: string;
-		edition_id: number;
+		edition_id?: number;
+		edition_external_key?: string;
 		round_name?: string;
-		scheduled_start_time: string;
+		round_label?: string;
+		scheduled_start_time?: string;
+		starts_at?: string;
 		status: CanonicalEventStatus;
 		venue?: string;
+		venue_name?: string;
 		metadata?: Record<string, unknown>;
 		participants?: Array<{
 			competitor_id?: number;
 			competitor_external_key?: string;
 			role: string;
-			slot_number: number;
+			slot_number?: number;
+			slot?: number;
 		}>;
 		market?: {
 			ruleset_id: number;
-			market_key: string;
-			status: string;
+			market_key?: string;
+			market_kind?: string;
+			status?: string;
 			lock_at?: string;
+			locks_at?: string;
+			opens_at?: string;
 			market_schema_version?: number;
+			payload_schema_version?: number;
 		};
 		result?: {
 			status: CanonicalResultStatus;
-			result_payload: Record<string, unknown>;
+			result_payload?: Record<string, unknown>;
+			homeScore?: number | null;
+			awayScore?: number | null;
 			revision_number?: number;
 			payload_schema_version?: number;
 		};

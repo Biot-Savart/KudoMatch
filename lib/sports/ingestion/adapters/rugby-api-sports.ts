@@ -110,19 +110,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 	async fetchCompetitors(
 		editionExternalKey: string,
 	): Promise<CanonicalCompetitorDTO[]> {
-		const leagueId = editionExternalKey.split('-')[0] || '11';
-		const season = editionExternalKey.split('-')[1] || '2025';
-
-		const data = await this.request<{
-			response?: Array<{
-				id: number;
-				name: string;
-				logo?: string;
-				country?: { code?: string };
-			}>;
-		}>(`/teams?league=${leagueId}&season=${season}`);
-
-		const teams = data.response || [
+		const defaultSixNationsTeams = [
 			{
 				id: 16,
 				name: 'England',
@@ -154,6 +142,63 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 				logo: 'https://media.api-sports.io/rugby/teams/21.png',
 			},
 		];
+
+		let teams: Array<{
+			id: number;
+			name: string;
+			logo?: string;
+			country?: { code?: string };
+		}> = defaultSixNationsTeams;
+
+		if (this.apiKey) {
+			try {
+				const leagueId = editionExternalKey.split('-')[0] || '11';
+				const season = editionExternalKey.split('-')[1] || '2025';
+				const data = await this.request<{
+					response?: Array<{
+						id: number;
+						name: string;
+						logo?: string;
+						country?: { code?: string };
+					}>;
+				}>(`/teams?league=${leagueId}&season=${season}`);
+
+				if (
+					data?.response &&
+					Array.isArray(data.response) &&
+					data.response.length > 0 &&
+					data.response[0].name
+				) {
+					teams = data.response;
+				}
+			} catch {
+				teams = defaultSixNationsTeams;
+			}
+		} else if (this.recordedGames?.response) {
+			const extractedMap = new Map<
+				number,
+				{ id: number; name: string; logo?: string }
+			>();
+			for (const item of this.recordedGames.response) {
+				if (item.teams?.home?.id && item.teams?.home?.name) {
+					extractedMap.set(item.teams.home.id, {
+						id: item.teams.home.id,
+						name: item.teams.home.name,
+						logo: item.teams.home.logo,
+					});
+				}
+				if (item.teams?.away?.id && item.teams?.away?.name) {
+					extractedMap.set(item.teams.away.id, {
+						id: item.teams.away.id,
+						name: item.teams.away.name,
+						logo: item.teams.away.logo,
+					});
+				}
+			}
+			if (extractedMap.size > 0) {
+				teams = Array.from(extractedMap.values());
+			}
+		}
 
 		return teams.map((team) => ({
 			externalKey: String(team.id),

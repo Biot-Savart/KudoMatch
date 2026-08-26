@@ -23,7 +23,6 @@ export class FootballDataAdapter implements SportProviderAdapter {
 	private recordedMatches?: any;
 
 	constructor(options: FootballDataAdapterOptions = {}) {
-		// Server-side secret resolution (NEVER use NEXT_PUBLIC_ in production)
 		this.apiKey =
 			options.apiKey ||
 			process.env.FOOTBALL_DATA_API_KEY ||
@@ -109,18 +108,71 @@ export class FootballDataAdapter implements SportProviderAdapter {
 	async fetchCompetitors(
 		editionExternalKey: string,
 	): Promise<CanonicalCompetitorDTO[]> {
-		const compId = editionExternalKey.split('-')[0] || '2021';
-		const data = await this.request<{
-			teams?: Array<{
-				id: number;
-				name: string;
-				shortName?: string;
-				tla?: string;
-				crest?: string;
-			}>;
-		}>(`/competitions/${compId}/teams`);
+		let teams: Array<{
+			id: number;
+			name: string;
+			shortName?: string;
+			tla?: string;
+			crest?: string;
+		}> = [];
 
-		const teams = data.teams || [];
+		if (this.apiKey) {
+			try {
+				const compId = editionExternalKey.split('-')[0] || '2021';
+				const data = await this.request<{
+					teams?: Array<{
+						id: number;
+						name: string;
+						shortName?: string;
+						tla?: string;
+						crest?: string;
+					}>;
+				}>(`/competitions/${compId}/teams`);
+
+				if (data?.teams && Array.isArray(data.teams)) {
+					teams = data.teams;
+				}
+			} catch {
+				teams = [];
+			}
+		} else if (this.recordedMatches?.matches) {
+			const extractedMap = new Map<
+				number,
+				{
+					id: number;
+					name: string;
+					shortName?: string;
+					tla?: string;
+					crest?: string;
+				}
+			>();
+			for (const match of this.recordedMatches.matches) {
+				if (match.homeTeam?.id && match.homeTeam?.name) {
+					extractedMap.set(match.homeTeam.id, {
+						id: match.homeTeam.id,
+						name: match.homeTeam.name,
+						shortName:
+							match.homeTeam.shortName ||
+							match.homeTeam.tla ||
+							match.homeTeam.name,
+						crest: match.homeTeam.crest,
+					});
+				}
+				if (match.awayTeam?.id && match.awayTeam?.name) {
+					extractedMap.set(match.awayTeam.id, {
+						id: match.awayTeam.id,
+						name: match.awayTeam.name,
+						shortName:
+							match.awayTeam.shortName ||
+							match.awayTeam.tla ||
+							match.awayTeam.name,
+						crest: match.awayTeam.crest,
+					});
+				}
+			}
+			teams = Array.from(extractedMap.values());
+		}
+
 		return teams.map((team) => ({
 			externalKey: String(team.id),
 			name: team.name,

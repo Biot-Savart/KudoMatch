@@ -5,7 +5,13 @@ import {
 	IngestionBatchPayload,
 	IngestionRunSummary,
 } from './dto';
-import { quarantineRecord, resolveSportRulesetId } from './resolve-canonical';
+import {
+	ensureCanonicalCompetition,
+	ensureCanonicalCompetitors,
+	ensureCanonicalEdition,
+	quarantineRecord,
+	resolveSportRulesetId,
+} from './resolve-canonical';
 import { applyCanonicalIngestionBatch } from './upsert';
 import { validateEventDTO } from './validate';
 
@@ -33,6 +39,7 @@ export async function orchestrateIngestion(
 		supabase,
 		editionExternalKey,
 		competitionExternalKey,
+		seasonKey,
 		operation = 'sync_live',
 		dryRun = false,
 		correlationId = `run_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -69,7 +76,14 @@ export async function orchestrateIngestion(
 			},
 		);
 
-		if (leaseErr || !leaseAcquired) {
+		// Distinguish DB/RPC error from an active lease
+		if (leaseErr) {
+			throw new Error(
+				`Database error acquiring ingestion lease: ${leaseErr.message}`,
+			);
+		}
+
+		if (!leaseAcquired) {
 			console.warn(`⚠️ Ingestion lease '${leaseKey}' is already active.`);
 			summary.durationMs = Date.now() - startTime;
 			return {
@@ -102,7 +116,39 @@ export async function orchestrateIngestion(
 	}
 
 	try {
-		// 2. Fetch canonical events from provider adapter
+		let canonicalCompetitionId = 1;
+		let canonicalEditionId = 1;
+		let rulesetId = 1;
+
+		if (!dryRun) {
+			// 2. Resolve or ensure catalog entities in correct dependency order
+			canonicalCompetitionId = await ensureCanonicalCompetition(
+				supabase,
+				adapter,
+				competitionExternalKey,
+			);
+
+			canonicalEditionId = await ensureCanonicalEdition(
+				supabase,
+				adapter,
+				canonicalCompetitionId,
+				editionExternalKey,
+				competitionExternalKey,
+				seasonKey,
+			);
+
+			await ensureCanonicalCompetitors(
+				supabase,
+				adapter,
+				canonicalEditionId,
+				editionExternalKey,
+				competitionExternalKey,
+			);
+
+			rulesetId = await resolveSportRulesetId(supabase, adapter.sportSlug);
+		}
+
+		// 3. Fetch canonical events from provider adapter
 		let events: CanonicalEventDTO[] = [];
 		if (operation === 'sync_live') {
 			events = await adapter.fetchLiveUpdates({
@@ -113,30 +159,11 @@ export async function orchestrateIngestion(
 			events = await adapter.fetchEvents({
 				editionExternalKey,
 				competitionExternalKey,
+				seasonKey,
 			});
 		}
 
 		summary.fetchedCount = events.length;
-
-		// 3. Resolve ruleset ID & Edition ID
-		const rulesetId =
-			(await resolveSportRulesetId(supabase, adapter.sportSlug)) || 1;
-
-		// Resolve edition canonical ID
-		let canonicalEditionId = 1;
-		const { data: editionData } = await supabase
-			.from('external_entity_refs')
-			.select('edition_id, target_id')
-			.eq('provider_slug', adapter.providerSlug)
-			.eq('entity_kind', 'edition')
-			.eq('external_key', editionExternalKey)
-			.maybeSingle();
-
-		if (editionData?.edition_id) {
-			canonicalEditionId = Number(editionData.edition_id);
-		} else if (editionData?.target_id) {
-			canonicalEditionId = Number(editionData.target_id);
-		}
 
 		// 4. Validate and construct atomic batch
 		const validEvents: CanonicalEventDTO[] = [];
@@ -175,22 +202,26 @@ export async function orchestrateIngestion(
 				events: validEvents.map((evt) => ({
 					external_key: evt.externalKey,
 					edition_id: canonicalEditionId,
+					round_label: evt.roundName,
 					round_name: evt.roundName,
+					starts_at: evt.scheduledStartTime,
 					scheduled_start_time: evt.scheduledStartTime,
 					status: evt.status,
+					venue_name: evt.venue,
 					venue: evt.venue,
 					metadata: evt.metadata,
 					participants: evt.participants.map((p) => ({
 						competitor_external_key: p.competitorExternalKey,
 						role: p.role,
+						slot: p.slotNumber,
 						slot_number: p.slotNumber,
 					})),
 					market: {
 						ruleset_id: rulesetId,
-						market_key: evt.market?.marketKey || 'team_scoreline',
+						market_kind: 'team_scoreline',
 						status: evt.market?.status || 'open',
+						locks_at: evt.market?.lockAt || evt.scheduledStartTime,
 						lock_at: evt.market?.lockAt || evt.scheduledStartTime,
-						market_schema_version: evt.market?.marketSchemaVersion || 1,
 					},
 					result: evt.result
 						? {
