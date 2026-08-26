@@ -511,6 +511,241 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 		});
 	});
 
+	describe('Quarantined Ingestion Status & Failure Handling (Review Findings)', () => {
+		it('returns failed status when all events are quarantined', async () => {
+			const mockSupabase: any = {
+				rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+				from: vi.fn().mockImplementation((table: string) => {
+					const builder: any = {
+						select: vi.fn(),
+						eq: vi.fn(),
+						order: vi.fn(),
+						limit: vi.fn(),
+						maybeSingle: vi.fn().mockImplementation(async () => {
+							if (table === 'external_entity_refs')
+								return {
+									data: {
+										competition_id: 10,
+										edition_id: 20,
+										competitor_id: 30,
+									},
+								};
+							if (table === 'scoring_rulesets') return { data: { id: 5 } };
+							return { data: null };
+						}),
+						insert: vi.fn().mockReturnValue({
+							select: vi.fn().mockReturnValue({
+								maybeSingle: vi.fn().mockResolvedValue({ data: { id: 1 } }),
+								single: vi.fn().mockResolvedValue({ data: { id: 1 } }),
+							}),
+						}),
+						update: vi.fn().mockReturnValue({
+							eq: vi.fn().mockResolvedValue({ data: null }),
+						}),
+						upsert: vi.fn().mockResolvedValue({ data: null }),
+					};
+					builder.select.mockReturnValue(builder);
+					builder.eq.mockReturnValue(builder);
+					builder.order.mockReturnValue(builder);
+					builder.limit.mockReturnValue(builder);
+					return builder;
+				}),
+			};
+
+			const malformedEventAdapter: any = {
+				providerSlug: 'mock-provider',
+				sportSlug: 'football',
+				fetchCompetitions: vi.fn().mockResolvedValue([
+					{
+						externalKey: 'mock-c1',
+						sportSlug: 'football',
+						slug: 'mock-league',
+						name: 'Mock League',
+					},
+				]),
+				fetchEditions: vi.fn().mockResolvedValue([
+					{
+						externalKey: 'mock-2025',
+						competitionExternalKey: 'mock-c1',
+						seasonKey: '2025',
+						name: 'Mock Season 2025',
+					},
+				]),
+				fetchCompetitors: vi.fn().mockResolvedValue([
+					{ externalKey: 't1', name: 'Team 1' },
+					{ externalKey: 't2', name: 'Team 2' },
+				]),
+				fetchLiveUpdates: vi.fn().mockResolvedValue([
+					{
+						externalKey: 'malformed-1',
+						editionExternalKey: 'mock-2025',
+						scheduledStartTime: 'invalid-date',
+						status: 'scheduled',
+						participants: [],
+					},
+				]),
+			};
+
+			const res = await orchestrateIngestion({
+				adapter: malformedEventAdapter,
+				supabase: mockSupabase,
+				editionExternalKey: 'mock-2025',
+			});
+
+			if (res.summary.errors.length > 0) {
+				console.log(
+					'TEST DEBUG ERRORS:',
+					JSON.stringify(res.summary.errors, null, 2),
+				);
+			}
+			expect(res.status).toBe('failed');
+			expect(res.summary.quarantinedCount).toBe(1);
+			expect(res.summary.insertedCount).toBe(0);
+		});
+
+		it('returns partial_failure when there is a mixture of valid and quarantined events', async () => {
+			const mockSupabase: any = {
+				rpc: vi.fn().mockImplementation((fnName) => {
+					if (fnName === 'apply_canonical_ingestion_batch') {
+						return Promise.resolve({
+							data: {
+								success: true,
+								inserted_events: 1,
+								updated_events: 0,
+								unchanged_events: 0,
+								settled_results: 0,
+							},
+							error: null,
+						});
+					}
+					return Promise.resolve({ data: true, error: null });
+				}),
+				from: vi.fn().mockImplementation((table: string) => {
+					const builder: any = {
+						select: vi.fn(),
+						eq: vi.fn(),
+						order: vi.fn(),
+						limit: vi.fn(),
+						maybeSingle: vi.fn().mockImplementation(async () => {
+							if (table === 'external_entity_refs')
+								return {
+									data: {
+										competition_id: 10,
+										edition_id: 20,
+										competitor_id: 30,
+									},
+								};
+							if (table === 'scoring_rulesets') return { data: { id: 5 } };
+							return { data: null };
+						}),
+						insert: vi.fn().mockReturnValue({
+							select: vi.fn().mockReturnValue({
+								maybeSingle: vi.fn().mockResolvedValue({ data: { id: 1 } }),
+								single: vi.fn().mockResolvedValue({ data: { id: 1 } }),
+							}),
+						}),
+						update: vi.fn().mockReturnValue({
+							eq: vi.fn().mockResolvedValue({ data: null }),
+						}),
+						upsert: vi.fn().mockResolvedValue({ data: null }),
+					};
+					builder.select.mockReturnValue(builder);
+					builder.eq.mockReturnValue(builder);
+					builder.order.mockReturnValue(builder);
+					builder.limit.mockReturnValue(builder);
+					return builder;
+				}),
+			};
+
+			const mixedAdapter: any = {
+				providerSlug: 'mock-provider',
+				sportSlug: 'football',
+				fetchCompetitions: vi.fn().mockResolvedValue([
+					{
+						externalKey: 'mock-c1',
+						sportSlug: 'football',
+						slug: 'mock-league',
+						name: 'Mock League',
+					},
+				]),
+				fetchEditions: vi.fn().mockResolvedValue([
+					{
+						externalKey: 'mock-2025',
+						competitionExternalKey: 'mock-c1',
+						seasonKey: '2025',
+						name: 'Mock Season 2025',
+					},
+				]),
+				fetchCompetitors: vi.fn().mockResolvedValue([
+					{ externalKey: 't1', name: 'Team 1' },
+					{ externalKey: 't2', name: 'Team 2' },
+				]),
+				fetchLiveUpdates: vi.fn().mockResolvedValue([
+					// 1 Valid event
+					{
+						externalKey: 'valid-1',
+						editionExternalKey: 'mock-2025',
+						scheduledStartTime: '2025-08-15T15:00:00Z',
+						status: 'scheduled',
+						participants: [
+							{ competitorExternalKey: 't1', role: 'home', slotNumber: 1 },
+							{ competitorExternalKey: 't2', role: 'away', slotNumber: 2 },
+						],
+					},
+					// 1 Malformed event (missing participants)
+					{
+						externalKey: 'malformed-2',
+						editionExternalKey: 'mock-2025',
+						scheduledStartTime: '2025-08-15T15:00:00Z',
+						status: 'scheduled',
+						participants: [],
+					},
+				]),
+			};
+
+			const res = await orchestrateIngestion({
+				adapter: mixedAdapter,
+				supabase: mockSupabase,
+				editionExternalKey: 'mock-2025',
+			});
+
+			expect(res.status).toBe('partial_failure');
+			expect(res.summary.insertedCount).toBe(1);
+			expect(res.summary.quarantinedCount).toBe(1);
+		});
+
+		it('throws error when competitor external_entity_refs upsert fails', async () => {
+			const mockSupabase: any = {
+				from: vi.fn().mockImplementation((table: string) => ({
+					select: vi.fn().mockReturnThis(),
+					eq: vi.fn().mockReturnThis(),
+					maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+					insert: vi.fn().mockReturnValue({
+						select: vi.fn().mockReturnValue({
+							single: vi
+								.fn()
+								.mockResolvedValue({ data: { id: 101 }, error: null }),
+						}),
+					}),
+					upsert: vi.fn().mockImplementation(() => {
+						if (table === 'external_entity_refs') {
+							return Promise.resolve({
+								data: null,
+								error: { message: 'Database disk full' },
+							});
+						}
+						return Promise.resolve({ data: null, error: null });
+					}),
+				})),
+			};
+
+			const adapter = new RugbyApiSportsAdapter();
+			await expect(
+				ensureCanonicalCompetitors(mockSupabase, adapter, 11, '11-2025', '11'),
+			).rejects.toThrow(/Failed to persist external reference for competitor/);
+		});
+	});
+
 	describe('Lease Management & Error Differentiation (Finding 1)', () => {
 		it('returns already_running when active lease exists (data = false, error = null)', async () => {
 			const mockSupabase: any = {

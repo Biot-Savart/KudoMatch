@@ -133,16 +133,24 @@ export async function ensureCanonicalCompetition(
 	}
 
 	// 4. Upsert external entity reference
-	await supabase.from('external_entity_refs').upsert(
-		{
-			provider_slug: adapter.providerSlug,
-			entity_kind: 'competition',
-			external_key: compDto.externalKey,
-			competition_id: canonicalCompId,
-			is_primary: true,
-		},
-		{ onConflict: 'provider_slug,entity_kind,external_key' },
-	);
+	const { error: compRefErr } = await supabase
+		.from('external_entity_refs')
+		.upsert(
+			{
+				provider_slug: adapter.providerSlug,
+				entity_kind: 'competition',
+				external_key: compDto.externalKey,
+				competition_id: canonicalCompId,
+				is_primary: true,
+			},
+			{ onConflict: 'provider_slug,entity_kind,external_key' },
+		);
+
+	if (compRefErr) {
+		throw new Error(
+			`Failed to persist external reference for competition '${compDto.name}' in provider '${adapter.providerSlug}': ${compRefErr.message}`,
+		);
+	}
 
 	return canonicalCompId;
 }
@@ -259,16 +267,24 @@ export async function ensureCanonicalEdition(
 
 	// 4. Upsert external entity reference to ensure the edition is mapped
 	const externalKeyToRecord = editionExternalKey || edDto.externalKey;
-	await supabase.from('external_entity_refs').upsert(
-		{
-			provider_slug: adapter.providerSlug,
-			entity_kind: 'edition',
-			external_key: externalKeyToRecord,
-			edition_id: canonicalEditionId,
-			is_primary: true,
-		},
-		{ onConflict: 'provider_slug,entity_kind,external_key' },
-	);
+	const { error: edRefErr } = await supabase
+		.from('external_entity_refs')
+		.upsert(
+			{
+				provider_slug: adapter.providerSlug,
+				entity_kind: 'edition',
+				external_key: externalKeyToRecord,
+				edition_id: canonicalEditionId,
+				is_primary: true,
+			},
+			{ onConflict: 'provider_slug,entity_kind,external_key' },
+		);
+
+	if (edRefErr) {
+		throw new Error(
+			`Failed to persist external reference for edition '${externalKeyToRecord}' in provider '${adapter.providerSlug}': ${edRefErr.message}`,
+		);
+	}
 
 	return canonicalEditionId;
 }
@@ -315,16 +331,24 @@ export async function ensureCanonicalCompetitors(
 
 			if (insertedComp?.id) {
 				competitorId = Number(insertedComp.id);
-				await supabase.from('external_entity_refs').upsert(
-					{
-						provider_slug: adapter.providerSlug,
-						entity_kind: 'competitor',
-						external_key: comp.externalKey,
-						competitor_id: competitorId,
-						is_primary: true,
-					},
-					{ onConflict: 'provider_slug,entity_kind,external_key' },
-				);
+				const { error: compRefErr } = await supabase
+					.from('external_entity_refs')
+					.upsert(
+						{
+							provider_slug: adapter.providerSlug,
+							entity_kind: 'competitor',
+							external_key: comp.externalKey,
+							competitor_id: competitorId,
+							is_primary: true,
+						},
+						{ onConflict: 'provider_slug,entity_kind,external_key' },
+					);
+
+				if (compRefErr) {
+					throw new Error(
+						`Failed to persist external reference for competitor '${comp.name}' (key: ${comp.externalKey}) in provider '${adapter.providerSlug}': ${compRefErr.message}`,
+					);
+				}
 			} else {
 				const errorMsg = compErr
 					? compErr.message

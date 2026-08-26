@@ -531,28 +531,34 @@ begin
             and external_key = (v_part_elem->>'competitor_external_key');
         end if;
 
-        if v_competitor_id is not null then
-          -- Link competitor to the edition if not linked
-          insert into public.edition_competitors (edition_id, competitor_id)
-          values (v_target_edition_id, v_competitor_id)
-          on conflict (edition_id, competitor_id) do nothing;
-
-          insert into public.event_competitors (
-            event_id,
-            competitor_id,
-            slot,
-            role
-          )
-          values (
-            v_event_id,
-            v_competitor_id,
-            coalesce((v_part_elem->>'slot')::smallint, (v_part_elem->>'slot_number')::smallint, 1::smallint),
-            coalesce(v_part_elem->>'role', 'home')
-          )
-          on conflict (event_id, competitor_id) do update
-          set slot = excluded.slot,
-              role = excluded.role;
+        if v_competitor_id is null then
+          raise exception 'Unresolved competitor participant key % for event % in provider %',
+            coalesce(v_part_elem->>'competitor_external_key', v_part_elem->>'competitor_id', 'unknown'),
+            v_event_elem->>'external_key',
+            v_provider_slug
+            using errcode = '23503';
         end if;
+
+        -- Link competitor to the edition if not linked
+        insert into public.edition_competitors (edition_id, competitor_id)
+        values (v_target_edition_id, v_competitor_id)
+        on conflict (edition_id, competitor_id) do nothing;
+
+        insert into public.event_competitors (
+          event_id,
+          competitor_id,
+          slot,
+          role
+        )
+        values (
+          v_event_id,
+          v_competitor_id,
+          coalesce((v_part_elem->>'slot')::smallint, (v_part_elem->>'slot_number')::smallint, 1::smallint),
+          coalesce(v_part_elem->>'role', 'home')
+        )
+        on conflict (event_id, competitor_id) do update
+        set slot = excluded.slot,
+            role = excluded.role;
       end loop;
     end if;
 

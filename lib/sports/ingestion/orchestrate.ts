@@ -281,11 +281,14 @@ export async function orchestrateIngestion(
 
 			// Finalize run summary in database
 			if (runId) {
-				const finalStatus =
-					summary.failedCount > 0 &&
-					summary.insertedCount + summary.updatedCount > 0
+				const hasIssues =
+					summary.failedCount > 0 || summary.quarantinedCount > 0;
+				const hasSuccesses = summary.insertedCount + summary.updatedCount > 0;
+
+				const finalStatus: 'success' | 'partial_failure' | 'failed' =
+					hasIssues && hasSuccesses
 						? 'partial_failure'
-						: summary.failedCount > 0
+						: hasIssues
 							? 'failed'
 							: 'success';
 
@@ -309,10 +312,13 @@ export async function orchestrateIngestion(
 		}
 	}
 
-	const finalStatus =
-		summary.failedCount > 0 && summary.insertedCount + summary.updatedCount > 0
+	const hasIssues = summary.failedCount > 0 || summary.quarantinedCount > 0;
+	const hasSuccesses = summary.insertedCount + summary.updatedCount > 0;
+
+	const finalStatus: 'success' | 'partial_failure' | 'failed' =
+		hasIssues && hasSuccesses
 			? 'partial_failure'
-			: summary.failedCount > 0
+			: hasIssues
 				? 'failed'
 				: 'success';
 

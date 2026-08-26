@@ -1,6 +1,6 @@
 -- pgTAP Database & Security Tests for Phase 14: Ingestion Operations, Leases, and Batch API
 begin;
-select plan(28);
+select plan(29);
 
 -- 1. Table and Schema Existence (5 assertions)
 select has_table('public', 'data_providers', 'Public data_providers table exists');
@@ -305,6 +305,34 @@ select is(
   (select status from public.event_markets where id = (select em.id from public.event_markets em join public.events e on e.id = em.event_id join public.external_entity_refs r on r.event_id = e.id where r.external_key = 'mock-rugby-game-cancelled')),
   'void',
   'Market status is set to void when event is cancelled'
+);
+
+-- Reject unresolved event participants (Finding 3)
+select throws_ok(
+  $$
+  select private.apply_canonical_ingestion_batch(
+    jsonb_build_object(
+      'provider_slug', 'mock-provider',
+      'sport_slug', 'rugby-union',
+      'events', jsonb_build_array(
+        jsonb_build_object(
+          'external_key', 'mock-rugby-invalid-participants',
+          'edition_external_key', 'mock-rugby-ed-2025',
+          'round_label', 'Round 3',
+          'starts_at', (now() + interval '10 days')::text,
+          'status', 'scheduled',
+          'participants', jsonb_build_array(
+            jsonb_build_object('competitor_external_key', 'non-existent-team-key-xyz', 'role', 'home', 'slot', 1),
+            jsonb_build_object('competitor_external_key', 'mock-team-england', 'role', 'away', 'slot', 2)
+          )
+        )
+      )
+    )
+  );
+  $$,
+  '23503',
+  NULL,
+  'Batch RPC throws exception when event participant competitor cannot be resolved'
 );
 
 -- 7. Security & Permission Tests (2 assertions)
