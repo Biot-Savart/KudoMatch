@@ -19,6 +19,7 @@ import {
 	validateEventDTO,
 	validateIsoTimestamp,
 } from '@/lib/sports/ingestion/validate';
+import { fetchLiveScores } from '@/scripts/fetch-live-scores';
 
 import rugbyCancelled from '@/tests/fixtures/providers/api-sports/rugby-union/cancelled-game.json';
 import rugbyFinished from '@/tests/fixtures/providers/api-sports/rugby-union/finished-game.json';
@@ -158,7 +159,7 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 		});
 	});
 
-	describe('Provider Adapters Contract', () => {
+	describe('Provider Adapters & Authentication Headers (Finding 1 & 2)', () => {
 		it('FootballDataAdapter transforms Premier League match fixture', () => {
 			const adapter = new FootballDataAdapter({
 				recordedMatches: plFixture,
@@ -179,6 +180,92 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 
 			expect(events[2].externalKey).toBe('497521');
 			expect(events[2].status).toBe('scheduled');
+		});
+
+		it('FootballDataAdapter sends requested season parameter in fetchEvents and fetchLiveUpdates', async () => {
+			const fetchSpy = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ matches: [] }),
+			});
+			global.fetch = fetchSpy;
+
+			const adapter = new FootballDataAdapter({
+				apiKey: 'test-football-key',
+			});
+
+			await adapter.fetchEvents({
+				editionExternalKey: '2021-2025',
+				seasonKey: '2025',
+			});
+
+			expect(fetchSpy).toHaveBeenCalledWith(
+				expect.stringContaining('/competitions/2021/matches?season=2025'),
+				expect.objectContaining({
+					headers: { 'X-Auth-Token': 'test-football-key' },
+				}),
+			);
+
+			await adapter.fetchLiveUpdates({
+				editionExternalKey: '2021-2025',
+				seasonKey: '2025',
+			});
+
+			expect(fetchSpy).toHaveBeenCalledWith(
+				expect.stringContaining('season=2025&status=IN_PLAY,PAUSED,FINISHED'),
+				expect.anything(),
+			);
+		});
+
+		it('RugbyApiSportsAdapter supports Direct API-Sports authentication', async () => {
+			const fetchSpy = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ response: [] }),
+			});
+			global.fetch = fetchSpy;
+
+			const directAdapter = new RugbyApiSportsAdapter({
+				apiSportsKey: 'direct-api-sports-key-123',
+			});
+
+			await directAdapter.fetchEvents({
+				editionExternalKey: '11-2026',
+				seasonKey: '2026',
+			});
+
+			expect(fetchSpy).toHaveBeenCalledWith(
+				'https://v1.rugby.api-sports.io/games?league=11&season=2026',
+				{
+					headers: { 'x-apisports-key': 'direct-api-sports-key-123' },
+				},
+			);
+		});
+
+		it('RugbyApiSportsAdapter supports RapidAPI authentication', async () => {
+			const fetchSpy = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ response: [] }),
+			});
+			global.fetch = fetchSpy;
+
+			const rapidAdapter = new RugbyApiSportsAdapter({
+				rapidApiKey: 'rapidapi-key-456',
+				rapidApiHost: 'rugby-union.p.rapidapi.com',
+			});
+
+			await rapidAdapter.fetchEvents({
+				editionExternalKey: '11-2026',
+				seasonKey: '2026',
+			});
+
+			expect(fetchSpy).toHaveBeenCalledWith(
+				'https://rugby-union.p.rapidapi.com/games?league=11&season=2026',
+				{
+					headers: {
+						'x-rapidapi-key': 'rapidapi-key-456',
+						'x-rapidapi-host': 'rugby-union.p.rapidapi.com',
+					},
+				},
+			);
 		});
 
 		it('RugbyApiSportsAdapter transforms Six Nations games fixture', () => {
@@ -227,6 +314,47 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 			} finally {
 				vi.unstubAllEnvs();
 			}
+		});
+	});
+
+	describe('Active Edition Resolution in fetchLiveScores (Finding 2)', () => {
+		it('resolves active edition from database for rugby and football', async () => {
+			const mockSupabase: any = {
+				rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+				from: vi.fn().mockImplementation((table: string) => ({
+					select: vi.fn().mockReturnThis(),
+					eq: vi.fn().mockReturnThis(),
+					order: vi.fn().mockReturnThis(),
+					limit: vi.fn().mockReturnThis(),
+					maybeSingle: vi.fn().mockImplementation(async () => {
+						if (table === 'external_entity_refs') {
+							return { data: { external_key: '11-2026' } };
+						}
+						return { data: null };
+					}),
+					insert: vi.fn().mockReturnValue({
+						select: vi.fn().mockReturnValue({
+							maybeSingle: vi.fn().mockResolvedValue({ data: { id: 1 } }),
+							single: vi.fn().mockResolvedValue({ data: { id: 1 } }),
+						}),
+					}),
+					update: vi.fn().mockReturnValue({
+						eq: vi.fn().mockResolvedValue({ data: null }),
+					}),
+				})),
+			};
+
+			const rugbyResult = await fetchLiveScores(
+				{
+					sport: 'rugby-union',
+					dryRun: true,
+					recordedPayload: rugbyLive,
+				},
+				mockSupabase,
+			);
+
+			expect(rugbyResult.success).toBe(true);
+			expect(rugbyResult.summary?.editionKey).toBe('11-2026');
 		});
 	});
 

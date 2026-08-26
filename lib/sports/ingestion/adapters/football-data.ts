@@ -91,14 +91,14 @@ export class FootballDataAdapter implements SportProviderAdapter {
 			{
 				externalKey: `${competitionExternalKey}-2024`,
 				competitionExternalKey,
-				seasonKey: '2024-2025',
+				seasonKey: '2024',
 				name: 'Premier League 2024/2025',
-				status: 'active',
+				status: 'completed',
 			},
 			{
 				externalKey: `${competitionExternalKey}-2025`,
 				competitionExternalKey,
-				seasonKey: '2025-2026',
+				seasonKey: '2025',
 				name: 'Premier League 2025/2026',
 				status: 'active',
 			},
@@ -108,6 +108,9 @@ export class FootballDataAdapter implements SportProviderAdapter {
 	async fetchCompetitors(
 		editionExternalKey: string,
 	): Promise<CanonicalCompetitorDTO[]> {
+		const compId = editionExternalKey.split('-')[0] || '2021';
+		const season = editionExternalKey.split('-')[1] || '2025';
+
 		let teams: Array<{
 			id: number;
 			name: string;
@@ -118,7 +121,6 @@ export class FootballDataAdapter implements SportProviderAdapter {
 
 		if (this.apiKey) {
 			try {
-				const compId = editionExternalKey.split('-')[0] || '2021';
 				const data = await this.request<{
 					teams?: Array<{
 						id: number;
@@ -127,7 +129,7 @@ export class FootballDataAdapter implements SportProviderAdapter {
 						tla?: string;
 						crest?: string;
 					}>;
-				}>(`/competitions/${compId}/teams`);
+				}>(`/competitions/${compId}/teams?season=${season}`);
 
 				if (data?.teams && Array.isArray(data.teams)) {
 					teams = data.teams;
@@ -186,9 +188,11 @@ export class FootballDataAdapter implements SportProviderAdapter {
 
 	async fetchEvents(options: FetchEventsOptions): Promise<CanonicalEventDTO[]> {
 		const compId = options.editionExternalKey.split('-')[0] || '2021';
+		const season =
+			options.seasonKey || options.editionExternalKey.split('-')[1] || '2025';
 		const data = await this.request<{
 			matches?: Array<any>;
-		}>(`/competitions/${compId}/matches`);
+		}>(`/competitions/${compId}/matches?season=${season}`);
 
 		const matches = data.matches || [];
 		return this.transformMatches(matches, options.editionExternalKey);
@@ -196,11 +200,17 @@ export class FootballDataAdapter implements SportProviderAdapter {
 
 	async fetchLiveUpdates(options: {
 		editionExternalKey: string;
+		competitionExternalKey?: string;
+		seasonKey?: string;
 	}): Promise<CanonicalEventDTO[]> {
 		const compId = options.editionExternalKey.split('-')[0] || '2021';
+		const season =
+			options.seasonKey || options.editionExternalKey.split('-')[1] || '2025';
 		const data = await this.request<{
 			matches?: Array<any>;
-		}>(`/competitions/${compId}/matches?status=IN_PLAY,PAUSED,FINISHED`);
+		}>(
+			`/competitions/${compId}/matches?season=${season}&status=IN_PLAY,PAUSED,FINISHED`,
+		);
 
 		const matches = data.matches || [];
 		return this.transformMatches(matches, options.editionExternalKey);

@@ -213,6 +213,9 @@ declare
   v_score_home text;
   v_score_away text;
   v_clean_result jsonb;
+  v_source_ref text;
+  v_curr_result record;
+  v_should_settle boolean;
 begin
   if p_batch is null then
     raise exception 'Batch payload cannot be null';
@@ -629,8 +632,26 @@ begin
         where id = v_market_id;
       end if;
 
-      -- Handle Result settlement via private.settle_market_result
-      if v_event_elem ? 'result' and v_market_id is not null then
+      v_source_ref := v_provider_slug || ':' || (v_event_elem->>'external_key');
+
+      -- If event is cancelled or abandoned, void market and predictions via settlement engine
+      if v_event_status in ('cancelled', 'abandoned') or (v_market_elem->>'status') = 'void' then
+        select * into v_curr_result
+        from public.market_results
+        where event_market_id = v_market_id;
+
+        if v_curr_result is null or v_curr_result.status <> 'void' then
+          perform private.settle_market_result(
+            v_market_id,
+            null,
+            'void',
+            'provider',
+            v_source_ref,
+            100
+          );
+        end if;
+      -- Handle Result settlement via private.settle_market_result with idempotency check
+      elsif v_event_elem ? 'result' and v_market_id is not null then
         v_res_elem := v_event_elem->'result';
         v_result_status := coalesce(v_res_elem->>'status', 'provisional');
 
@@ -651,17 +672,34 @@ begin
             'version', 1
           );
 
-          perform private.settle_market_result(
-            v_market_id,
-            v_clean_result,
-            v_result_status,
-            'provider',
-            v_provider_slug || ':' || (v_event_elem->>'external_key'),
-            100
-          );
+          -- Idempotency check: compare with existing result snapshot
+          select * into v_curr_result
+          from public.market_results
+          where event_market_id = v_market_id;
 
-          if v_result_status = 'final' then
-            v_settled_results := v_settled_results + 1;
+          v_should_settle := true;
+          if v_curr_result is not null then
+            if v_curr_result.status = v_result_status
+               and (v_curr_result.result->>'home') = (v_clean_result->>'home')
+               and (v_curr_result.result->>'away') = (v_clean_result->>'away')
+               and coalesce(v_curr_result.source_ref, '') = v_source_ref then
+              v_should_settle := false;
+            end if;
+          end if;
+
+          if v_should_settle then
+            perform private.settle_market_result(
+              v_market_id,
+              v_clean_result,
+              v_result_status,
+              'provider',
+              v_source_ref,
+              100
+            );
+
+            if v_result_status = 'final' then
+              v_settled_results := v_settled_results + 1;
+            end if;
           end if;
         end if;
       end if;

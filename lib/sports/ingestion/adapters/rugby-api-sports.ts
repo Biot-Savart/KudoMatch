@@ -9,7 +9,9 @@ import { deriveResultStatus, normalizeEventStatus } from '../normalize-status';
 import { withRetry } from '../retry';
 
 export interface RugbyApiSportsAdapterOptions {
-	apiKey?: string;
+	apiSportsKey?: string;
+	rapidApiKey?: string;
+	rapidApiHost?: string;
 	baseUrl?: string;
 	recordedGames?: unknown;
 }
@@ -18,15 +20,54 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 	public readonly providerSlug = 'api-sports';
 	public readonly sportSlug = 'rugby-union';
 
-	private apiKey?: string;
+	private apiSportsKey?: string;
+	private rapidApiKey?: string;
+	private rapidApiHost: string;
 	private baseUrl: string;
 	private recordedGames?: any;
 
 	constructor(options: RugbyApiSportsAdapterOptions = {}) {
-		this.apiKey =
-			options.apiKey || process.env.API_SPORTS_KEY || process.env.RAPIDAPI_KEY;
-		this.baseUrl = options.baseUrl || 'https://v1.rugby.api-sports.io';
+		this.apiSportsKey = options.apiSportsKey || process.env.API_SPORTS_KEY;
+		this.rapidApiKey = options.rapidApiKey || process.env.RAPIDAPI_KEY;
+		this.rapidApiHost =
+			options.rapidApiHost ||
+			process.env.RAPIDAPI_RUGBY_HOST ||
+			'rugby-union.p.rapidapi.com';
+
+		if (this.apiSportsKey) {
+			// Direct API-Sports Configuration
+			this.baseUrl = options.baseUrl || 'https://v1.rugby.api-sports.io';
+		} else if (this.rapidApiKey) {
+			// RapidAPI Configuration
+			this.baseUrl =
+				options.baseUrl ||
+				process.env.RAPIDAPI_RUGBY_BASE_URL ||
+				'https://rugby-union.p.rapidapi.com';
+		} else {
+			// Default URL (will require key at request time or recorded games)
+			this.baseUrl = options.baseUrl || 'https://v1.rugby.api-sports.io';
+		}
+
 		this.recordedGames = options.recordedGames;
+	}
+
+	private getHeaders(): Record<string, string> {
+		if (this.apiSportsKey) {
+			return {
+				'x-apisports-key': this.apiSportsKey,
+			};
+		}
+
+		if (this.rapidApiKey) {
+			return {
+				'x-rapidapi-key': this.rapidApiKey,
+				'x-rapidapi-host': this.rapidApiHost,
+			};
+		}
+
+		throw new Error(
+			'API-Sports authentication error: Neither API_SPORTS_KEY (direct) nor RAPIDAPI_KEY (RapidAPI) is configured.',
+		);
 	}
 
 	private async request<T>(endpoint: string): Promise<T> {
@@ -34,16 +75,12 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 			return this.recordedGames as T;
 		}
 
-		if (!this.apiKey) {
-			throw new Error('API_SPORTS_KEY or RAPIDAPI_KEY is not configured');
-		}
+		const headers = this.getHeaders();
 
 		return withRetry(
 			async () => {
 				const response = await fetch(`${this.baseUrl}${endpoint}`, {
-					headers: {
-						'x-apisports-key': this.apiKey as string,
-					},
+					headers,
 				});
 
 				if (!response.ok) {
@@ -150,7 +187,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 			country?: { code?: string };
 		}> = defaultSixNationsTeams;
 
-		if (this.apiKey) {
+		if (this.apiSportsKey || this.rapidApiKey) {
 			try {
 				const leagueId = editionExternalKey.split('-')[0] || '11';
 				const season = editionExternalKey.split('-')[1] || '2025';
@@ -213,7 +250,8 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 
 	async fetchEvents(options: FetchEventsOptions): Promise<CanonicalEventDTO[]> {
 		const leagueId = options.editionExternalKey.split('-')[0] || '11';
-		const season = options.editionExternalKey.split('-')[1] || '2025';
+		const season =
+			options.seasonKey || options.editionExternalKey.split('-')[1] || '2026';
 
 		const data = await this.request<{
 			response?: Array<any>;
@@ -225,9 +263,12 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 
 	async fetchLiveUpdates(options: {
 		editionExternalKey: string;
+		competitionExternalKey?: string;
+		seasonKey?: string;
 	}): Promise<CanonicalEventDTO[]> {
 		const leagueId = options.editionExternalKey.split('-')[0] || '11';
-		const season = options.editionExternalKey.split('-')[1] || '2025';
+		const season =
+			options.seasonKey || options.editionExternalKey.split('-')[1] || '2026';
 
 		const data = await this.request<{
 			response?: Array<any>;
