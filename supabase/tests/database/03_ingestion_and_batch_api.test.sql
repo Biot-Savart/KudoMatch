@@ -2,14 +2,14 @@
 begin;
 select plan(28);
 
--- 1. Table and Schema Existence
+-- 1. Table and Schema Existence (5 assertions)
 select has_table('public', 'data_providers', 'Public data_providers table exists');
 select has_table('public', 'ingestion_runs', 'Public ingestion_runs table exists');
 select has_table('public', 'ingestion_run_leases', 'Public ingestion_run_leases table exists');
 select has_table('public', 'ingestion_quarantine', 'Public ingestion_quarantine table exists');
 select has_table('public', 'external_entity_refs', 'Public external_entity_refs table exists');
 
--- 2. Function Existence
+-- 2. Function Existence (6 assertions)
 select has_function('private', 'acquire_ingestion_lease', ARRAY['text', 'text', 'integer'], 'private.acquire_ingestion_lease exists');
 select has_function('private', 'release_ingestion_lease', ARRAY['text', 'text'], 'private.release_ingestion_lease exists');
 select has_function('private', 'apply_canonical_ingestion_batch', ARRAY['jsonb'], 'private.apply_canonical_ingestion_batch exists');
@@ -18,7 +18,7 @@ select has_function('public', 'acquire_ingestion_lease', ARRAY['text', 'text', '
 select has_function('public', 'release_ingestion_lease', ARRAY['text', 'text'], 'public.release_ingestion_lease wrapper exists');
 select has_function('public', 'apply_canonical_ingestion_batch', ARRAY['jsonb'], 'public.apply_canonical_ingestion_batch wrapper exists');
 
--- 3. Ingestion Lease Mutual Exclusion
+-- 3. Ingestion Lease Mutual Exclusion & Race Safety (8 assertions)
 select is(
   private.acquire_ingestion_lease('test:lease:key:1', 'worker-A', 60),
   true,
@@ -55,10 +55,24 @@ select is(
   'worker-B can now acquire released lease'
 );
 
--- Clean up test lease
-select private.release_ingestion_lease('test:lease:key:1', 'worker-B');
+-- Concurrency-safe atomic conflict handling without exceptions
+select is(
+  private.acquire_ingestion_lease('concurrent:lease:test', 'worker-1', 60),
+  true,
+  'Worker-1 acquires fresh lease via atomic upsert'
+);
 
--- 4. Batch RPC Execution with Canonical Entities
+select is(
+  private.acquire_ingestion_lease('concurrent:lease:test', 'worker-2', 60),
+  false,
+  'Worker-2 safely fails to acquire active lease without unique constraint exception'
+);
+
+-- Clean up test leases
+select private.release_ingestion_lease('test:lease:key:1', 'worker-B');
+select private.release_ingestion_lease('concurrent:lease:test', 'worker-1');
+
+-- 4. Batch RPC Execution with Canonical Entities (4 assertions)
 select lives_ok(
   $$
   select private.apply_canonical_ingestion_batch(
@@ -139,7 +153,7 @@ select is(
   'Event competitor slots 1 and 2 are correctly inserted'
 );
 
--- 5. Idempotent Settlement Test (Finding 4)
+-- 5. Idempotent Settlement Test (2 assertions)
 -- Apply final score (27-22)
 select private.apply_canonical_ingestion_batch(
   jsonb_build_object(
@@ -213,7 +227,7 @@ select is(
   'Idempotent ingestion creates exactly one settlement run'
 );
 
--- 6. Cancelled Event Voiding Test (Finding 3)
+-- 6. Cancelled Event Voiding Test (2 assertions)
 -- Insert a scheduled game
 select private.apply_canonical_ingestion_batch(
   jsonb_build_object(
@@ -293,7 +307,7 @@ select is(
   'Market status is set to void when event is cancelled'
 );
 
--- 7. Security & Permission Tests
+-- 7. Security & Permission Tests (2 assertions)
 -- Anonymous users cannot call private lease functions
 select throws_ok(
   $$ set role anon; select private.acquire_ingestion_lease('k', 'h', 60); $$,

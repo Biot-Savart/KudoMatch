@@ -642,6 +642,51 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 			).rejects.toThrow(/Invalid edition external key/);
 		});
 
+		it('throws error when explicit unknown season key is supplied', async () => {
+			const mockSupabase: any = {
+				from: vi.fn().mockReturnValue({
+					select: vi.fn().mockReturnThis(),
+					eq: vi.fn().mockReturnThis(),
+					maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+				}),
+			};
+
+			const adapter = new RugbyApiSportsAdapter();
+			await expect(
+				ensureCanonicalEdition(
+					mockSupabase,
+					adapter,
+					11,
+					undefined,
+					'11',
+					'unknown-season-9999',
+				),
+			).rejects.toThrow(/Invalid season key/);
+		});
+
+		it('throws error and halts ingestion when competitor insertion fails', async () => {
+			const mockSupabase: any = {
+				from: vi.fn().mockImplementation((table: string) => ({
+					select: vi.fn().mockReturnThis(),
+					eq: vi.fn().mockReturnThis(),
+					maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+					insert: vi.fn().mockReturnValue({
+						select: vi.fn().mockReturnValue({
+							single: vi.fn().mockResolvedValue({
+								data: null,
+								error: { message: 'Unique violation on competitor' },
+							}),
+						}),
+					}),
+				})),
+			};
+
+			const adapter = new RugbyApiSportsAdapter();
+			await expect(
+				ensureCanonicalCompetitors(mockSupabase, adapter, 11, '11-2025', '11'),
+			).rejects.toThrow(/Failed to resolve or insert competitor/);
+		});
+
 		it('fetches or creates competition, edition, competitors, and links them on fresh ingestion', async () => {
 			const storedData: {
 				competitions: any[];

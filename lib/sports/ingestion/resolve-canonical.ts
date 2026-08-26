@@ -185,10 +185,15 @@ export async function ensureCanonicalEdition(
 				`Invalid edition external key '${editionExternalKey}': not returned by provider '${adapter.providerSlug}'`,
 			);
 		}
+	} else if (seasonKey) {
+		edDto = editions.find((e) => e.seasonKey === seasonKey);
+		if (!edDto) {
+			throw new Error(
+				`Invalid season key '${seasonKey}': not returned by provider '${adapter.providerSlug}'`,
+			);
+		}
 	} else {
-		edDto = seasonKey
-			? editions.find((e) => e.seasonKey === seasonKey) || editions[0]
-			: editions[0];
+		edDto = editions[0];
 		if (!edDto) {
 			throw new Error(
 				`No editions returned by provider '${adapter.providerSlug}'`,
@@ -320,23 +325,37 @@ export async function ensureCanonicalCompetitors(
 					},
 					{ onConflict: 'provider_slug,entity_kind,external_key' },
 				);
-			} else if (compErr) {
-				console.warn(
-					`Warning inserting competitor '${comp.name}':`,
-					compErr.message,
+			} else {
+				const errorMsg = compErr
+					? compErr.message
+					: 'Unknown competitor insertion failure';
+				throw new Error(
+					`Failed to resolve or insert competitor '${comp.name}' (key: ${comp.externalKey}) for provider '${adapter.providerSlug}': ${errorMsg}`,
 				);
 			}
 		}
 
-		if (competitorId) {
-			competitorMap.set(comp.externalKey, competitorId);
-			// Link to edition
-			await supabase.from('edition_competitors').upsert(
+		if (!competitorId) {
+			throw new Error(
+				`Competitor '${comp.name}' (key: ${comp.externalKey}) could not be resolved for provider '${adapter.providerSlug}'`,
+			);
+		}
+
+		competitorMap.set(comp.externalKey, competitorId);
+		// Link to edition
+		const { error: linkErr } = await supabase
+			.from('edition_competitors')
+			.upsert(
 				{
 					edition_id: editionId,
 					competitor_id: competitorId,
 				},
 				{ onConflict: 'edition_id,competitor_id' },
+			);
+
+		if (linkErr) {
+			throw new Error(
+				`Failed to link competitor '${comp.name}' to edition ${editionId}: ${linkErr.message}`,
 			);
 		}
 	}

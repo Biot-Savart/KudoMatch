@@ -177,11 +177,44 @@ describe('scripts automation and seeding', () => {
 	});
 
 	describe('seed-six-nations.ts', () => {
-		it('runs seedSixNations successfully in dryRun mode', async () => {
+		it('runs seedSixNations successfully in dryRun mode with recorded fixtures in non-prod', async () => {
 			const { seedSixNations } = await import('@/scripts/seed-six-nations');
-			const result = await seedSixNations({ dryRun: true, useRecorded: true });
+			const result = await seedSixNations({ dryRun: true });
 			expect(result.status).toBe('success');
 			expect(result.summary.fetchedCount).toBeGreaterThan(0);
+		});
+
+		it('rejects automatic recorded fallback in production when API credentials are missing', async () => {
+			vi.stubEnv('NODE_ENV', 'production');
+			const origKey1 = process.env.API_SPORTS_KEY;
+			const origKey2 = process.env.RAPIDAPI_KEY;
+			delete process.env.API_SPORTS_KEY;
+			delete process.env.RAPIDAPI_KEY;
+
+			try {
+				const { seedSixNations } = await import('@/scripts/seed-six-nations');
+				await expect(seedSixNations({ dryRun: true })).rejects.toThrow(
+					/Production Six Nations seeding requires valid API_SPORTS_KEY or RAPIDAPI_KEY credentials/,
+				);
+			} finally {
+				if (origKey1) process.env.API_SPORTS_KEY = origKey1;
+				if (origKey2) process.env.RAPIDAPI_KEY = origKey2;
+				vi.unstubAllEnvs();
+			}
+		});
+
+		it('allows explicit useRecorded in production when specified', async () => {
+			vi.stubEnv('NODE_ENV', 'production');
+			try {
+				const { seedSixNations } = await import('@/scripts/seed-six-nations');
+				const result = await seedSixNations({
+					dryRun: true,
+					useRecorded: true,
+				});
+				expect(result.status).toBe('success');
+			} finally {
+				vi.unstubAllEnvs();
+			}
 		});
 	});
 

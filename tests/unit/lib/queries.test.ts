@@ -413,6 +413,38 @@ describe('lib/queries modular unit tests', () => {
 			expect(insertedMember.user_id).toBe('u1');
 		});
 
+		it('should force normalized scoring_mode for all_sports pools even if omitted', async () => {
+			let insertedPoolPayload: any = null;
+			(mockSupabaseClient.from as any)
+				.mockImplementationOnce(() => ({
+					insert: vi.fn().mockImplementation((payload: any) => {
+						insertedPoolPayload = payload;
+						return {
+							select: vi.fn().mockReturnValue({
+								single: vi.fn().mockResolvedValue({
+									data: { id: 'p-all-sports', ...payload },
+									error: null,
+								}),
+							}),
+						};
+					}),
+				}))
+				.mockImplementationOnce(() => ({
+					insert: vi.fn().mockResolvedValue({ data: { id: 1 }, error: null }),
+				}));
+
+			const created = await createPool({
+				name: 'All Sports World Championship',
+				user_id: 'u1',
+				scope_kind: 'all_sports',
+				// no scoring_mode provided
+			});
+
+			expect(insertedPoolPayload).toBeDefined();
+			expect(insertedPoolPayload.scoring_mode).toBe('normalized');
+			expect(created.scoring_mode).toBe('normalized');
+		});
+
 		it('should roll back pool creation when creator membership insertion fails', async () => {
 			const mockPool = {
 				id: 'p-failed',

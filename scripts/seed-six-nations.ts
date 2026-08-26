@@ -18,10 +18,19 @@ export interface SeedSixNationsOptions {
 export async function seedSixNations(options: SeedSixNationsOptions = {}) {
 	console.log('🏉 Initiating Six Nations Data Ingestion...');
 
+	const isProduction = process.env.NODE_ENV === 'production';
+	const hasApiKey = Boolean(
+		process.env.API_SPORTS_KEY || process.env.RAPIDAPI_KEY,
+	);
+
+	if (isProduction && !hasApiKey && !options.useRecorded) {
+		throw new Error(
+			'Production Six Nations seeding requires valid API_SPORTS_KEY or RAPIDAPI_KEY credentials. Automatic fallback to recorded fixtures is disabled in production.',
+		);
+	}
+
 	const supabase = createServiceRoleClient();
-	const useRecorded =
-		options.useRecorded ||
-		(!process.env.API_SPORTS_KEY && !process.env.RAPIDAPI_KEY);
+	const useRecorded = options.useRecorded || (!isProduction && !hasApiKey);
 
 	let recordedGames: any = undefined;
 	if (useRecorded) {

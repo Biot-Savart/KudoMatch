@@ -220,6 +220,11 @@ export async function createPool(input: CreatePoolInput): Promise<ScopedPool> {
 		.replace(/^-|-$/g, '');
 	const slug = `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
 
+	const scoringMode =
+		input.scope_kind === 'all_sports'
+			? 'normalized'
+			: input.scoring_mode || 'raw';
+
 	const { data: poolData, error: poolError } = await supabase
 		.from('pools')
 		.insert({
@@ -233,7 +238,7 @@ export async function createPool(input: CreatePoolInput): Promise<ScopedPool> {
 			sport_slug: input.sport_slug || null,
 			competition_id: input.competition_id || null,
 			edition_id: input.edition_id || null,
-			scoring_mode: input.scoring_mode || 'raw',
+			scoring_mode: scoringMode,
 			scoring_starts_at: new Date().toISOString(),
 		})
 		.select()
@@ -272,7 +277,7 @@ export async function createPool(input: CreatePoolInput): Promise<ScopedPool> {
 		sport_slug: poolData.sport_slug,
 		competition_id: poolData.competition_id,
 		edition_id: poolData.edition_id,
-		scoring_mode: poolData.scoring_mode,
+		scoring_mode: scoringMode,
 		scoring_starts_at: poolData.scoring_starts_at,
 		created_at: poolData.created_at,
 		updated_at: poolData.updated_at,

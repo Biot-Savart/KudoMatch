@@ -88,7 +88,7 @@ as $$
 declare
   v_now timestamptz := clock_timestamp();
   v_new_expiry timestamptz;
-  v_existing_lease record;
+  v_acquired boolean := false;
 begin
   if p_lease_key is null or trim(p_lease_key) = '' then
     raise exception 'lease_key cannot be null or empty';
@@ -100,34 +100,19 @@ begin
 
   v_new_expiry := v_now + (greatest(coalesce(p_ttl_seconds, 300), 5) || ' seconds')::interval;
 
-  -- Lock and read existing lease
-  select * into v_existing_lease
-  from public.ingestion_run_leases
-  where lease_key = p_lease_key
-  for update;
+  -- Atomic insert on conflict: only take or renew if expired or held by same runner
+  insert into public.ingestion_run_leases (lease_key, holder_id, acquired_at, expires_at, created_at, updated_at)
+  values (p_lease_key, p_holder_id, v_now, v_new_expiry, v_now, v_now)
+  on conflict (lease_key) do update
+  set holder_id = excluded.holder_id,
+      acquired_at = v_now,
+      expires_at = v_new_expiry,
+      updated_at = v_now
+  where public.ingestion_run_leases.expires_at <= v_now
+     or public.ingestion_run_leases.holder_id = p_holder_id;
 
-  if v_existing_lease is not null then
-    -- Check if lease is active and held by a different runner
-    if v_existing_lease.expires_at > v_now and v_existing_lease.holder_id != p_holder_id then
-      return false; -- Lock held by active runner
-    end if;
-
-    -- Lease is expired or held by same runner: take/renew lease
-    update public.ingestion_run_leases
-    set holder_id = p_holder_id,
-        acquired_at = v_now,
-        expires_at = v_new_expiry,
-        updated_at = v_now
-    where lease_key = p_lease_key;
-
-    return true;
-  else
-    -- Insert new lease
-    insert into public.ingestion_run_leases (lease_key, holder_id, acquired_at, expires_at)
-    values (p_lease_key, p_holder_id, v_now, v_new_expiry);
-
-    return true;
-  end if;
+  get diagnostics v_acquired = row_count;
+  return v_acquired;
 end;
 $$;
 
