@@ -190,7 +190,7 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 			global.fetch = fetchSpy;
 
 			const adapter = new FootballDataAdapter({
-				apiKey: 'test-football-key',
+				footballDataApiKey: 'test-football-key',
 			});
 
 			await adapter.fetchEvents({
@@ -214,6 +214,41 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 				expect.stringContaining('season=2025&status=IN_PLAY,PAUSED,FINISHED'),
 				expect.anything(),
 			);
+		});
+
+		it('FootballDataAdapter supports RapidAPI gateway with separate headers and host', async () => {
+			const fetchSpy = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ matches: [] }),
+			});
+			global.fetch = fetchSpy;
+
+			const rapidAdapter = new FootballDataAdapter({
+				rapidApiKey: 'rapid-football-key-789',
+				rapidApiHost: 'football-data.p.rapidapi.com',
+			});
+
+			await rapidAdapter.fetchEvents({
+				editionExternalKey: '2021-2025',
+				seasonKey: '2025-2026',
+			});
+
+			expect(fetchSpy).toHaveBeenCalledWith(
+				'https://football-data.p.rapidapi.com/v4/competitions/2021/matches?season=2025',
+				{
+					headers: {
+						'x-rapidapi-key': 'rapid-football-key-789',
+						'x-rapidapi-host': 'football-data.p.rapidapi.com',
+					},
+				},
+			);
+		});
+
+		it('FootballDataAdapter throws when no API key is configured', async () => {
+			const unauthAdapter = new FootballDataAdapter();
+			await expect(
+				unauthAdapter.fetchEvents({ editionExternalKey: '2021-2025' }),
+			).rejects.toThrow(/Football-Data authentication error/);
 		});
 
 		it('RugbyApiSportsAdapter supports Direct API-Sports authentication', async () => {
@@ -317,7 +352,7 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 		});
 	});
 
-	describe('Active Edition Resolution in fetchLiveScores (Finding 2)', () => {
+	describe('Active Edition & Provider Resolution in fetchLiveScores (Finding 2 & 4)', () => {
 		it('resolves active edition from database for rugby and football', async () => {
 			const mockSupabase: any = {
 				rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
@@ -355,6 +390,45 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 
 			expect(rugbyResult.success).toBe(true);
 			expect(rugbyResult.summary?.editionKey).toBe('11-2026');
+		});
+
+		it('honors explicit options.provider and rejects incompatible sport/provider combinations', async () => {
+			const mockSupabase: any = {
+				rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+				from: vi.fn().mockReturnValue({
+					select: vi.fn().mockReturnThis(),
+					eq: vi.fn().mockReturnThis(),
+					order: vi.fn().mockReturnThis(),
+					limit: vi.fn().mockReturnThis(),
+					maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+				}),
+			};
+
+			// Incompatible sport/provider combination
+			await expect(
+				fetchLiveScores(
+					{
+						sport: 'rugby-union',
+						provider: 'football-data',
+						dryRun: true,
+					},
+					mockSupabase,
+				),
+			).rejects.toThrow(
+				/Provider 'football-data' is incompatible with sport 'rugby-union'/,
+			);
+
+			// Valid provider option
+			const mockResult = await fetchLiveScores(
+				{
+					sport: 'football',
+					provider: 'mock-provider',
+					dryRun: true,
+				},
+				mockSupabase,
+			);
+			expect(mockResult.success).toBe(true);
+			expect(mockResult.summary?.providerSlug).toBe('mock-provider');
 		});
 	});
 
@@ -410,7 +484,89 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 		});
 	});
 
-	describe('Catalog Resolution & Dependency Order (Finding 3)', () => {
+	describe('Catalog Resolution, Seed Alignment & Key Validation (Finding 1 & 3)', () => {
+		it('proves the seeded active football edition (2025-2026) is reused without creating a duplicate', async () => {
+			let insertedCount = 0;
+			const mockSupabase: any = {
+				from: vi.fn().mockImplementation((table: string) => ({
+					select: vi.fn().mockReturnThis(),
+					eq: vi.fn().mockReturnThis(),
+					order: vi.fn().mockReturnThis(),
+					limit: vi.fn().mockReturnThis(),
+					maybeSingle: vi.fn().mockImplementation(async () => {
+						if (table === 'external_entity_refs') return { data: null };
+						if (table === 'competition_editions') {
+							// Seeded active edition exists with id 99
+							return { data: { id: 99, season_key: '2025-2026' } };
+						}
+						return { data: null };
+					}),
+					insert: vi.fn().mockImplementation(() => {
+						insertedCount++;
+						return {
+							select: vi.fn().mockReturnValue({
+								single: vi.fn().mockResolvedValue({ data: { id: 100 } }),
+							}),
+						};
+					}),
+					upsert: vi.fn().mockResolvedValue({ data: null }),
+				})),
+			};
+
+			const adapter = new FootballDataAdapter({ recordedMatches: plFixture });
+
+			const editionId = await ensureCanonicalEdition(
+				mockSupabase,
+				adapter,
+				1, // Premier League competition ID
+				'2021-2025',
+			);
+
+			// Expect the seeded edition id (99) to be reused
+			expect(editionId).toBe(99);
+			// Expect insert on competition_editions not to have been called
+			expect(insertedCount).toBe(0);
+		});
+
+		it('throws error when explicit invalid competition key is supplied', async () => {
+			const mockSupabase: any = {
+				from: vi.fn().mockReturnValue({
+					select: vi.fn().mockReturnThis(),
+					eq: vi.fn().mockReturnThis(),
+					maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+				}),
+			};
+
+			const adapter = new RugbyApiSportsAdapter();
+			await expect(
+				ensureCanonicalCompetition(
+					mockSupabase,
+					adapter,
+					'non-existent-competition-99999',
+				),
+			).rejects.toThrow(/Invalid competition external key/);
+		});
+
+		it('throws error when explicit invalid edition key is supplied', async () => {
+			const mockSupabase: any = {
+				from: vi.fn().mockReturnValue({
+					select: vi.fn().mockReturnThis(),
+					eq: vi.fn().mockReturnThis(),
+					maybeSingle: vi.fn().mockResolvedValue({ data: null }),
+				}),
+			};
+
+			const adapter = new RugbyApiSportsAdapter();
+			await expect(
+				ensureCanonicalEdition(
+					mockSupabase,
+					adapter,
+					11,
+					'non-existent-edition-99999',
+				),
+			).rejects.toThrow(/Invalid edition external key/);
+		});
+
 		it('fetches or creates competition, edition, competitors, and links them on fresh ingestion', async () => {
 			const storedData: {
 				competitions: any[];

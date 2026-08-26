@@ -10,6 +10,9 @@ import { withRetry } from '../retry';
 
 export interface FootballDataAdapterOptions {
 	apiKey?: string;
+	footballDataApiKey?: string;
+	rapidApiKey?: string;
+	rapidApiHost?: string;
 	baseUrl?: string;
 	recordedMatches?: unknown;
 }
@@ -18,17 +21,56 @@ export class FootballDataAdapter implements SportProviderAdapter {
 	public readonly providerSlug = 'football-data';
 	public readonly sportSlug = 'football';
 
-	private apiKey?: string;
+	private directApiKey?: string;
+	private rapidApiKey?: string;
+	private rapidApiHost: string;
 	private baseUrl: string;
 	private recordedMatches?: any;
 
 	constructor(options: FootballDataAdapterOptions = {}) {
-		this.apiKey =
+		this.directApiKey =
+			options.footballDataApiKey ||
 			options.apiKey ||
-			process.env.FOOTBALL_DATA_API_KEY ||
-			process.env.RAPIDAPI_KEY;
-		this.baseUrl = options.baseUrl || 'https://api.football-data.org/v4';
+			process.env.FOOTBALL_DATA_API_KEY;
+		this.rapidApiKey = options.rapidApiKey || process.env.RAPIDAPI_KEY;
+		this.rapidApiHost =
+			options.rapidApiHost ||
+			process.env.RAPIDAPI_FOOTBALL_DATA_HOST ||
+			'football-data.p.rapidapi.com';
+
+		if (this.directApiKey) {
+			// Direct Football-Data.org Client
+			this.baseUrl = options.baseUrl || 'https://api.football-data.org/v4';
+		} else if (this.rapidApiKey) {
+			// RapidAPI Gateway Configuration
+			this.baseUrl =
+				options.baseUrl ||
+				process.env.RAPIDAPI_FOOTBALL_DATA_BASE_URL ||
+				'https://football-data.p.rapidapi.com/v4';
+		} else {
+			this.baseUrl = options.baseUrl || 'https://api.football-data.org/v4';
+		}
+
 		this.recordedMatches = options.recordedMatches;
+	}
+
+	private getHeaders(): Record<string, string> {
+		if (this.directApiKey) {
+			return {
+				'X-Auth-Token': this.directApiKey,
+			};
+		}
+
+		if (this.rapidApiKey) {
+			return {
+				'x-rapidapi-key': this.rapidApiKey,
+				'x-rapidapi-host': this.rapidApiHost,
+			};
+		}
+
+		throw new Error(
+			'Football-Data authentication error: Neither FOOTBALL_DATA_API_KEY (direct) nor RAPIDAPI_KEY (RapidAPI) is configured.',
+		);
 	}
 
 	private async request<T>(endpoint: string): Promise<T> {
@@ -36,16 +78,12 @@ export class FootballDataAdapter implements SportProviderAdapter {
 			return this.recordedMatches as T;
 		}
 
-		if (!this.apiKey) {
-			throw new Error('FOOTBALL_DATA_API_KEY is not configured');
-		}
+		const headers = this.getHeaders();
 
 		return withRetry(
 			async () => {
 				const response = await fetch(`${this.baseUrl}${endpoint}`, {
-					headers: {
-						'X-Auth-Token': this.apiKey as string,
-					},
+					headers,
 				});
 
 				if (!response.ok) {
@@ -91,25 +129,31 @@ export class FootballDataAdapter implements SportProviderAdapter {
 			{
 				externalKey: `${competitionExternalKey}-2024`,
 				competitionExternalKey,
-				seasonKey: '2024',
+				seasonKey: '2024-2025',
 				name: 'Premier League 2024/2025',
 				status: 'completed',
 			},
 			{
 				externalKey: `${competitionExternalKey}-2025`,
 				competitionExternalKey,
-				seasonKey: '2025',
+				seasonKey: '2025-2026',
 				name: 'Premier League 2025/2026',
 				status: 'active',
 			},
 		];
 	}
 
+	private extractSeasonYear(seasonOrEditionKey?: string): string {
+		if (!seasonOrEditionKey) return '2025';
+		const match = seasonOrEditionKey.match(/\b(20\d\d)\b/);
+		return match ? match[1] : '2025';
+	}
+
 	async fetchCompetitors(
 		editionExternalKey: string,
 	): Promise<CanonicalCompetitorDTO[]> {
 		const compId = editionExternalKey.split('-')[0] || '2021';
-		const season = editionExternalKey.split('-')[1] || '2025';
+		const seasonYear = this.extractSeasonYear(editionExternalKey);
 
 		let teams: Array<{
 			id: number;
@@ -119,7 +163,7 @@ export class FootballDataAdapter implements SportProviderAdapter {
 			crest?: string;
 		}> = [];
 
-		if (this.apiKey) {
+		if (this.directApiKey || this.rapidApiKey) {
 			try {
 				const data = await this.request<{
 					teams?: Array<{
@@ -129,7 +173,7 @@ export class FootballDataAdapter implements SportProviderAdapter {
 						tla?: string;
 						crest?: string;
 					}>;
-				}>(`/competitions/${compId}/teams?season=${season}`);
+				}>(`/competitions/${compId}/teams?season=${seasonYear}`);
 
 				if (data?.teams && Array.isArray(data.teams)) {
 					teams = data.teams;
@@ -188,11 +232,12 @@ export class FootballDataAdapter implements SportProviderAdapter {
 
 	async fetchEvents(options: FetchEventsOptions): Promise<CanonicalEventDTO[]> {
 		const compId = options.editionExternalKey.split('-')[0] || '2021';
-		const season =
-			options.seasonKey || options.editionExternalKey.split('-')[1] || '2025';
+		const seasonYear = this.extractSeasonYear(
+			options.seasonKey || options.editionExternalKey,
+		);
 		const data = await this.request<{
 			matches?: Array<any>;
-		}>(`/competitions/${compId}/matches?season=${season}`);
+		}>(`/competitions/${compId}/matches?season=${seasonYear}`);
 
 		const matches = data.matches || [];
 		return this.transformMatches(matches, options.editionExternalKey);
@@ -204,12 +249,13 @@ export class FootballDataAdapter implements SportProviderAdapter {
 		seasonKey?: string;
 	}): Promise<CanonicalEventDTO[]> {
 		const compId = options.editionExternalKey.split('-')[0] || '2021';
-		const season =
-			options.seasonKey || options.editionExternalKey.split('-')[1] || '2025';
+		const seasonYear = this.extractSeasonYear(
+			options.seasonKey || options.editionExternalKey,
+		);
 		const data = await this.request<{
 			matches?: Array<any>;
 		}>(
-			`/competitions/${compId}/matches?season=${season}&status=IN_PLAY,PAUSED,FINISHED`,
+			`/competitions/${compId}/matches?season=${seasonYear}&status=IN_PLAY,PAUSED,FINISHED`,
 		);
 
 		const matches = data.matches || [];

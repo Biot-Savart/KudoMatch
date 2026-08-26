@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { SportProviderAdapter } from './adapter';
+import { CanonicalCompetitionDTO, CanonicalEditionDTO } from './dto';
 
 export interface CanonicalResolutionContext {
 	providerSlug: string;
@@ -76,15 +77,24 @@ export async function ensureCanonicalCompetition(
 
 	// 2. Fetch competition definition from adapter
 	const competitions = await adapter.fetchCompetitions();
-	const compDto = competitionExternalKey
-		? competitions.find((c) => c.externalKey === competitionExternalKey) ||
-			competitions[0]
-		: competitions[0];
+	let compDto: CanonicalCompetitionDTO | undefined;
 
-	if (!compDto) {
-		throw new Error(
-			`Unable to find competition from adapter '${adapter.providerSlug}' for key '${competitionExternalKey || 'default'}'`,
+	if (competitionExternalKey) {
+		compDto = competitions.find(
+			(c) => c.externalKey === competitionExternalKey,
 		);
+		if (!compDto) {
+			throw new Error(
+				`Invalid competition external key '${competitionExternalKey}': not returned by provider '${adapter.providerSlug}'`,
+			);
+		}
+	} else {
+		compDto = competitions[0];
+		if (!compDto) {
+			throw new Error(
+				`No competitions returned by provider '${adapter.providerSlug}'`,
+			);
+		}
 	}
 
 	// 3. Check if competition already exists by (sport_slug, slug)
@@ -144,78 +154,119 @@ export async function ensureCanonicalEdition(
 	supabase: SupabaseClient,
 	adapter: SportProviderAdapter,
 	competitionId: number,
-	editionExternalKey: string,
+	editionExternalKey?: string,
 	competitionExternalKey?: string,
 	seasonKey?: string,
 ): Promise<number> {
 	// 1. Try resolving existing external ref
-	const existingId = await resolveExternalRef(
-		supabase,
-		adapter.providerSlug,
-		'edition',
-		editionExternalKey,
-	);
-	if (existingId) return existingId;
-
-	// 2. Fetch edition definition from adapter
-	const editions = await adapter.fetchEditions(
-		competitionExternalKey || String(competitionId),
-	);
-	const edDto =
-		editions.find((e) => e.externalKey === editionExternalKey) ||
-		(seasonKey ? editions.find((e) => e.seasonKey === seasonKey) : null) ||
-		editions[0];
-
-	if (!edDto) {
-		throw new Error(
-			`Unable to find edition from adapter '${adapter.providerSlug}' for key '${editionExternalKey}'`,
+	if (editionExternalKey) {
+		const existingId = await resolveExternalRef(
+			supabase,
+			adapter.providerSlug,
+			'edition',
+			editionExternalKey,
 		);
+		if (existingId) return existingId;
 	}
 
-	// 3. Check if edition already exists by (competition_id, season_key)
+	// 2. Fetch edition definition from adapter
+	const compKey =
+		competitionExternalKey ||
+		(editionExternalKey ? editionExternalKey.split('-')[0] : null) ||
+		String(competitionId);
+
+	const editions = await adapter.fetchEditions(compKey);
+	let edDto: CanonicalEditionDTO | undefined;
+
+	if (editionExternalKey) {
+		edDto = editions.find(
+			(e) =>
+				e.externalKey === editionExternalKey ||
+				(seasonKey && e.seasonKey === seasonKey) ||
+				(editionExternalKey.includes('-') &&
+					e.externalKey.endsWith(
+						editionExternalKey.slice(editionExternalKey.indexOf('-')),
+					)),
+		);
+		if (!edDto) {
+			throw new Error(
+				`Invalid edition external key '${editionExternalKey}': not returned by provider '${adapter.providerSlug}'`,
+			);
+		}
+	} else {
+		edDto = seasonKey
+			? editions.find((e) => e.seasonKey === seasonKey) || editions[0]
+			: editions[0];
+		if (!edDto) {
+			throw new Error(
+				`No editions returned by provider '${adapter.providerSlug}'`,
+			);
+		}
+	}
+
+	// 3. Check if edition already exists by (competition_id, season_key) or normalized variant
 	let canonicalEditionId: number | null = null;
-	const { data: existingEd } = await supabase
+	const { data: directMatch } = await supabase
 		.from('competition_editions')
-		.select('id')
+		.select('id, season_key')
 		.eq('competition_id', competitionId)
 		.eq('season_key', edDto.seasonKey)
 		.maybeSingle();
 
-	if (existingEd?.id) {
-		canonicalEditionId = Number(existingEd.id);
+	if (directMatch?.id) {
+		canonicalEditionId = Number(directMatch.id);
 	} else {
-		// Insert edition
-		const { data: insertedEd, error: edErr } = await supabase
-			.from('competition_editions')
-			.insert({
-				competition_id: competitionId,
-				season_key: edDto.seasonKey,
-				name: edDto.name,
-				starts_at: edDto.startsAt || new Date().toISOString(),
-				ends_at:
-					edDto.endsAt ||
-					new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
-				status:
-					edDto.status === 'archived' ? 'completed' : edDto.status || 'active',
-				metadata: edDto.metadata || {},
-			})
-			.select('id')
-			.single();
+		// Check alternate format (e.g. 2025-2026 vs 2025)
+		const altSeasonKey = edDto.seasonKey.includes('-')
+			? edDto.seasonKey.split('-')[0]
+			: `${edDto.seasonKey}-${Number(edDto.seasonKey) + 1}`;
 
-		if (edErr || !insertedEd) {
-			throw new Error(
-				`Failed to insert competition edition '${edDto.name}': ${edErr?.message}`,
-			);
+		const { data: altMatch } = await supabase
+			.from('competition_editions')
+			.select('id, season_key')
+			.eq('competition_id', competitionId)
+			.eq('season_key', altSeasonKey)
+			.maybeSingle();
+
+		if (altMatch?.id) {
+			canonicalEditionId = Number(altMatch.id);
+		} else {
+			// Insert edition if not found in database seed
+			const { data: insertedEd, error: edErr } = await supabase
+				.from('competition_editions')
+				.insert({
+					competition_id: competitionId,
+					season_key: edDto.seasonKey,
+					name: edDto.name,
+					starts_at: edDto.startsAt || new Date().toISOString(),
+					ends_at:
+						edDto.endsAt ||
+						new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
+					status:
+						edDto.status === 'archived'
+							? 'completed'
+							: edDto.status || 'active',
+					metadata: edDto.metadata || {},
+				})
+				.select('id')
+				.single();
+
+			if (edErr || !insertedEd) {
+				throw new Error(
+					`Failed to insert competition edition '${edDto.name}': ${edErr?.message}`,
+				);
+			}
+			canonicalEditionId = Number(insertedEd.id);
 		}
-		canonicalEditionId = Number(insertedEd.id);
 	}
 
-	// 4. Upsert external entity reference
+	// 4. Upsert external entity reference to ensure the edition is mapped
+	const externalKeyToRecord = editionExternalKey || edDto.externalKey;
 	await supabase.from('external_entity_refs').upsert(
 		{
 			provider_slug: adapter.providerSlug,
 			entity_kind: 'edition',
-			external_key: editionExternalKey,
+			external_key: externalKeyToRecord,
 			edition_id: canonicalEditionId,
 			is_primary: true,
 		},

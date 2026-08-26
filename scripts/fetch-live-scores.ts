@@ -40,30 +40,67 @@ export async function fetchLiveScores(
 	const operation = options.operation || 'sync_live';
 	const simulate = options.simulate || false;
 	const dryRun = options.dryRun || false;
+	const explicitProvider = options.provider;
 
 	if (simulate && process.env.NODE_ENV === 'production') {
 		throw new Error('Simulation mode is not permitted in production');
 	}
 
+	// 1. Validate and select the requested adapter
 	let adapter: SportProviderAdapter;
+
+	if (simulate || explicitProvider === 'mock-provider') {
+		adapter = new MockSportProviderAdapter(sport);
+	} else if (explicitProvider === 'football-data') {
+		if (sport !== 'football') {
+			throw new Error(
+				`Provider 'football-data' is incompatible with sport '${sport}'`,
+			);
+		}
+		adapter = new FootballDataAdapter({
+			recordedMatches: options.recordedPayload,
+		});
+	} else if (explicitProvider === 'api-sports') {
+		if (sport !== 'rugby-union') {
+			throw new Error(
+				`Provider 'api-sports' is configured for sport 'rugby-union', incompatible with '${sport}'`,
+			);
+		}
+		adapter = new RugbyApiSportsAdapter({
+			recordedGames: options.recordedPayload,
+		});
+	} else {
+		// Default provider selection based on sport
+		if (sport === 'rugby-union') {
+			adapter = new RugbyApiSportsAdapter({
+				recordedGames: options.recordedPayload,
+			});
+		} else {
+			adapter = new FootballDataAdapter({
+				recordedMatches: options.recordedPayload,
+			});
+		}
+	}
+
 	let editionExternalKey = options.editionExternalKey;
 	let competitionExternalKey = options.competitionExternalKey;
 
-	// Resolve active edition dynamically if not explicitly specified
-	if (!editionExternalKey && !simulate) {
+	// 2. Resolve active edition dynamically from selected provider and sport
+	if (
+		!editionExternalKey &&
+		!simulate &&
+		adapter.providerSlug !== 'mock-provider'
+	) {
 		try {
-			const providerSlug =
-				sport === 'rugby-union' ? 'api-sports' : 'football-data';
-
 			const { data: activeEditionRef } = await supabase
 				.from('external_entity_refs')
 				.select(
 					'external_key, competition_editions!inner(status, season_key, competition_id, competitions!inner(sport_slug))',
 				)
-				.eq('provider_slug', providerSlug)
+				.eq('provider_slug', adapter.providerSlug)
 				.eq('entity_kind', 'edition')
 				.eq('competition_editions.status', 'active')
-				.eq('competition_editions.competitions.sport_slug', sport)
+				.eq('competition_editions.competitions.sport_slug', adapter.sportSlug)
 				.order('id', { ascending: false })
 				.limit(1)
 				.maybeSingle();
@@ -85,21 +122,11 @@ export async function fetchLiveScores(
 				competitionExternalKey = competitionExternalKey || '2021';
 			}
 		}
-	}
-
-	if (simulate) {
-		adapter = new MockSportProviderAdapter(sport);
-		editionExternalKey = editionExternalKey || 'mock-edition-2025';
-	} else if (sport === 'rugby-union') {
-		adapter = new RugbyApiSportsAdapter({
-			recordedGames: options.recordedPayload,
-		});
-		competitionExternalKey = competitionExternalKey || '11';
-	} else {
-		adapter = new FootballDataAdapter({
-			recordedMatches: options.recordedPayload,
-		});
-		competitionExternalKey = competitionExternalKey || '2021';
+	} else if (
+		!editionExternalKey &&
+		(simulate || adapter.providerSlug === 'mock-provider')
+	) {
+		editionExternalKey = 'mock-edition-2025';
 	}
 
 	const res = await orchestrateIngestion({
