@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
 export function createClient() {
@@ -35,6 +36,27 @@ export function createClient() {
 					// user sessions.
 				}
 			},
+		},
+	});
+}
+
+/**
+ * Creates a server-only service-role client for background jobs and ingestion pipelines.
+ * Never expose the service role key to client components or public bundles.
+ */
+export function createServiceRoleClient() {
+	const url =
+		process.env.NEXT_PUBLIC_SUPABASE_URL ||
+		process.env.SUPABASE_URL ||
+		'https://placeholder-project-id.supabase.co';
+	const serviceRoleKey =
+		process.env.SUPABASE_SERVICE_ROLE_KEY ||
+		'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder_service_role';
+
+	return createSupabaseClient(url, serviceRoleKey, {
+		auth: {
+			persistSession: false,
+			autoRefreshToken: false,
 		},
 	});
 }

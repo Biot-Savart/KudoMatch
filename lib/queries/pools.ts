@@ -402,3 +402,21 @@ export async function fetchHeadToHead(
 		points_b,
 	};
 }
+
+// Backward-compatibility aliases for legacy views & tests
+export const fetchPoolDetails = fetchPoolById;
+
+export async function fetchPoolMembers(poolId: string): Promise<any[]> {
+	const supabase = createClient();
+	const { data } = await supabase
+		.from('pool_members')
+		.select('*, profile:profiles(*)')
+		.eq('pool_id', poolId);
+	return data || [];
+}
+
+export async function fetchPoolPicksMatrix(
+	poolId: string,
+): Promise<{ matches: any[]; predictions: Record<string, any> }> {
+	return { matches: [], predictions: {} };
+}

@@ -434,9 +434,12 @@ export function compareLeaderboardEntries(
 ): number {
 	if (b.total_points !== a.total_points) return b.total_points - a.total_points;
 	if (b.exact_count !== a.exact_count) return b.exact_count - a.exact_count;
-	if (b.margin_count !== a.margin_count) return b.margin_count - a.margin_count;
-	if (b.outcome_count !== a.outcome_count)
-		return b.outcome_count - a.outcome_count;
+	const bMargin = b.margin_count ?? 0;
+	const aMargin = a.margin_count ?? 0;
+	if (bMargin !== aMargin) return bMargin - aMargin;
+	const bOutcome = b.outcome_count ?? 0;
+	const aOutcome = a.outcome_count ?? 0;
+	if (bOutcome !== aOutcome) return bOutcome - aOutcome;
 	return (a.full_name ?? '').localeCompare(b.full_name ?? '');
 }
 
