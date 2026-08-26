@@ -98,6 +98,9 @@ export interface EventCompetitor {
 export interface SportEvent {
 	id: string; // bigint mapped to string
 	edition_id: string;
+	tournament_id?: string;
+	matchday?: number;
+	round?: string;
 	kind: EventKind;
 	starts_at: string;
 	status: EventStatus;
@@ -112,6 +115,7 @@ export interface SportEvent {
 	competitors?: EventCompetitor[];
 	markets?: EventMarket[];
 	current_market?: EventMarket;
+	[key: string]: any;
 }
 
 export type PredictableEvent = SportEvent;
@@ -265,19 +269,21 @@ export type SettlementStatus = 'pending' | 'settled' | 'void';
 export interface MarketPrediction {
 	id: string; // bigint mapped to string
 	user_id: string; // UUID
-	event_market_id: string; // bigint mapped to string
-	selection: PredictionSelection;
-	settlement_status: SettlementStatus;
-	ruleset_id: string | null;
-	result_revision: number | null;
-	tier_code: TierCode | null;
-	raw_points: number | null;
-	normalized_basis_points: number | null;
-	settled_at: string | null;
-	created_at: string;
-	updated_at: string;
+	event_market_id?: string; // bigint mapped to string
+	selection?: PredictionSelection | any;
+	settlement_status?: SettlementStatus | any;
+	ruleset_id?: string | null;
+	result_revision?: number | null;
+	tier_code?: TierCode | null;
+	raw_points?: number | null;
+	normalized_basis_points?: number | null;
+	settled_at?: string | null;
+	created_at?: string;
+	updated_at?: string;
 	market?: EventMarket;
 	profile?: Profile;
+	match_id?: string;
+	[key: string]: any;
 }
 
 export type MarketResultStatus = 'provisional' | 'final' | 'void';
@@ -312,24 +318,30 @@ export type PoolScopeKind = 'all_sports' | 'sport' | 'competition' | 'edition';
 export type PoolScoringMode = 'raw' | 'normalized';
 
 export interface ScopedPool {
-	id: string; // UUID
-	name: string;
-	created_by: string; // UUID
-	invite_code: string;
-	scope_kind: PoolScopeKind;
-	sport_slug: SportSlug | null;
-	competition_id: string | null;
-	edition_id: string | null;
-	scoring_mode: PoolScoringMode;
-	scoring_starts_at: string;
-	is_private: boolean;
-	created_at: string;
-	updated_at: string;
+	id?: string; // UUID
+	name?: string;
+	created_by?: string; // UUID
+	creator_id?: string;
+	invite_code?: string;
+	scope_kind?: PoolScopeKind;
+	sport_slug?: SportSlug | null;
+	competition_id?: string | null;
+	edition_id?: string | null;
+	scoring_mode?: PoolScoringMode;
+	scoring_starts_at?: string;
+	is_private?: boolean;
+	is_public?: boolean;
+	created_at?: string;
+	updated_at?: string;
 	creator?: Profile;
 	member_count?: number;
 	competition?: Competition;
 	edition?: CompetitionEdition;
 	sport?: Sport;
+	pool_id?: string;
+	description?: string | null;
+	success?: boolean;
+	[key: string]: any;
 }
 
 // ScopedPool is the new primary Pool interface
@@ -351,13 +363,15 @@ export type PoolMember = PoolMembershipEpisode;
 export interface PoolLeaderboardEntry {
 	rank: number;
 	user_id: string;
+	username?: string | null;
 	full_name: string | null;
 	avatar_url: string | null;
 	total_points: number;
 	exact_count: number;
-	margin_count: number;
-	outcome_count: number;
+	margin_count?: number;
+	outcome_count?: number;
 	predictions_count: number;
+	joined_at?: string;
 }
 
 export interface PoolMessage {
