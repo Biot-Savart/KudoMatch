@@ -43,15 +43,17 @@ export function createClient() {
 /**
  * Creates a server-only service-role client for background jobs and ingestion pipelines.
  * Never expose the service role key to client components or public bundles.
+ * Requires both SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL).
  */
 export function createServiceRoleClient() {
-	const url =
-		process.env.NEXT_PUBLIC_SUPABASE_URL ||
-		process.env.SUPABASE_URL ||
-		'https://placeholder-project-id.supabase.co';
-	const serviceRoleKey =
-		process.env.SUPABASE_SERVICE_ROLE_KEY ||
-		'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder_service_role';
+	const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+	const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+	if (!url || !serviceRoleKey) {
+		throw new Error(
+			'Missing Supabase service-role credentials: NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY must be set in environment variables.',
+		);
+	}
 
 	return createSupabaseClient(url, serviceRoleKey, {
 		auth: {

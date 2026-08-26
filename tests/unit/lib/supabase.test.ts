@@ -208,10 +208,36 @@ describe('lib/supabase/client', () => {
 	});
 });
 
+import { createServiceRoleClient } from '@/lib/supabase/server';
+
 describe('lib/supabase/server', () => {
 	it('should instantiate server client correctly', () => {
 		const client = createServerClient();
 		expect(client).toBeDefined();
+	});
+
+	it('should instantiate service-role client when credentials are provided', () => {
+		process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+		process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
+		const client = createServiceRoleClient();
+		expect(client).toBeDefined();
+	});
+
+	it('should throw clear error when service-role credentials are missing', () => {
+		const origUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+		const origKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+		try {
+			delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+			delete process.env.SUPABASE_URL;
+			delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+			expect(() => createServiceRoleClient()).toThrow(
+				/Missing Supabase service-role credentials/,
+			);
+		} finally {
+			if (origUrl) process.env.NEXT_PUBLIC_SUPABASE_URL = origUrl;
+			if (origKey) process.env.SUPABASE_SERVICE_ROLE_KEY = origKey;
+		}
 	});
 });
 

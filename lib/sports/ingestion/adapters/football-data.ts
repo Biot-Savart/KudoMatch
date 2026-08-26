@@ -125,17 +125,20 @@ export class FootballDataAdapter implements SportProviderAdapter {
 	async fetchEditions(
 		competitionExternalKey: string,
 	): Promise<CanonicalEditionDTO[]> {
+		if (competitionExternalKey && competitionExternalKey !== '2021') {
+			return [];
+		}
 		return [
 			{
-				externalKey: `${competitionExternalKey}-2024`,
-				competitionExternalKey,
+				externalKey: '2021-2024',
+				competitionExternalKey: '2021',
 				seasonKey: '2024-2025',
 				name: 'Premier League 2024/2025',
 				status: 'completed',
 			},
 			{
-				externalKey: `${competitionExternalKey}-2025`,
-				competitionExternalKey,
+				externalKey: '2021-2025',
+				competitionExternalKey: '2021',
 				seasonKey: '2025-2026',
 				name: 'Premier League 2025/2026',
 				status: 'active',
@@ -145,6 +148,22 @@ export class FootballDataAdapter implements SportProviderAdapter {
 
 	private extractSeasonYear(seasonOrEditionKey?: string): string {
 		if (!seasonOrEditionKey) return '2025';
+		const parts = seasonOrEditionKey.split('-');
+		if (
+			parts.length === 2 &&
+			/^\d{4}$/.test(parts[0]) &&
+			/^\d{4}$/.test(parts[1])
+		) {
+			// If it's a span like 2025-2026 (consecutive years), use starting year
+			if (Number(parts[1]) === Number(parts[0]) + 1) {
+				return parts[0];
+			}
+			// Otherwise it's competition-season like 2021-2025 -> return season year 2025
+			return parts[1];
+		}
+		if (parts.length >= 2 && /^\d{4}$/.test(parts[1])) {
+			return parts[1];
+		}
 		const match = seasonOrEditionKey.match(/\b(20\d\d)\b/);
 		return match ? match[1] : '2025';
 	}
@@ -164,23 +183,26 @@ export class FootballDataAdapter implements SportProviderAdapter {
 		}> = [];
 
 		if (this.directApiKey || this.rapidApiKey) {
-			try {
-				const data = await this.request<{
-					teams?: Array<{
-						id: number;
-						name: string;
-						shortName?: string;
-						tla?: string;
-						crest?: string;
-					}>;
-				}>(`/competitions/${compId}/teams?season=${seasonYear}`);
+			const data = await this.request<{
+				teams?: Array<{
+					id: number;
+					name: string;
+					shortName?: string;
+					tla?: string;
+					crest?: string;
+				}>;
+			}>(`/competitions/${compId}/teams?season=${seasonYear}`);
 
-				if (data?.teams && Array.isArray(data.teams)) {
-					teams = data.teams;
-				}
-			} catch {
-				teams = [];
+			if (
+				!data?.teams ||
+				!Array.isArray(data.teams) ||
+				data.teams.length === 0
+			) {
+				throw new Error(
+					`Failed to discover competitors for competition '${compId}' in season '${seasonYear}' from provider '${this.providerSlug}'`,
+				);
 			}
+			teams = data.teams;
 		} else if (this.recordedMatches?.matches) {
 			const extractedMap = new Map<
 				number,
@@ -312,7 +334,7 @@ export class FootballDataAdapter implements SportProviderAdapter {
 				market: {
 					marketKey: 'team_scoreline',
 					status:
-						status === 'finished'
+						status === 'finished' && hasScores
 							? 'settled'
 							: status === 'cancelled' || status === 'abandoned'
 								? 'void'

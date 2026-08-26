@@ -122,10 +122,13 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 	async fetchEditions(
 		competitionExternalKey: string,
 	): Promise<CanonicalEditionDTO[]> {
+		if (competitionExternalKey && competitionExternalKey !== '11') {
+			return [];
+		}
 		return [
 			{
-				externalKey: `${competitionExternalKey}-2025`,
-				competitionExternalKey,
+				externalKey: '11-2025',
+				competitionExternalKey: '11',
 				seasonKey: '2025',
 				name: 'Six Nations 2025',
 				startsAt: '2025-01-31T00:00:00Z',
@@ -133,8 +136,8 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 				status: 'completed',
 			},
 			{
-				externalKey: `${competitionExternalKey}-2026`,
-				competitionExternalKey,
+				externalKey: '11-2026',
+				competitionExternalKey: '11',
 				seasonKey: '2026',
 				name: 'Six Nations 2026',
 				startsAt: '2026-02-06T00:00:00Z',
@@ -188,29 +191,27 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 		}> = defaultSixNationsTeams;
 
 		if (this.apiSportsKey || this.rapidApiKey) {
-			try {
-				const leagueId = editionExternalKey.split('-')[0] || '11';
-				const season = editionExternalKey.split('-')[1] || '2025';
-				const data = await this.request<{
-					response?: Array<{
-						id: number;
-						name: string;
-						logo?: string;
-						country?: { code?: string };
-					}>;
-				}>(`/teams?league=${leagueId}&season=${season}`);
+			const leagueId = editionExternalKey.split('-')[0] || '11';
+			const season = editionExternalKey.split('-')[1] || '2025';
+			const data = await this.request<{
+				response?: Array<{
+					id: number;
+					name: string;
+					logo?: string;
+					country?: { code?: string };
+				}>;
+			}>(`/teams?league=${leagueId}&season=${season}`);
 
-				if (
-					data?.response &&
-					Array.isArray(data.response) &&
-					data.response.length > 0 &&
-					data.response[0].name
-				) {
-					teams = data.response;
-				}
-			} catch {
-				teams = defaultSixNationsTeams;
+			if (
+				!data?.response ||
+				!Array.isArray(data.response) ||
+				data.response.length === 0
+			) {
+				throw new Error(
+					`Failed to discover competitors for rugby league '${leagueId}' in season '${season}' from provider '${this.providerSlug}'`,
+				);
 			}
+			teams = data.response;
 		} else if (this.recordedGames?.response) {
 			const extractedMap = new Map<
 				number,
@@ -332,7 +333,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 				market: {
 					marketKey: 'team_scoreline',
 					status:
-						status === 'finished'
+						status === 'finished' && hasScores
 							? 'settled'
 							: status === 'cancelled' || status === 'abandoned'
 								? 'void'

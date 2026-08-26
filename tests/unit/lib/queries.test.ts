@@ -15,6 +15,7 @@ import {
 import {
 	createPool,
 	fetchPoolLeaderboard,
+	fetchPoolPicksMatrix,
 	fetchUserPools,
 } from '@/lib/queries/pools';
 import {
@@ -365,7 +366,7 @@ describe('lib/queries modular unit tests', () => {
 
 			const created = await createPool({
 				name: 'Premier League Legends',
-				created_by: 'u1',
+				user_id: 'u1',
 				scope_kind: 'sport',
 				sport_slug: 'football',
 			});
@@ -396,6 +397,42 @@ describe('lib/queries modular unit tests', () => {
 			expect(board).toHaveLength(1);
 			expect(board[0].rank).toBe(1);
 			expect(board[0].total_points).toBe(12);
+		});
+
+		it('should fetch pool picks matrix with events and predictions mapped', async () => {
+			const mockPool = {
+				id: 'p1',
+				name: 'Test Pool',
+				scope_kind: 'edition',
+				edition_id: 10,
+			};
+			const mockMembers = [{ user_id: 'u1' }, { user_id: 'u2' }];
+			const mockEvents = [
+				{
+					id: 101,
+					round_label: 'Gameweek 1',
+					event_markets: [{ id: 501, status: 'open' }],
+				},
+			];
+			const mockPredictions = [
+				{
+					id: 1,
+					user_id: 'u1',
+					event_market_id: 501,
+					selection: { home: '2', away: '1' },
+				},
+			];
+
+			(mockSupabaseClient.from as any)
+				.mockImplementationOnce(() => new MockQueryBuilder(mockPool))
+				.mockImplementationOnce(() => new MockQueryBuilder(mockMembers))
+				.mockImplementationOnce(() => new MockQueryBuilder(mockEvents))
+				.mockImplementationOnce(() => new MockQueryBuilder(mockPredictions));
+
+			const matrix = await fetchPoolPicksMatrix('p1', 1);
+			expect(matrix.matches).toHaveLength(1);
+			expect(matrix.predictions['u1_101']).toBeDefined();
+			expect(matrix.predictions['u1_101'].selection.home).toBe('2');
 		});
 	});
 });

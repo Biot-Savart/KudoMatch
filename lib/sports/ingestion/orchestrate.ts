@@ -94,9 +94,10 @@ export async function orchestrateIngestion(
 	}
 
 	let runId: number | null = null;
+	let resolvedCanonicalEditionId: number | null = null;
 
 	if (!dryRun) {
-		// Record run initiation in ingestion_runs
+		// Record run initiation in ingestion_runs (edition_id starts as NULL until resolved)
 		const { data: runRecord } = await supabase
 			.from('ingestion_runs')
 			.insert({
@@ -136,6 +137,16 @@ export async function orchestrateIngestion(
 				competitionExternalKey,
 				seasonKey,
 			);
+
+			resolvedCanonicalEditionId = canonicalEditionId;
+
+			// Update ingestion run with resolved edition_id
+			if (runId) {
+				await supabase
+					.from('ingestion_runs')
+					.update({ edition_id: resolvedCanonicalEditionId })
+					.eq('id', runId);
+			}
 
 			await ensureCanonicalCompetitors(
 				supabase,
@@ -281,6 +292,7 @@ export async function orchestrateIngestion(
 				await supabase
 					.from('ingestion_runs')
 					.update({
+						edition_id: resolvedCanonicalEditionId,
 						status: finalStatus,
 						fetched_count: summary.fetchedCount,
 						inserted_count: summary.insertedCount,

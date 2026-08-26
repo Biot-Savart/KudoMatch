@@ -3,28 +3,25 @@ import {
 	HeadToHeadStats,
 	PoolLeaderboardEntry,
 	PoolScopeKind,
-	PoolScoringMode,
 	ScopedPool,
 } from '@/types';
 
 export const poolsQueryKeys = {
 	all: ['pools'] as const,
-	user: (userId: string) => [...poolsQueryKeys.all, 'user', userId] as const,
-	detail: (poolId: string) =>
-		[...poolsQueryKeys.all, 'detail', poolId] as const,
-	leaderboard: (poolId: string) =>
-		[...poolsQueryKeys.all, 'leaderboard', poolId] as const,
-	h2h: (poolId: string, userA: string, userB: string) =>
-		[...poolsQueryKeys.all, 'h2h', poolId, userA, userB] as const,
+	user: (userId?: string) => ['pools', 'user', userId] as const,
+	detail: (poolId: string) => ['pools', 'detail', poolId] as const,
+	leaderboard: (poolId: string) => ['pools', 'leaderboard', poolId] as const,
+	picksMatrix: (poolId: string, matchday?: number | string) =>
+		['pools', 'picksMatrix', poolId, matchday] as const,
 };
 
 function generateInviteCode(): string {
 	const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-	let result = '';
+	let code = '';
 	for (let i = 0; i < 6; i++) {
-		result += chars.charAt(Math.floor(Math.random() * chars.length));
+		code += chars.charAt(Math.floor(Math.random() * chars.length));
 	}
-	return result;
+	return code;
 }
 
 export async function fetchUserPools(userId: string): Promise<ScopedPool[]> {
@@ -34,54 +31,65 @@ export async function fetchUserPools(userId: string): Promise<ScopedPool[]> {
 		.from('pool_members')
 		.select(
 			`
-			pool_id,
-			role,
-			joined_at,
-			left_at,
-			pools:pools(
-				*,
-				creator:profiles!created_by(id, full_name, avatar_url)
-			)
-		`,
+      pool_id,
+      joined_at,
+      left_at,
+      pool:pools (
+        id,
+        name,
+        slug,
+        description,
+        created_by,
+        is_private,
+        invite_code,
+        scope_kind,
+        sport_slug,
+        competition_id,
+        edition_id,
+        scoring_mode,
+        scoring_starts_at,
+        created_at,
+        updated_at,
+        sport:sports (slug, name, icon_key),
+        competition:competitions (id, name, slug, logo_url),
+        edition:competition_editions (id, name, season_key)
+      )
+    `,
 		)
 		.eq('user_id', userId)
-		.is('left_at', null)
-		.order('joined_at', { ascending: false });
+		.is('left_at', null);
 
 	if (error) {
-		console.error(`Error fetching pools for user ${userId}:`, error);
+		console.error('Error fetching user pools:', error);
 		throw error;
 	}
 
 	return (data ?? [])
-		.filter((row: any) => row.pools)
 		.map((row: any) => {
-			const p = row.pools;
+			const p = row.pool || row.pools;
+			if (!p) return null;
 			return {
 				id: p.id,
 				name: p.name,
+				slug: p.slug,
+				description: p.description,
 				created_by: p.created_by,
-				invite_code: p.invite_code,
-				scope_kind: p.scope_kind as PoolScopeKind,
-				sport_slug: p.sport_slug,
-				competition_id: p.competition_id ? String(p.competition_id) : null,
-				edition_id: p.edition_id ? String(p.edition_id) : null,
-				scoring_mode: p.scoring_mode as PoolScoringMode,
-				scoring_starts_at: p.scoring_starts_at,
 				is_private: p.is_private,
+				invite_code: p.invite_code,
+				scope_kind: p.scope_kind,
+				sport_slug: p.sport_slug,
+				competition_id: p.competition_id,
+				edition_id: p.edition_id,
+				scoring_mode: p.scoring_mode,
+				scoring_starts_at: p.scoring_starts_at,
 				created_at: p.created_at,
 				updated_at: p.updated_at,
-				creator: p.creator
-					? {
-							id: p.creator.id,
-							full_name: p.creator.full_name,
-							avatar_url: p.creator.avatar_url,
-							created_at: '',
-							updated_at: '',
-						}
-					: undefined,
+				sport: p.sport,
+				competition: p.competition,
+				edition: p.edition,
 			};
-		});
+		})
+		.filter(Boolean) as ScopedPool[];
 }
 
 export async function fetchPoolById(
@@ -93,21 +101,36 @@ export async function fetchPoolById(
 		.from('pools')
 		.select(
 			`
-			*,
-			creator:profiles!created_by(id, full_name, avatar_url),
-			competitions:competitions(*),
-			competition_editions:competition_editions(*),
-			sports:sports(*)
-		`,
+      id,
+      name,
+      slug,
+      description,
+      created_by,
+      is_private,
+      invite_code,
+      scope_kind,
+      sport_slug,
+      competition_id,
+      edition_id,
+      scoring_mode,
+      scoring_starts_at,
+      created_at,
+      updated_at,
+      sport:sports (slug, name, icon_key),
+      competition:competitions (id, name, slug, logo_url),
+      edition:competition_editions (id, name, season_key)
+    `,
 		)
 		.eq('id', poolId)
 		.single();
 
-	if (error || !data) {
+	if (error) {
+		console.error('Error fetching pool by ID:', error);
 		return null;
 	}
 
-	// Count active members
+	if (!data) return null;
+
 	const { count } = await supabase
 		.from('pool_members')
 		.select('*', { count: 'exact', head: true })
@@ -117,27 +140,23 @@ export async function fetchPoolById(
 	return {
 		id: data.id,
 		name: data.name,
+		slug: data.slug,
+		description: data.description,
 		created_by: data.created_by,
-		invite_code: data.invite_code,
-		scope_kind: data.scope_kind as PoolScopeKind,
-		sport_slug: data.sport_slug,
-		competition_id: data.competition_id ? String(data.competition_id) : null,
-		edition_id: data.edition_id ? String(data.edition_id) : null,
-		scoring_mode: data.scoring_mode as PoolScoringMode,
-		scoring_starts_at: data.scoring_starts_at,
 		is_private: data.is_private,
+		invite_code: data.invite_code,
+		scope_kind: data.scope_kind,
+		sport_slug: data.sport_slug,
+		competition_id: data.competition_id,
+		edition_id: data.edition_id,
+		scoring_mode: data.scoring_mode,
+		scoring_starts_at: data.scoring_starts_at,
 		created_at: data.created_at,
 		updated_at: data.updated_at,
-		member_count: count ?? 1,
-		creator: data.creator
-			? {
-					id: (data.creator as any).id,
-					full_name: (data.creator as any).full_name,
-					avatar_url: (data.creator as any).avatar_url,
-					created_at: '',
-					updated_at: '',
-				}
-			: undefined,
+		members_count: count ?? 0,
+		sport: data.sport as any,
+		competition: data.competition as any,
+		edition: data.edition as any,
 	};
 }
 
@@ -146,96 +165,106 @@ export async function fetchPoolLeaderboard(
 ): Promise<PoolLeaderboardEntry[]> {
 	const supabase = createClient();
 
-	const { data, error } = await (supabase.rpc as any)('get_pool_leaderboard', {
+	const { data, error } = await supabase.rpc('get_pool_leaderboard', {
 		p_pool_id: poolId,
 	});
 
 	if (error) {
-		console.error(`Error fetching leaderboard for pool ${poolId}:`, error);
-		return [];
+		console.error('Error fetching pool leaderboard:', error);
+		throw error;
 	}
 
 	return (data ?? []).map((row: any) => ({
-		rank: Number(row.rank ?? 1),
+		rank: Number(row.rank),
 		user_id: row.user_id,
-		full_name: row.full_name,
-		avatar_url: row.avatar_url,
-		total_points: Number(row.total_points ?? 0),
-		exact_count: Number(row.exact_count ?? 0),
-		margin_count: Number(row.margin_count ?? 0),
-		outcome_count: Number(row.outcome_count ?? 0),
-		predictions_count: Number(row.predictions_count ?? 0),
+		full_name: row.full_name || 'Anonymous Player',
+		avatar_url: row.avatar_url || null,
+		total_points: Number(row.total_points),
+		exact_count: Number(row.exact_count),
+		margin_count: Number(row.margin_count),
+		outcome_count: Number(row.outcome_count),
+		predictions_count: Number(row.predictions_count),
 	}));
 }
 
 export interface CreatePoolInput {
 	name: string;
-	created_by: string;
+	description?: string;
+	is_private?: boolean;
 	scope_kind: PoolScopeKind;
 	sport_slug?: string | null;
-	competition_id?: string | null;
-	edition_id?: string | null;
-	scoring_mode?: PoolScoringMode;
-	is_private?: boolean;
+	competition_id?: number | null;
+	edition_id?: number | null;
+	scoring_mode?: 'raw' | 'normalized';
+	user_id?: string;
+	created_by?: string;
 }
 
 export async function createPool(input: CreatePoolInput): Promise<ScopedPool> {
 	const supabase = createClient();
+	const creatorId = input.user_id || input.created_by;
+
+	if (!creatorId) {
+		throw new Error('user_id or created_by is required to create a pool');
+	}
+
 	const inviteCode = generateInviteCode();
+	const baseSlug = input.name
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, '-')
+		.replace(/^-|-$/g, '');
+	const slug = `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
 
-	// All-sport pools must use normalized scoring mode
-	const scoringMode: PoolScoringMode =
-		input.scope_kind === 'all_sports'
-			? 'normalized'
-			: (input.scoring_mode ?? 'raw');
-
-	const { data, error } = await supabase
+	const { data: poolData, error: poolError } = await supabase
 		.from('pools')
 		.insert({
 			name: input.name,
-			created_by: input.created_by,
+			slug,
+			description: input.description || null,
+			created_by: creatorId,
+			is_private: input.is_private ?? true,
 			invite_code: inviteCode,
 			scope_kind: input.scope_kind,
 			sport_slug: input.sport_slug || null,
-			competition_id: input.competition_id
-				? Number(input.competition_id)
-				: null,
-			edition_id: input.edition_id ? Number(input.edition_id) : null,
-			scoring_mode: scoringMode,
+			competition_id: input.competition_id || null,
+			edition_id: input.edition_id || null,
+			scoring_mode: input.scoring_mode || 'raw',
 			scoring_starts_at: new Date().toISOString(),
-			is_private: input.is_private ?? false,
 		})
 		.select()
 		.single();
 
-	if (error) {
-		console.error('Error creating pool:', error);
-		throw error;
+	if (poolError) {
+		console.error('Error creating pool:', poolError);
+		throw poolError;
 	}
 
-	// Add creator as admin member
-	await supabase.from('pool_members').insert({
-		pool_id: data.id,
-		user_id: input.created_by,
-		role: 'admin',
+	const { error: memberError } = await supabase.from('pool_members').insert({
+		pool_id: poolData.id,
+		user_id: creatorId,
 		joined_at: new Date().toISOString(),
 	});
 
+	if (memberError) {
+		console.error('Error adding creator to pool_members:', memberError);
+	}
+
 	return {
-		id: data.id,
-		name: data.name,
-		created_by: data.created_by,
-		invite_code: data.invite_code,
-		scope_kind: data.scope_kind as PoolScopeKind,
-		sport_slug: data.sport_slug,
-		competition_id: data.competition_id ? String(data.competition_id) : null,
-		edition_id: data.edition_id ? String(data.edition_id) : null,
-		scoring_mode: data.scoring_mode as PoolScoringMode,
-		scoring_starts_at: data.scoring_starts_at,
-		is_private: data.is_private,
-		created_at: data.created_at,
-		updated_at: data.updated_at,
-		member_count: 1,
+		id: poolData.id,
+		name: poolData.name,
+		slug: poolData.slug,
+		description: poolData.description,
+		created_by: poolData.created_by,
+		is_private: poolData.is_private,
+		invite_code: poolData.invite_code,
+		scope_kind: poolData.scope_kind,
+		sport_slug: poolData.sport_slug,
+		competition_id: poolData.competition_id,
+		edition_id: poolData.edition_id,
+		scoring_mode: poolData.scoring_mode,
+		scoring_starts_at: poolData.scoring_starts_at,
+		created_at: poolData.created_at,
+		updated_at: poolData.updated_at,
 	};
 }
 
@@ -245,44 +274,45 @@ export async function joinPoolByCode(
 ): Promise<ScopedPool> {
 	const supabase = createClient();
 
-	const { data: pool, error: poolError } = await supabase
+	const { data: poolData, error: poolError } = await supabase
 		.from('pools')
-		.select('*')
+		.select('id, name, scope_kind, scoring_starts_at, is_private')
 		.eq('invite_code', inviteCode.trim().toUpperCase())
 		.single();
 
-	if (poolError || !pool) {
-		throw new Error('Pool not found with this invite code');
+	if (poolError || !poolData) {
+		throw new Error('Invalid invite code. Pool not found.');
 	}
 
-	// Check existing membership episode
 	const { data: existingMember } = await supabase
 		.from('pool_members')
-		.select('*')
-		.eq('pool_id', pool.id)
+		.select('id, left_at')
+		.eq('pool_id', poolData.id)
 		.eq('user_id', userId)
-		.is('left_at', null)
 		.maybeSingle();
 
-	if (existingMember) {
-		return fetchPoolById(pool.id) as Promise<ScopedPool>;
+	if (existingMember && !existingMember.left_at) {
+		throw new Error('You are already an active member of this pool.');
 	}
 
-	// Insert new active membership episode
-	const { error: joinError } = await supabase.from('pool_members').insert({
-		pool_id: pool.id,
-		user_id: userId,
-		role: 'member',
-		joined_at: new Date().toISOString(),
-	});
+	if (existingMember && existingMember.left_at) {
+		const { error: rejoinError } = await supabase
+			.from('pool_members')
+			.update({ left_at: null, joined_at: new Date().toISOString() })
+			.eq('id', existingMember.id);
 
-	if (joinError) {
-		console.error('Error joining pool:', joinError);
-		throw joinError;
+		if (rejoinError) throw rejoinError;
+	} else {
+		const { error: joinError } = await supabase.from('pool_members').insert({
+			pool_id: poolData.id,
+			user_id: userId,
+			joined_at: new Date().toISOString(),
+		});
+
+		if (joinError) throw joinError;
 	}
 
-	const updated = await fetchPoolById(pool.id);
-	return updated!;
+	return fetchPoolById(poolData.id) as Promise<ScopedPool>;
 }
 
 export async function leavePool(poolId: string, userId: string): Promise<void> {
@@ -292,11 +322,10 @@ export async function leavePool(poolId: string, userId: string): Promise<void> {
 		.from('pool_members')
 		.update({ left_at: new Date().toISOString() })
 		.eq('pool_id', poolId)
-		.eq('user_id', userId)
-		.is('left_at', null);
+		.eq('user_id', userId);
 
 	if (error) {
-		console.error(`Error leaving pool ${poolId}:`, error);
+		console.error('Error leaving pool:', error);
 		throw error;
 	}
 }
@@ -314,48 +343,51 @@ export async function deletePool(
 		.eq('created_by', userId);
 
 	if (error) {
-		console.error(`Error deleting pool ${poolId}:`, error);
+		console.error('Error deleting pool:', error);
 		throw error;
 	}
 }
 
 export async function fetchHeadToHead(
-	poolId: string,
 	userAId: string,
 	userBId: string,
+	poolId?: string,
 ): Promise<HeadToHeadStats> {
 	const supabase = createClient();
 
-	// Fetch pool config
-	const pool = await fetchPoolById(poolId);
-	if (!pool) {
-		return {
-			events_compared: 0,
-			wins_a: 0,
-			wins_b: 0,
-			draws: 0,
-			exacts_a: 0,
-			exacts_b: 0,
-			points_a: 0,
-			points_b: 0,
-		};
+	let poolScoringMode = 'raw';
+	let scoringStartsAt = '1970-01-01T00:00:00Z';
+
+	if (poolId) {
+		const { data: pool } = await supabase
+			.from('pools')
+			.select('scoring_mode, scoring_starts_at')
+			.eq('id', poolId)
+			.single();
+		if (pool) {
+			poolScoringMode = pool.scoring_mode || 'raw';
+			scoringStartsAt = pool.scoring_starts_at || scoringStartsAt;
+		}
 	}
 
 	const { data: predsA } = await supabase
 		.from('predictions')
-		.select('*')
+		.select(
+			'id, event_market_id, raw_points, normalized_basis_points, tier_code, settlement_status',
+		)
 		.eq('user_id', userAId)
 		.eq('settlement_status', 'settled');
 
 	const { data: predsB } = await supabase
 		.from('predictions')
-		.select('*')
+		.select(
+			'id, event_market_id, raw_points, normalized_basis_points, tier_code, settlement_status',
+		)
 		.eq('user_id', userBId)
 		.eq('settlement_status', 'settled');
 
-	const mapB = new Map(
-		(predsB ?? []).map((p) => [String(p.event_market_id), p]),
-	);
+	const mapA = new Map((predsA || []).map((p) => [p.event_market_id, p]));
+	const mapB = new Map((predsB || []).map((p) => [p.event_market_id, p]));
 
 	let events_compared = 0;
 	let wins_a = 0;
@@ -366,17 +398,18 @@ export async function fetchHeadToHead(
 	let points_a = 0;
 	let points_b = 0;
 
-	for (const pA of predsA ?? []) {
-		const pB = mapB.get(String(pA.event_market_id));
-		if (!pB) continue;
+	Array.from(mapA.entries()).forEach(([marketId, pA]) => {
+		const pB = mapB.get(marketId);
+		if (!pB) return;
 
 		events_compared++;
+
 		const ptsA =
-			pool.scoring_mode === 'normalized'
+			poolScoringMode === 'normalized'
 				? Number(pA.normalized_basis_points ?? 0)
 				: Number(pA.raw_points ?? 0);
 		const ptsB =
-			pool.scoring_mode === 'normalized'
+			poolScoringMode === 'normalized'
 				? Number(pB.normalized_basis_points ?? 0)
 				: Number(pB.raw_points ?? 0);
 
@@ -389,7 +422,7 @@ export async function fetchHeadToHead(
 		if (ptsA > ptsB) wins_a++;
 		else if (ptsB > ptsA) wins_b++;
 		else draws++;
-	}
+	});
 
 	return {
 		events_compared,
@@ -417,6 +450,101 @@ export async function fetchPoolMembers(poolId: string): Promise<any[]> {
 
 export async function fetchPoolPicksMatrix(
 	poolId: string,
+	roundLabelOrMatchday?: string | number,
 ): Promise<{ matches: any[]; predictions: Record<string, any> }> {
-	return { matches: [], predictions: {} };
+	const supabase = createClient();
+
+	const { data: pool } = await supabase
+		.from('pools')
+		.select('*')
+		.eq('id', poolId)
+		.maybeSingle();
+
+	if (!pool) {
+		return { matches: [], predictions: {} };
+	}
+
+	const { data: members } = await supabase
+		.from('pool_members')
+		.select('user_id')
+		.eq('pool_id', poolId)
+		.is('left_at', null);
+
+	const memberIds = (members || []).map((m: any) => m.user_id);
+	if (memberIds.length === 0) {
+		return { matches: [], predictions: {} };
+	}
+
+	let eventsQuery = supabase
+		.from('events')
+		.select(
+			`
+			id,
+			edition_id,
+			round_label,
+			starts_at,
+			status,
+			venue_name,
+			event_competitors (
+				slot,
+				role,
+				competitor:competitors (id, name, short_name, media_url)
+			),
+			event_markets (
+				id,
+				market_kind,
+				status,
+				locks_at,
+				market_results (result, status)
+			)
+		`,
+		)
+		.order('starts_at', { ascending: true });
+
+	if (pool.scope_kind === 'edition' && pool.edition_id) {
+		eventsQuery = eventsQuery.eq('edition_id', pool.edition_id);
+	}
+
+	if (roundLabelOrMatchday !== undefined) {
+		const roundStr =
+			typeof roundLabelOrMatchday === 'number'
+				? `Gameweek ${roundLabelOrMatchday}`
+				: String(roundLabelOrMatchday);
+		eventsQuery = eventsQuery.or(
+			`round_label.eq.${roundStr},round_label.eq.${roundLabelOrMatchday}`,
+		);
+	}
+
+	const { data: rawEvents } = await eventsQuery;
+	const eventsList = rawEvents || [];
+
+	const marketIds: number[] = [];
+	for (const evt of eventsList) {
+		for (const mkt of evt.event_markets || []) {
+			marketIds.push(Number(mkt.id));
+		}
+	}
+
+	const predictionsMap: Record<string, any> = {};
+	if (marketIds.length > 0) {
+		const { data: preds } = await supabase
+			.from('predictions')
+			.select('*')
+			.in('event_market_id', marketIds)
+			.in('user_id', memberIds);
+
+		for (const pred of preds || []) {
+			const parentEvent = eventsList.find((e) =>
+				(e.event_markets || []).some((m: any) => m.id === pred.event_market_id),
+			);
+			const eventId = parentEvent ? parentEvent.id : pred.event_market_id;
+			const key = `${pred.user_id}_${eventId}`;
+			predictionsMap[key] = pred;
+		}
+	}
+
+	return {
+		matches: eventsList,
+		predictions: predictionsMap,
+	};
 }

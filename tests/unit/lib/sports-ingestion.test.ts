@@ -216,6 +216,27 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 			);
 		});
 
+		it('FootballDataAdapter parses season=2025 for 2021-2025 when no explicit seasonKey is supplied', async () => {
+			const fetchSpy = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ matches: [] }),
+			});
+			global.fetch = fetchSpy;
+
+			const adapter = new FootballDataAdapter({
+				footballDataApiKey: 'test-key',
+			});
+
+			await adapter.fetchEvents({
+				editionExternalKey: '2021-2025',
+			});
+
+			expect(fetchSpy).toHaveBeenCalledWith(
+				expect.stringContaining('/competitions/2021/matches?season=2025'),
+				expect.anything(),
+			);
+		});
+
 		it('FootballDataAdapter supports RapidAPI gateway with separate headers and host', async () => {
 			const fetchSpy = vi.fn().mockResolvedValue({
 				ok: true,
@@ -249,6 +270,64 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 			await expect(
 				unauthAdapter.fetchEvents({ editionExternalKey: '2021-2025' }),
 			).rejects.toThrow(/Football-Data authentication error/);
+		});
+
+		it('FootballDataAdapter throws when competitor discovery fails', async () => {
+			const fetchSpy = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ teams: [] }),
+			});
+			global.fetch = fetchSpy;
+
+			const adapter = new FootballDataAdapter({
+				footballDataApiKey: 'test-key',
+			});
+
+			await expect(adapter.fetchCompetitors('2021-2025')).rejects.toThrow(
+				/Failed to discover competitors/,
+			);
+		});
+
+		it('FootballDataAdapter and RugbyApiSportsAdapter do not mark market as settled when finished match has null scores', () => {
+			const footballAdapter = new FootballDataAdapter();
+			const nullScoreFootballMatches = [
+				{
+					id: 9991,
+					status: 'FINISHED',
+					utcDate: '2025-08-15T19:00:00Z',
+					homeTeam: { id: 1, name: 'Arsenal' },
+					awayTeam: { id: 2, name: 'Chelsea' },
+					score: { fullTime: { home: null, away: null } },
+				},
+			];
+			const footballEvents = footballAdapter.transformMatches(
+				nullScoreFootballMatches,
+				'2021-2025',
+			);
+			expect(footballEvents[0].status).toBe('finished');
+			expect(footballEvents[0].market?.status).toBe('open');
+			expect(footballEvents[0].result).toBeUndefined();
+
+			const rugbyAdapter = new RugbyApiSportsAdapter();
+			const nullScoreRugbyGames = [
+				{
+					id: 8881,
+					date: '2025-02-01T15:00:00Z',
+					status: { short: 'FT', long: 'Finished' },
+					teams: {
+						home: { id: 16, name: 'England' },
+						away: { id: 17, name: 'France' },
+					},
+					scores: { home: null, away: null },
+				},
+			];
+			const rugbyEvents = rugbyAdapter.transformGames(
+				nullScoreRugbyGames,
+				'11-2025',
+			);
+			expect(rugbyEvents[0].status).toBe('finished');
+			expect(rugbyEvents[0].market?.status).toBe('open');
+			expect(rugbyEvents[0].result).toBeUndefined();
 		});
 
 		it('RugbyApiSportsAdapter supports Direct API-Sports authentication', async () => {
@@ -547,7 +626,7 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 			).rejects.toThrow(/Invalid competition external key/);
 		});
 
-		it('throws error when explicit invalid edition key is supplied', async () => {
+		it('throws error when explicit invalid edition key is supplied and rejects fuzzy matches like 999-2025', async () => {
 			const mockSupabase: any = {
 				from: vi.fn().mockReturnValue({
 					select: vi.fn().mockReturnThis(),
@@ -557,13 +636,9 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 			};
 
 			const adapter = new RugbyApiSportsAdapter();
+			// Explicit key that does not match provider editions (11-2025, 11-2026)
 			await expect(
-				ensureCanonicalEdition(
-					mockSupabase,
-					adapter,
-					11,
-					'non-existent-edition-99999',
-				),
+				ensureCanonicalEdition(mockSupabase, adapter, 11, '999-2025'),
 			).rejects.toThrow(/Invalid edition external key/);
 		});
 
