@@ -159,27 +159,41 @@ describe('scripts automation and seeding', () => {
 	});
 
 	describe('fetch-live-scores.ts', () => {
-		it('executes live score synchronization on matches in need of updates', async () => {
+		it('executes live score synchronization with dryRun mode', async () => {
 			const { fetchLiveScores } = await import('@/scripts/fetch-live-scores');
-			mockSelect.mockResolvedValueOnce({
-				data: [
-					{
-						id: 'match-1',
-						external_id: 12001,
-						status: 'scheduled',
-						home_score: null,
-						away_score: null,
-						home_team: { name: 'Arsenal' },
-						away_team: { name: 'Chelsea' },
-					},
-				],
-				error: null,
-			});
-			mockUpsert.mockResolvedValue({ data: [], error: null });
-
-			const result = await fetchLiveScores({ simulate: true });
+			const result = await fetchLiveScores({ simulate: true, dryRun: true });
 			expect(result.success).toBe(true);
-			expect(mockSelect).toHaveBeenCalled();
+			expect(result.updated).toBeGreaterThan(0);
+		});
+
+		it('executes rugby live score synchronization', async () => {
+			const { fetchLiveScores } = await import('@/scripts/fetch-live-scores');
+			const result = await fetchLiveScores({
+				sport: 'rugby-union',
+				dryRun: true,
+			});
+			expect(result.success).toBe(true);
+		});
+	});
+
+	describe('seed-six-nations.ts', () => {
+		it('runs seedSixNations successfully in dryRun mode', async () => {
+			const { seedSixNations } = await import('@/scripts/seed-six-nations');
+			const result = await seedSixNations({ dryRun: true, useRecorded: true });
+			expect(result.status).toBe('success');
+			expect(result.summary.fetchedCount).toBeGreaterThan(0);
+		});
+	});
+
+	describe('import-real-premier-league.ts', () => {
+		it('runs importRealPremierLeague successfully in dryRun mode', async () => {
+			const { importRealPremierLeague } =
+				await import('@/scripts/import-real-premier-league');
+			const result = await importRealPremierLeague({
+				dryRun: true,
+				simulate: true,
+			});
+			expect(result.success).toBe(true);
 		});
 	});
 

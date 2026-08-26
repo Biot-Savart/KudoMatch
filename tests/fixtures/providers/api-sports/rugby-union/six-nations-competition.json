@@ -1,0 +1,36 @@
+{
+	"get": "leagues",
+	"parameters": {
+		"id": "11"
+	},
+	"errors": [],
+	"results": 1,
+	"response": [
+		{
+			"id": 11,
+			"name": "Six Nations",
+			"type": "League",
+			"logo": "https://media.api-sports.io/rugby/leagues/11.png",
+			"country": {
+				"id": 1,
+				"name": "World",
+				"code": "WLD",
+				"flag": null
+			},
+			"seasons": [
+				{
+					"season": 2025,
+					"current": true,
+					"start": "2025-01-31",
+					"end": "2025-03-15"
+				},
+				{
+					"season": 2026,
+					"current": false,
+					"start": "2026-02-06",
+					"end": "2026-03-21"
+				}
+			]
+		}
+	]
+}

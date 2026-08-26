@@ -1,0 +1,119 @@
+{
+	"filters": {
+		"season": "2024"
+	},
+	"resultSet": {
+		"count": 3,
+		"first": "2024-08-16",
+		"last": "2024-08-17",
+		"played": 2
+	},
+	"competition": {
+		"id": 2021,
+		"name": "Premier League",
+		"code": "PL",
+		"type": "LEAGUE",
+		"emblem": "https://crests.football-data.org/PL.png"
+	},
+	"matches": [
+		{
+			"id": 497519,
+			"utcDate": "2024-08-16T19:00:00Z",
+			"status": "FINISHED",
+			"matchday": 1,
+			"stage": "REGULAR_SEASON",
+			"homeTeam": {
+				"id": 66,
+				"name": "Manchester United FC",
+				"shortName": "Man United",
+				"tla": "MUN",
+				"crest": "https://crests.football-data.org/66.png"
+			},
+			"awayTeam": {
+				"id": 63,
+				"name": "Fulham FC",
+				"shortName": "Fulham",
+				"tla": "FUL",
+				"crest": "https://crests.football-data.org/63.png"
+			},
+			"score": {
+				"winner": "HOME_TEAM",
+				"duration": "REGULAR",
+				"fullTime": {
+					"home": 1,
+					"away": 0
+				},
+				"halfTime": {
+					"home": 0,
+					"away": 0
+				}
+			}
+		},
+		{
+			"id": 497520,
+			"utcDate": "2024-08-17T11:30:00Z",
+			"status": "IN_PLAY",
+			"matchday": 1,
+			"stage": "REGULAR_SEASON",
+			"homeTeam": {
+				"id": 389,
+				"name": "Ipswich Town FC",
+				"shortName": "Ipswich",
+				"tla": "IPS",
+				"crest": "https://crests.football-data.org/389.png"
+			},
+			"awayTeam": {
+				"id": 64,
+				"name": "Liverpool FC",
+				"shortName": "Liverpool",
+				"tla": "LIV",
+				"crest": "https://crests.football-data.org/64.png"
+			},
+			"score": {
+				"winner": null,
+				"duration": "REGULAR",
+				"fullTime": {
+					"home": 0,
+					"away": 1
+				},
+				"halfTime": {
+					"home": 0,
+					"away": 0
+				}
+			}
+		},
+		{
+			"id": 497521,
+			"utcDate": "2024-08-17T14:00:00Z",
+			"status": "SCHEDULED",
+			"matchday": 1,
+			"stage": "REGULAR_SEASON",
+			"homeTeam": {
+				"id": 57,
+				"name": "Arsenal FC",
+				"shortName": "Arsenal",
+				"tla": "ARS",
+				"crest": "https://crests.football-data.org/57.png"
+			},
+			"awayTeam": {
+				"id": 76,
+				"name": "Wolverhampton Wanderers FC",
+				"shortName": "Wolves",
+				"tla": "WOL",
+				"crest": "https://crests.football-data.org/76.png"
+			},
+			"score": {
+				"winner": null,
+				"duration": "REGULAR",
+				"fullTime": {
+					"home": null,
+					"away": null
+				},
+				"halfTime": {
+					"home": null,
+					"away": null
+				}
+			}
+		}
+	]
+}

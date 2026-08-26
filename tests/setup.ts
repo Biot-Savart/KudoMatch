@@ -6,9 +6,12 @@ vi.mock('dotenv', () => {
 	const configFn = vi.fn();
 	return {
 		config: configFn,
+		parse: vi.fn(),
 		default: {
 			config: configFn,
+			parse: vi.fn(),
 		},
+		__esModule: true,
 	};
 });
 

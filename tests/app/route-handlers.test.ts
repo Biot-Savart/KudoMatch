@@ -73,6 +73,20 @@ describe('app/auth/callback/route', () => {
 });
 
 describe('app/api/cron/fetch-live-scores/route', () => {
+	it('rejects query parameter secrets with 400 error', async () => {
+		const { GET: cronGET } =
+			await import('@/app/api/cron/fetch-live-scores/route');
+		const request = new Request(
+			'https://kudomatch.com/api/cron/fetch-live-scores?secret=insecure_token',
+		);
+		const response = await cronGET(request as any);
+
+		expect(response.status).toBe(400);
+		const json = await response.json();
+		expect(json.success).toBe(false);
+		expect(json.error).toMatch(/query parameter is forbidden/i);
+	});
+
 	it('executes fetchLiveScores successfully when triggered', async () => {
 		const { GET: cronGET } =
 			await import('@/app/api/cron/fetch-live-scores/route');

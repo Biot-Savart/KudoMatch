@@ -1,0 +1,48 @@
+{
+	"get": "games",
+	"parameters": { "id": "1003" },
+	"errors": [],
+	"results": 1,
+	"response": [
+		{
+			"id": 1003,
+			"date": "2025-02-01T16:45:00+00:00",
+			"time": "16:45",
+			"timestamp": 1738428300,
+			"timezone": "UTC",
+			"week": "Round 1",
+			"status": {
+				"short": "FT",
+				"long": "Finished"
+			},
+			"country": { "id": 4, "name": "Ireland", "code": "IRE" },
+			"league": {
+				"id": 11,
+				"name": "Six Nations",
+				"type": "League",
+				"season": 2025
+			},
+			"teams": {
+				"home": {
+					"id": 18,
+					"name": "Ireland",
+					"logo": "https://media.api-sports.io/rugby/teams/18.png"
+				},
+				"away": {
+					"id": 16,
+					"name": "England",
+					"logo": "https://media.api-sports.io/rugby/teams/16.png"
+				}
+			},
+			"scores": {
+				"home": 27,
+				"away": 22
+			},
+			"periods": {
+				"first": { "home": 17, "away": 10 },
+				"second": { "home": 10, "away": 12 },
+				"overtime": { "home": null, "away": null }
+			}
+		}
+	]
+}

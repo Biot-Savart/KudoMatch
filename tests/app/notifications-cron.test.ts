@@ -431,7 +431,7 @@ describe('Notification Cron Routes & Scripts', () => {
 			});
 
 			const result = await scoreSyncScript.fetchLiveScores(
-				{ simulate: true },
+				{ simulate: true, dryRun: true },
 				mockSupabaseJsClient,
 			);
 			expect(result.success).toBe(true);

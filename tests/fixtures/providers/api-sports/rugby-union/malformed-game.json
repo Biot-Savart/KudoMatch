@@ -1,0 +1,9 @@
+{
+	"get": "games",
+	"parameters": { "id": "invalid" },
+	"errors": {
+		"rateLimit": "Too many requests. Limit: 10 per minute."
+	},
+	"results": 0,
+	"response": []
+}

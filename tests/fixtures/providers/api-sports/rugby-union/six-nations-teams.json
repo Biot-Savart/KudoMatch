@@ -1,0 +1,53 @@
+{
+	"get": "teams",
+	"parameters": {
+		"league": "11",
+		"season": "2025"
+	},
+	"errors": [],
+	"results": 6,
+	"response": [
+		{
+			"id": 16,
+			"name": "England",
+			"logo": "https://media.api-sports.io/rugby/teams/16.png",
+			"national": true,
+			"country": { "id": 2, "name": "England", "code": "ENG" }
+		},
+		{
+			"id": 17,
+			"name": "France",
+			"logo": "https://media.api-sports.io/rugby/teams/17.png",
+			"national": true,
+			"country": { "id": 3, "name": "France", "code": "FRA" }
+		},
+		{
+			"id": 18,
+			"name": "Ireland",
+			"logo": "https://media.api-sports.io/rugby/teams/18.png",
+			"national": true,
+			"country": { "id": 4, "name": "Ireland", "code": "IRE" }
+		},
+		{
+			"id": 19,
+			"name": "Italy",
+			"logo": "https://media.api-sports.io/rugby/teams/19.png",
+			"national": true,
+			"country": { "id": 5, "name": "Italy", "code": "ITA" }
+		},
+		{
+			"id": 20,
+			"name": "Scotland",
+			"logo": "https://media.api-sports.io/rugby/teams/20.png",
+			"national": true,
+			"country": { "id": 6, "name": "Scotland", "code": "SCO" }
+		},
+		{
+			"id": 21,
+			"name": "Wales",
+			"logo": "https://media.api-sports.io/rugby/teams/21.png",
+			"national": true,
+			"country": { "id": 7, "name": "Wales", "code": "WAL" }
+		}
+	]
+}
