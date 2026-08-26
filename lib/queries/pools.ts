@@ -101,25 +101,26 @@ export async function fetchPoolById(
 		.from('pools')
 		.select(
 			`
-      id,
-      name,
-      slug,
-      description,
-      created_by,
-      is_private,
-      invite_code,
-      scope_kind,
-      sport_slug,
-      competition_id,
-      edition_id,
-      scoring_mode,
-      scoring_starts_at,
-      created_at,
-      updated_at,
-      sport:sports (slug, name, icon_key),
-      competition:competitions (id, name, slug, logo_url),
-      edition:competition_editions (id, name, season_key)
-    `,
+		    id,
+		    name,
+		    slug,
+		    description,
+		    created_by,
+		    is_private,
+		    invite_code,
+		    scope_kind,
+		    sport_slug,
+		    competition_id,
+		    edition_id,
+		    scoring_mode,
+		    scoring_starts_at,
+		    created_at,
+		    updated_at,
+		    creator:profiles!pools_created_by_fkey (id, full_name, avatar_url),
+		    sport:sports (slug, name, icon_key),
+		    competition:competitions (id, name, slug, logo_url),
+		    edition:competition_editions (id, name, season_key)
+		  `,
 		)
 		.eq('id', poolId)
 		.single();
@@ -137,12 +138,15 @@ export async function fetchPoolById(
 		.eq('pool_id', poolId)
 		.is('left_at', null);
 
+	const memberCount = count ?? 0;
+
 	return {
 		id: data.id,
 		name: data.name,
 		slug: data.slug,
 		description: data.description,
 		created_by: data.created_by,
+		creator: (data as any).creator || (data as any).created_by_profile || null,
 		is_private: data.is_private,
 		invite_code: data.invite_code,
 		scope_kind: data.scope_kind,
@@ -153,11 +157,12 @@ export async function fetchPoolById(
 		scoring_starts_at: data.scoring_starts_at,
 		created_at: data.created_at,
 		updated_at: data.updated_at,
-		members_count: count ?? 0,
+		members_count: memberCount,
+		member_count: memberCount,
 		sport: data.sport as any,
 		competition: data.competition as any,
 		edition: data.edition as any,
-	};
+	} as any;
 }
 
 export async function fetchPoolLeaderboard(
@@ -242,11 +247,17 @@ export async function createPool(input: CreatePoolInput): Promise<ScopedPool> {
 	const { error: memberError } = await supabase.from('pool_members').insert({
 		pool_id: poolData.id,
 		user_id: creatorId,
+		role: 'admin',
 		joined_at: new Date().toISOString(),
 	});
 
 	if (memberError) {
 		console.error('Error adding creator to pool_members:', memberError);
+		// Roll back newly created pool to prevent orphaned records
+		await supabase.from('pools').delete().eq('id', poolData.id);
+		throw new Error(
+			`Failed to add creator to pool members: ${memberError.message}`,
+		);
 	}
 
 	return {
@@ -322,7 +333,8 @@ export async function leavePool(poolId: string, userId: string): Promise<void> {
 		.from('pool_members')
 		.update({ left_at: new Date().toISOString() })
 		.eq('pool_id', poolId)
-		.eq('user_id', userId);
+		.eq('user_id', userId)
+		.is('left_at', null);
 
 	if (error) {
 		console.error('Error leaving pool:', error);
@@ -485,6 +497,14 @@ export async function fetchPoolPicksMatrix(
 			starts_at,
 			status,
 			venue_name,
+			competition_editions!inner (
+				id,
+				competition_id,
+				competitions!inner (
+					id,
+					sport_slug
+				)
+			),
 			event_competitors (
 				slot,
 				role,
@@ -503,6 +523,16 @@ export async function fetchPoolPicksMatrix(
 
 	if (pool.scope_kind === 'edition' && pool.edition_id) {
 		eventsQuery = eventsQuery.eq('edition_id', pool.edition_id);
+	} else if (pool.scope_kind === 'competition' && pool.competition_id) {
+		eventsQuery = eventsQuery.eq(
+			'competition_editions.competition_id',
+			pool.competition_id,
+		);
+	} else if (pool.scope_kind === 'sport' && pool.sport_slug) {
+		eventsQuery = eventsQuery.eq(
+			'competition_editions.competitions.sport_slug',
+			pool.sport_slug,
+		);
 	}
 
 	if (roundLabelOrMatchday !== undefined) {

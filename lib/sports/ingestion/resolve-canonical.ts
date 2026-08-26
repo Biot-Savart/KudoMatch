@@ -179,15 +179,7 @@ export async function ensureCanonicalEdition(
 	let edDto: CanonicalEditionDTO | undefined;
 
 	if (editionExternalKey) {
-		edDto = editions.find(
-			(e) =>
-				e.externalKey === editionExternalKey ||
-				(seasonKey && e.seasonKey === seasonKey) ||
-				(editionExternalKey.includes('-') &&
-					e.externalKey.endsWith(
-						editionExternalKey.slice(editionExternalKey.indexOf('-')),
-					)),
-		);
+		edDto = editions.find((e) => e.externalKey === editionExternalKey);
 		if (!edDto) {
 			throw new Error(
 				`Invalid edition external key '${editionExternalKey}': not returned by provider '${adapter.providerSlug}'`,

@@ -638,7 +638,7 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 			const adapter = new RugbyApiSportsAdapter();
 			// Explicit key that does not match provider editions (11-2025, 11-2026)
 			await expect(
-				ensureCanonicalEdition(mockSupabase, adapter, 11, '999-2025'),
+				ensureCanonicalEdition(mockSupabase, adapter, 11, '999-2025', '11'),
 			).rejects.toThrow(/Invalid edition external key/);
 		});
 
