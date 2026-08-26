@@ -11,6 +11,7 @@ import {
 	ensureCanonicalCompetitors,
 	ensureCanonicalEdition,
 	resolveSportRulesetId,
+	resolveExternalRef,
 } from '@/lib/sports/ingestion/resolve-canonical';
 import { withRetry, withTimeout } from '@/lib/sports/ingestion/retry';
 import {
@@ -24,6 +25,7 @@ import { fetchLiveScores } from '@/scripts/fetch-live-scores';
 import rugbyCancelled from '@/tests/fixtures/providers/api-sports/rugby-union/cancelled-game.json';
 import rugbyFinished from '@/tests/fixtures/providers/api-sports/rugby-union/finished-game.json';
 import rugbyLive from '@/tests/fixtures/providers/api-sports/rugby-union/live-game.json';
+import rugbyMalformed from '@/tests/fixtures/providers/api-sports/rugby-union/malformed-game.json';
 import rugbyPostponed from '@/tests/fixtures/providers/api-sports/rugby-union/postponed-game.json';
 import rugbyScheduled from '@/tests/fixtures/providers/api-sports/rugby-union/scheduled-game.json';
 import plFixture from '@/tests/fixtures/providers/football-data/football/premier-league-matches.json';
@@ -382,6 +384,16 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 			);
 		});
 
+		it('rejects provider-level errors even when the API returns HTTP 200', async () => {
+			const adapter = new RugbyApiSportsAdapter({
+				recordedGames: rugbyMalformed,
+			});
+
+			await expect(
+				adapter.fetchEvents({ editionExternalKey: '11-2025' }),
+			).rejects.toThrow(/provider error/);
+		});
+
 		it('RugbyApiSportsAdapter transforms Six Nations games fixture', () => {
 			const adapter = new RugbyApiSportsAdapter();
 			const finishedEvents = adapter.transformGames(
@@ -512,6 +524,33 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 	});
 
 	describe('Quarantined Ingestion Status & Failure Handling (Review Findings)', () => {
+		it('forwards seasonKey to live update adapters', async () => {
+			const fetchLiveUpdates = vi.fn().mockResolvedValue([]);
+			const adapter = {
+				providerSlug: 'mock-provider',
+				sportSlug: 'rugby-union',
+				fetchCompetitions: vi.fn(),
+				fetchEditions: vi.fn(),
+				fetchCompetitors: vi.fn(),
+				fetchEvents: vi.fn(),
+				fetchLiveUpdates,
+			};
+
+			await orchestrateIngestion({
+				adapter,
+				supabase: {} as any,
+				editionExternalKey: '11',
+				seasonKey: '2025',
+				dryRun: true,
+			});
+
+			expect(fetchLiveUpdates).toHaveBeenCalledWith({
+				editionExternalKey: '11',
+				competitionExternalKey: undefined,
+				seasonKey: '2025',
+			});
+		});
+
 		it('returns failed status when all events are quarantined', async () => {
 			const mockSupabase: any = {
 				rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
@@ -743,6 +782,22 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 			await expect(
 				ensureCanonicalCompetitors(mockSupabase, adapter, 11, '11-2025', '11'),
 			).rejects.toThrow(/Failed to persist external reference for competitor/);
+		});
+
+		it('fails external reference resolution on database errors', async () => {
+			const query = {
+				select: vi.fn().mockReturnThis(),
+				eq: vi.fn().mockReturnThis(),
+				maybeSingle: vi.fn().mockResolvedValue({
+					data: null,
+					error: { message: 'connection refused' },
+				}),
+			};
+			const supabase: any = { from: vi.fn().mockReturnValue(query) };
+
+			await expect(
+				resolveExternalRef(supabase, 'api-sports', 'competitor', '16'),
+			).rejects.toThrow(/Failed to resolve external ref/);
 		});
 	});
 

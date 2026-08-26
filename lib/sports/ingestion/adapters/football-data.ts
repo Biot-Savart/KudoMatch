@@ -17,6 +17,14 @@ export interface FootballDataAdapterOptions {
 	recordedMatches?: unknown;
 }
 
+function hasProviderErrors(errors: unknown): boolean {
+	if (!errors) return false;
+	if (typeof errors === 'string') return errors.trim().length > 0;
+	if (Array.isArray(errors)) return errors.length > 0;
+	if (typeof errors === 'object') return Object.keys(errors).length > 0;
+	return true;
+}
+
 export class FootballDataAdapter implements SportProviderAdapter {
 	public readonly providerSlug = 'football-data';
 	public readonly sportSlug = 'football';
@@ -75,7 +83,15 @@ export class FootballDataAdapter implements SportProviderAdapter {
 
 	private async request<T>(endpoint: string): Promise<T> {
 		if (this.recordedMatches) {
-			return this.recordedMatches as T;
+			const recordedPayload = this.recordedMatches as T & {
+				errors?: unknown;
+			};
+			if (hasProviderErrors(recordedPayload.errors)) {
+				throw new Error(
+					`Football-Data provider error: ${JSON.stringify(recordedPayload.errors)}`,
+				);
+			}
+			return recordedPayload;
 		}
 
 		const headers = this.getHeaders();
@@ -98,7 +114,16 @@ export class FootballDataAdapter implements SportProviderAdapter {
 					throw error;
 				}
 
-				return (await response.json()) as T;
+				const payload = (await response.json()) as T & { errors?: unknown };
+				if (hasProviderErrors(payload.errors)) {
+					const error: any = new Error(
+						`Football-Data provider error: ${JSON.stringify(payload.errors)}`,
+					);
+					error.status = 502;
+					throw error;
+				}
+
+				return payload;
 			},
 			{
 				maxRetries: 3,

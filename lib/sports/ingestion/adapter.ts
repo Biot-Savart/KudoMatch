@@ -47,5 +47,6 @@ export interface SportProviderAdapter {
 	fetchLiveUpdates(options: {
 		editionExternalKey: string;
 		competitionExternalKey?: string;
+		seasonKey?: string;
 	}): Promise<CanonicalEventDTO[]>;
 }

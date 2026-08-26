@@ -37,7 +37,9 @@ export async function resolveExternalRef(
 			`Error resolving external ref for ${entityKind} ${externalKey}:`,
 			error,
 		);
-		return null;
+		throw new Error(
+			`Failed to resolve external ref for ${entityKind} '${externalKey}' from provider '${providerSlug}': ${error.message}`,
+		);
 	}
 
 	if (!data) return null;

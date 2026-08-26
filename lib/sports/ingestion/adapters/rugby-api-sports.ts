@@ -16,6 +16,14 @@ export interface RugbyApiSportsAdapterOptions {
 	recordedGames?: unknown;
 }
 
+function hasProviderErrors(errors: unknown): boolean {
+	if (!errors) return false;
+	if (typeof errors === 'string') return errors.trim().length > 0;
+	if (Array.isArray(errors)) return errors.length > 0;
+	if (typeof errors === 'object') return Object.keys(errors).length > 0;
+	return true;
+}
+
 export class RugbyApiSportsAdapter implements SportProviderAdapter {
 	public readonly providerSlug = 'api-sports';
 	public readonly sportSlug = 'rugby-union';
@@ -72,7 +80,15 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 
 	private async request<T>(endpoint: string): Promise<T> {
 		if (this.recordedGames) {
-			return this.recordedGames as T;
+			const recordedPayload = this.recordedGames as T & {
+				errors?: unknown;
+			};
+			if (hasProviderErrors(recordedPayload.errors)) {
+				throw new Error(
+					`API-Sports Rugby provider error: ${JSON.stringify(recordedPayload.errors)}`,
+				);
+			}
+			return recordedPayload;
 		}
 
 		const headers = this.getHeaders();
@@ -95,7 +111,16 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 					throw error;
 				}
 
-				return (await response.json()) as T;
+				const payload = (await response.json()) as T & { errors?: unknown };
+				if (hasProviderErrors(payload.errors)) {
+					const error: any = new Error(
+						`API-Sports Rugby provider error: ${JSON.stringify(payload.errors)}`,
+					);
+					error.status = 502;
+					throw error;
+				}
+
+				return payload;
 			},
 			{
 				maxRetries: 3,

@@ -1,6 +1,6 @@
 -- pgTAP Database & Security Tests for Phase 14: Ingestion Operations, Leases, and Batch API
 begin;
-select plan(29);
+select plan(31);
 
 -- 1. Table and Schema Existence (5 assertions)
 select has_table('public', 'data_providers', 'Public data_providers table exists');
@@ -333,6 +333,68 @@ select throws_ok(
   '23503',
   NULL,
   'Batch RPC throws exception when event participant competitor cannot be resolved'
+);
+
+-- Preserve a locked market when a later provider update reports it as open
+select private.apply_canonical_ingestion_batch(
+  jsonb_build_object(
+    'provider_slug', 'mock-provider',
+    'sport_slug', 'rugby-union',
+    'events', jsonb_build_array(
+      jsonb_build_object(
+        'external_key', 'mock-rugby-game-locked',
+        'edition_external_key', 'mock-rugby-ed-2025',
+        'round_label', 'Round 4',
+        'starts_at', (now() + interval '10 days')::text,
+        'status', 'scheduled',
+        'participants', jsonb_build_array(
+          jsonb_build_object('competitor_external_key', 'mock-team-ireland', 'role', 'home', 'slot', 1),
+          jsonb_build_object('competitor_external_key', 'mock-team-england', 'role', 'away', 'slot', 2)
+        ),
+        'market', jsonb_build_object(
+          'ruleset_id', (select id from public.scoring_rulesets where sport_slug = 'rugby-union' limit 1),
+          'market_kind', 'team_scoreline',
+          'status', 'locked'
+        )
+      )
+    )
+  )
+);
+
+select private.apply_canonical_ingestion_batch(
+  jsonb_build_object(
+    'provider_slug', 'mock-provider',
+    'sport_slug', 'rugby-union',
+    'events', jsonb_build_array(
+      jsonb_build_object(
+        'external_key', 'mock-rugby-game-locked',
+        'edition_external_key', 'mock-rugby-ed-2025',
+        'round_label', 'Round 4',
+        'starts_at', (now() + interval '10 days')::text,
+        'status', 'scheduled',
+        'participants', jsonb_build_array(
+          jsonb_build_object('competitor_external_key', 'mock-team-ireland', 'role', 'home', 'slot', 1),
+          jsonb_build_object('competitor_external_key', 'mock-team-england', 'role', 'away', 'slot', 2)
+        ),
+        'market', jsonb_build_object(
+          'ruleset_id', (select id from public.scoring_rulesets where sport_slug = 'rugby-union' limit 1),
+          'market_kind', 'team_scoreline',
+          'status', 'open'
+        )
+      )
+    )
+  )
+);
+
+select is(
+  (select em.status
+   from public.event_markets em
+   join public.events e on e.id = em.event_id
+   join public.external_entity_refs r on r.event_id = e.id
+   where r.external_key = 'mock-rugby-game-locked'
+     and r.provider_slug = 'mock-provider'),
+  'locked',
+  'Provider open status cannot reopen a locked market'
 );
 
 -- 7. Security & Permission Tests (2 assertions)

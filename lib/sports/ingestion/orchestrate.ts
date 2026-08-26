@@ -165,6 +165,7 @@ export async function orchestrateIngestion(
 			events = await adapter.fetchLiveUpdates({
 				editionExternalKey,
 				competitionExternalKey,
+				seasonKey,
 			});
 		} else {
 			events = await adapter.fetchEvents({

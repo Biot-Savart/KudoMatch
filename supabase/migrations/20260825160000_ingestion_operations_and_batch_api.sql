@@ -617,6 +617,9 @@ begin
         set locks_at = v_market_locks_at,
             status = case
               when public.event_markets.status in ('settled', 'void') then public.event_markets.status
+              when public.event_markets.status = 'locked'
+                   and coalesce(v_market_elem->>'status', public.event_markets.status) not in ('settled', 'void')
+                then public.event_markets.status
               else coalesce(v_market_elem->>'status', public.event_markets.status)
             end,
             updated_at = clock_timestamp()
