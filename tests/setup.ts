@@ -6,9 +6,12 @@ vi.mock('dotenv', () => {
 	const configFn = vi.fn();
 	return {
 		config: configFn,
+		parse: vi.fn(),
 		default: {
 			config: configFn,
+			parse: vi.fn(),
 		},
+		__esModule: true,
 	};
 });
 
@@ -36,10 +39,21 @@ vi.mock('next/headers', () => ({
 export class MockQueryBuilder {
 	private data: any;
 	private error: any;
+	private count: number | null;
 
-	constructor(data: any = [], error: any = null) {
+	constructor(
+		data: any = [],
+		error: any = null,
+		options: { count?: number | null } = {},
+	) {
 		this.data = data;
 		this.error = error;
+		this.count =
+			options.count !== undefined
+				? options.count
+				: Array.isArray(data)
+					? data.length
+					: null;
 	}
 
 	select = vi.fn().mockImplementation(() => this);
@@ -70,10 +84,11 @@ export class MockQueryBuilder {
 
 	// Thenable implementation to support direct `await supabase.from(...)`
 	then(onfulfilled?: (value: any) => any, onrejected?: (reason: any) => any) {
-		return Promise.resolve({ data: this.data, error: this.error }).then(
-			onfulfilled,
-			onrejected,
-		);
+		return Promise.resolve({
+			data: this.data,
+			error: this.error,
+			count: this.count,
+		}).then(onfulfilled, onrejected);
 	}
 }
 

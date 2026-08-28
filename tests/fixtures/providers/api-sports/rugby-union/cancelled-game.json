@@ -1,0 +1,40 @@
+{
+	"get": "games",
+	"parameters": { "id": "1005" },
+	"errors": [],
+	"results": 1,
+	"response": [
+		{
+			"id": 1005,
+			"date": "2025-02-08T17:45:00+00:00",
+			"time": "17:45",
+			"timestamp": 1739036700,
+			"timezone": "UTC",
+			"week": "Round 2",
+			"status": {
+				"short": "CANC",
+				"long": "Cancelled"
+			},
+			"country": { "id": 2, "name": "England", "code": "ENG" },
+			"league": {
+				"id": 11,
+				"name": "Six Nations",
+				"type": "League",
+				"season": 2025
+			},
+			"teams": {
+				"home": {
+					"id": 16,
+					"name": "England",
+					"logo": "https://media.api-sports.io/rugby/teams/16.png"
+				},
+				"away": {
+					"id": 17,
+					"name": "France",
+					"logo": "https://media.api-sports.io/rugby/teams/17.png"
+				}
+			},
+			"scores": { "home": null, "away": null }
+		}
+	]
+}

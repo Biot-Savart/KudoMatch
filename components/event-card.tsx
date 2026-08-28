@@ -3,15 +3,16 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
-    calculatePredictionPoints,
-    getScoringExplanation,
+	calculatePredictionPoints,
+	getScoringExplanation,
 } from '@/lib/utils/scoring';
 import { MarketPrediction, SportEvent } from '@/types';
 import { ChevronRight, Info, Lock, Timer, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export interface EventCardProps {
-	event: SportEvent;
+	event?: SportEvent;
+	match?: any;
 	userId: string | null;
 	existingPrediction?: MarketPrediction | null;
 	onPredict: (event: SportEvent) => void;
@@ -27,15 +28,16 @@ export interface EventCardProps {
 	onInsightsClick?: (event: SportEvent) => void;
 }
 
-export function EventCard({
-	event,
-	userId,
-	existingPrediction,
-	onPredict,
-	onQuickPredict,
-	onBreakdownClick,
-	onInsightsClick,
-}: EventCardProps) {
+export function EventCard(props: EventCardProps) {
+	const event = (props.event || props.match) as SportEvent;
+	const {
+		userId,
+		existingPrediction,
+		onPredict,
+		onQuickPredict,
+		onBreakdownClick,
+		onInsightsClick,
+	} = props;
 	const [timeLeft, setTimeLeft] = useState<string>('');
 	const [isLocked, setIsLocked] = useState<boolean>(false);
 

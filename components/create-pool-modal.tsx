@@ -59,7 +59,7 @@ export function CreatePoolModal({
 				is_private: isPrivate,
 			});
 
-			if (pool) {
+			if (pool?.id) {
 				onSuccess(pool.id);
 			} else {
 				setError('Failed to create pool. Please try again.');

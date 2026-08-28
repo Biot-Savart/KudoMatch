@@ -1,9 +1,10 @@
 import { fetchEvents } from '@/lib/queries/events';
 import { fetchMarketCommunityStats } from '@/lib/queries/markets';
+import { Match } from '@/types';
 
-export async function fetchMatches(matchdayNum?: number) {
+export async function fetchMatches(matchdayNum?: number): Promise<Match[]> {
 	const round = matchdayNum ? `Round ${matchdayNum}` : undefined;
-	return fetchEvents({ roundLabel: round });
+	return (await fetchEvents({ roundLabel: round })) as unknown as Match[];
 }
 
 export async function fetchAvailableMatchdays(): Promise<number[]> {

@@ -362,12 +362,15 @@ export default function ProfilePage() {
 											Market #{p.event_market_id}
 										</span>
 										<span className="text-[10px] text-slate-500">
-											{new Date(p.created_at).toLocaleDateString(undefined, {
-												month: 'short',
-												day: 'numeric',
-												hour: '2-digit',
-												minute: '2-digit',
-											})}
+											{new Date(p.created_at || Date.now()).toLocaleDateString(
+												undefined,
+												{
+													month: 'short',
+													day: 'numeric',
+													hour: '2-digit',
+													minute: '2-digit',
+												},
+											)}
 										</span>
 									</div>
 

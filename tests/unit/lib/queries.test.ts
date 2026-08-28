@@ -14,8 +14,11 @@ import {
 } from '@/lib/queries/markets';
 import {
 	createPool,
+	fetchPoolById,
 	fetchPoolLeaderboard,
+	fetchPoolPicksMatrix,
 	fetchUserPools,
+	leavePool,
 } from '@/lib/queries/pools';
 import {
 	fetchUserPredictions,
@@ -347,7 +350,35 @@ describe('lib/queries modular unit tests', () => {
 			expect(pools[0].name).toBe('Champions Pool');
 		});
 
-		it('should create pool and assign admin membership', async () => {
+		it('should fetch pool by id preserving member_count, members_count, and creator', async () => {
+			const mockPool = {
+				id: 'p1',
+				name: 'Premier League Legends',
+				created_by: 'u1',
+				scope_kind: 'sport',
+				sport_slug: 'football',
+				creator: {
+					id: 'u1',
+					full_name: 'Pool Admin',
+					avatar_url: 'https://avatar.url',
+				},
+			};
+
+			(mockSupabaseClient.from as any)
+				.mockImplementationOnce(() => new MockQueryBuilder(mockPool))
+				.mockImplementationOnce(
+					() => new MockQueryBuilder([], null, { count: 8 }),
+				);
+
+			const pool = await fetchPoolById('p1');
+			expect(pool).toBeDefined();
+			expect(pool?.id).toBe('p1');
+			expect(pool?.member_count).toBe(8);
+			expect(pool?.members_count).toBe(8);
+			expect(pool?.creator?.full_name).toBe('Pool Admin');
+		});
+
+		it('should create pool and assign admin membership with role=admin', async () => {
 			const mockPool = {
 				id: 'p-new',
 				name: 'Premier League Legends',
@@ -359,18 +390,117 @@ describe('lib/queries modular unit tests', () => {
 				is_private: true,
 			};
 
+			let insertedMember: any = null;
 			(mockSupabaseClient.from as any)
 				.mockImplementationOnce(() => new MockQueryBuilder(mockPool))
-				.mockImplementationOnce(() => new MockQueryBuilder({ id: 1 }));
+				.mockImplementationOnce(() => ({
+					insert: vi.fn().mockImplementation((payload: any) => {
+						insertedMember = payload;
+						return Promise.resolve({ data: { id: 1 }, error: null });
+					}),
+				}));
 
 			const created = await createPool({
 				name: 'Premier League Legends',
-				created_by: 'u1',
+				user_id: 'u1',
 				scope_kind: 'sport',
 				sport_slug: 'football',
 			});
 
 			expect(created.id).toBe('p-new');
+			expect(insertedMember).toBeDefined();
+			expect(insertedMember.role).toBe('admin');
+			expect(insertedMember.user_id).toBe('u1');
+		});
+
+		it('should force normalized scoring_mode for all_sports pools even if omitted', async () => {
+			let insertedPoolPayload: any = null;
+			(mockSupabaseClient.from as any)
+				.mockImplementationOnce(() => ({
+					insert: vi.fn().mockImplementation((payload: any) => {
+						insertedPoolPayload = payload;
+						return {
+							select: vi.fn().mockReturnValue({
+								single: vi.fn().mockResolvedValue({
+									data: { id: 'p-all-sports', ...payload },
+									error: null,
+								}),
+							}),
+						};
+					}),
+				}))
+				.mockImplementationOnce(() => ({
+					insert: vi.fn().mockResolvedValue({ data: { id: 1 }, error: null }),
+				}));
+
+			const created = await createPool({
+				name: 'All Sports World Championship',
+				user_id: 'u1',
+				scope_kind: 'all_sports',
+				// no scoring_mode provided
+			});
+
+			expect(insertedPoolPayload).toBeDefined();
+			expect(insertedPoolPayload.scoring_mode).toBe('normalized');
+			expect(created.scoring_mode).toBe('normalized');
+		});
+
+		it('should roll back pool creation when creator membership insertion fails', async () => {
+			const mockPool = {
+				id: 'p-failed',
+				name: 'Orphan Pool',
+				created_by: 'u1',
+			};
+
+			let deletedPoolId: string | null = null;
+			(mockSupabaseClient.from as any)
+				.mockImplementationOnce(() => new MockQueryBuilder(mockPool))
+				.mockImplementationOnce(() => ({
+					insert: vi.fn().mockResolvedValue({
+						data: null,
+						error: { message: 'Database connection failed' },
+					}),
+				}))
+				.mockImplementationOnce(() => ({
+					delete: vi.fn().mockReturnValue({
+						eq: vi.fn().mockImplementation((col: string, val: string) => {
+							if (col === 'id') deletedPoolId = val;
+							return Promise.resolve({ data: null, error: null });
+						}),
+					}),
+				}));
+
+			await expect(
+				createPool({
+					name: 'Orphan Pool',
+					user_id: 'u1',
+					scope_kind: 'sport',
+					sport_slug: 'football',
+				}),
+			).rejects.toThrow(/Failed to add creator to pool members/);
+
+			expect(deletedPoolId).toBe('p-failed');
+		});
+
+		it('should leave only active membership episode where left_at IS NULL', async () => {
+			let isNullChecked = false;
+			(mockSupabaseClient.from as any).mockImplementationOnce(() => ({
+				update: vi.fn().mockReturnValue({
+					eq: vi.fn().mockReturnValue({
+						eq: vi.fn().mockReturnValue({
+							is: vi.fn().mockImplementation((col: string, val: any) => {
+								if (col === 'left_at' && val === null) {
+									isNullChecked = true;
+								}
+								return Promise.resolve({ data: null, error: null });
+							}),
+						}),
+					}),
+				}),
+			}));
+
+			await leavePool('p1', 'u1');
+			expect(isNullChecked).toBe(true);
 		});
 
 		it('should fetch pool leaderboard via RPC', async () => {
@@ -396,6 +526,54 @@ describe('lib/queries modular unit tests', () => {
 			expect(board).toHaveLength(1);
 			expect(board[0].rank).toBe(1);
 			expect(board[0].total_points).toBe(12);
+		});
+
+		it('should fetch pool picks matrix applying all pool scopes (edition, competition, sport, all_sports)', async () => {
+			const scopes: Array<{
+				scope_kind: any;
+				sport_slug?: string;
+				competition_id?: number;
+				edition_id?: number;
+			}> = [
+				{ scope_kind: 'all_sports' },
+				{ scope_kind: 'sport', sport_slug: 'rugby-union' },
+				{ scope_kind: 'competition', competition_id: 2021 },
+				{ scope_kind: 'edition', edition_id: 10 },
+			];
+
+			for (const scope of scopes) {
+				const mockPool = {
+					id: 'p1',
+					name: 'Test Pool',
+					...scope,
+				};
+				const mockMembers = [{ user_id: 'u1' }];
+				const mockEvents = [
+					{
+						id: 101,
+						round_label: 'Gameweek 1',
+						event_markets: [{ id: 501, status: 'open' }],
+					},
+				];
+				const mockPredictions = [
+					{
+						id: 1,
+						user_id: 'u1',
+						event_market_id: 501,
+						selection: { home: '2', away: '1' },
+					},
+				];
+
+				(mockSupabaseClient.from as any)
+					.mockImplementationOnce(() => new MockQueryBuilder(mockPool))
+					.mockImplementationOnce(() => new MockQueryBuilder(mockMembers))
+					.mockImplementationOnce(() => new MockQueryBuilder(mockEvents))
+					.mockImplementationOnce(() => new MockQueryBuilder(mockPredictions));
+
+				const matrix = await fetchPoolPicksMatrix('p1', 1);
+				expect(matrix.matches).toHaveLength(1);
+				expect(matrix.predictions['u1_101']).toBeDefined();
+			}
 		});
 	});
 });

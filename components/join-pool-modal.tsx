@@ -9,14 +9,14 @@ import { KeyRound, X } from 'lucide-react';
 import { useState } from 'react';
 
 export interface JoinPoolModalProps {
-	userId: string;
+	userId?: string;
 	isOpen: boolean;
 	onClose: () => void;
 	onSuccess: (poolId: string) => void;
 }
 
 export function JoinPoolModal({
-	userId,
+	userId = '',
 	isOpen,
 	onClose,
 	onSuccess,

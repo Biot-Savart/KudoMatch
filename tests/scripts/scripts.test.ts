@@ -159,27 +159,74 @@ describe('scripts automation and seeding', () => {
 	});
 
 	describe('fetch-live-scores.ts', () => {
-		it('executes live score synchronization on matches in need of updates', async () => {
+		it('executes live score synchronization with dryRun mode', async () => {
 			const { fetchLiveScores } = await import('@/scripts/fetch-live-scores');
-			mockSelect.mockResolvedValueOnce({
-				data: [
-					{
-						id: 'match-1',
-						external_id: 12001,
-						status: 'scheduled',
-						home_score: null,
-						away_score: null,
-						home_team: { name: 'Arsenal' },
-						away_team: { name: 'Chelsea' },
-					},
-				],
-				error: null,
-			});
-			mockUpsert.mockResolvedValue({ data: [], error: null });
-
-			const result = await fetchLiveScores({ simulate: true });
+			const result = await fetchLiveScores({ simulate: true, dryRun: true });
 			expect(result.success).toBe(true);
-			expect(mockSelect).toHaveBeenCalled();
+			expect(result.updated).toBeGreaterThan(0);
+		});
+
+		it('executes rugby live score synchronization', async () => {
+			const { fetchLiveScores } = await import('@/scripts/fetch-live-scores');
+			const result = await fetchLiveScores({
+				sport: 'rugby-union',
+				dryRun: true,
+			});
+			expect(result.success).toBe(true);
+		});
+	});
+
+	describe('seed-six-nations.ts', () => {
+		it('runs seedSixNations successfully in dryRun mode with recorded fixtures in non-prod', async () => {
+			const { seedSixNations } = await import('@/scripts/seed-six-nations');
+			const result = await seedSixNations({ dryRun: true });
+			expect(result.status).toBe('success');
+			expect(result.summary.fetchedCount).toBeGreaterThan(0);
+		});
+
+		it('rejects automatic recorded fallback in production when API credentials are missing', async () => {
+			vi.stubEnv('NODE_ENV', 'production');
+			const origKey1 = process.env.API_SPORTS_KEY;
+			const origKey2 = process.env.RAPIDAPI_KEY;
+			delete process.env.API_SPORTS_KEY;
+			delete process.env.RAPIDAPI_KEY;
+
+			try {
+				const { seedSixNations } = await import('@/scripts/seed-six-nations');
+				await expect(seedSixNations({ dryRun: true })).rejects.toThrow(
+					/Production Six Nations seeding requires valid API_SPORTS_KEY or RAPIDAPI_KEY credentials/,
+				);
+			} finally {
+				if (origKey1) process.env.API_SPORTS_KEY = origKey1;
+				if (origKey2) process.env.RAPIDAPI_KEY = origKey2;
+				vi.unstubAllEnvs();
+			}
+		});
+
+		it('allows explicit useRecorded in production when specified', async () => {
+			vi.stubEnv('NODE_ENV', 'production');
+			try {
+				const { seedSixNations } = await import('@/scripts/seed-six-nations');
+				const result = await seedSixNations({
+					dryRun: true,
+					useRecorded: true,
+				});
+				expect(result.status).toBe('success');
+			} finally {
+				vi.unstubAllEnvs();
+			}
+		});
+	});
+
+	describe('import-real-premier-league.ts', () => {
+		it('runs importRealPremierLeague successfully in dryRun mode', async () => {
+			const { importRealPremierLeague } =
+				await import('@/scripts/import-real-premier-league');
+			const result = await importRealPremierLeague({
+				dryRun: true,
+				simulate: true,
+			});
+			expect(result.success).toBe(true);
 		});
 	});
 

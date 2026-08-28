@@ -1,21 +1,31 @@
 /**
  * Live provider import script for real Premier League fixtures.
- * Note: External provider ingestion is scheduled for Phase 14: Provider Ingestion and Rugby Data.
+ * Ingests Premier League competitions, teams, events, and markets via the unified ingestion orchestrator.
  */
 
-export async function importRealPremierLeague() {
-	console.log(
-		'ℹ️ Live provider ingestion is scheduled for migration in Phase 14: Provider Ingestion and Rugby Data. Deterministic seeds are available via npm run seed:fixtures.',
-	);
-	return {
-		success: true,
-		message: 'Live provider ingestion scheduled for Phase 14',
-	};
+import { fetchLiveScores } from './fetch-live-scores';
+
+export async function importRealPremierLeague(
+	options: { dryRun?: boolean; simulate?: boolean } = {},
+) {
+	console.log('⚽ Initiating Premier League Real Provider Ingestion...');
+	return fetchLiveScores({
+		sport: 'football',
+		operation: 'sync_fixtures',
+		dryRun: options.dryRun,
+		simulate: options.simulate,
+	});
 }
 
 if (require.main === module) {
-	importRealPremierLeague()
-		.then(() => process.exit(0))
+	const dryRun = process.argv.includes('--dry-run');
+	const simulate = process.argv.includes('--simulate');
+
+	importRealPremierLeague({ dryRun, simulate })
+		.then((res) => {
+			console.log('Result:', JSON.stringify(res, null, 2));
+			process.exit(res.success ? 0 : 1);
+		})
 		.catch((err) => {
 			console.error(err);
 			process.exit(1);

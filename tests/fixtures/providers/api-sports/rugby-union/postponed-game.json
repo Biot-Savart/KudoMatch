@@ -1,0 +1,40 @@
+{
+	"get": "games",
+	"parameters": { "id": "1004" },
+	"errors": [],
+	"results": 1,
+	"response": [
+		{
+			"id": 1004,
+			"date": "2025-02-08T15:00:00+00:00",
+			"time": "15:00",
+			"timestamp": 1739026800,
+			"timezone": "UTC",
+			"week": "Round 2",
+			"status": {
+				"short": "POST",
+				"long": "Postponed"
+			},
+			"country": { "id": 5, "name": "Italy", "code": "ITA" },
+			"league": {
+				"id": 11,
+				"name": "Six Nations",
+				"type": "League",
+				"season": 2025
+			},
+			"teams": {
+				"home": {
+					"id": 19,
+					"name": "Italy",
+					"logo": "https://media.api-sports.io/rugby/teams/19.png"
+				},
+				"away": {
+					"id": 21,
+					"name": "Wales",
+					"logo": "https://media.api-sports.io/rugby/teams/21.png"
+				}
+			},
+			"scores": { "home": null, "away": null }
+		}
+	]
+}

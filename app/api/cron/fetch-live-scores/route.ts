@@ -13,44 +13,82 @@ export async function POST(req: NextRequest) {
 
 async function handleCron(req: NextRequest) {
 	try {
-		// 1. Verify cron authorization token to prevent unauthorized triggers
+		// 1. Enforce secure Authorization Bearer header only (reject query-string secret)
 		const authHeader = req.headers.get('authorization');
 		const searchParams = req.nextUrl.searchParams;
-		const secretParam = searchParams.get('secret');
+
+		if (searchParams.has('secret')) {
+			return NextResponse.json(
+				{
+					success: false,
+					error:
+						'Security violation: Passing cron secret via URL query parameter is forbidden. Use Authorization: Bearer <secret> header.',
+				},
+				{ status: 400 },
+			);
+		}
 
 		const expectedSecret = process.env.CRON_SECRET;
 
-		// Skip auth if CRON_SECRET is not set in development
-		if (expectedSecret) {
+		// Skip auth if CRON_SECRET is not set in development or test
+		if (expectedSecret && process.env.NODE_ENV === 'production') {
 			const hasBearerMatch = authHeader === `Bearer ${expectedSecret}`;
-			const hasParamMatch = secretParam === expectedSecret;
 
-			if (!hasBearerMatch && !hasParamMatch) {
+			if (!hasBearerMatch) {
 				return NextResponse.json(
-					{ success: false, error: 'Unauthorized: Invalid cron secret key.' },
+					{
+						success: false,
+						error: 'Unauthorized: Invalid cron authorization token.',
+					},
+					{ status: 401 },
+				);
+			}
+		} else if (expectedSecret) {
+			const hasBearerMatch = authHeader === `Bearer ${expectedSecret}`;
+			if (!hasBearerMatch) {
+				return NextResponse.json(
+					{
+						success: false,
+						error: 'Unauthorized: Invalid cron authorization token.',
+					},
 					{ status: 401 },
 				);
 			}
 		}
 
-		// 2. Read execution options from query parameters
+		// 2. Read execution options
 		const simulate = searchParams.get('simulate') === 'true';
+		const dryRun = searchParams.get('dryRun') === 'true';
+		const sport =
+			searchParams.get('sport') === 'rugby-union' ? 'rugby-union' : 'football';
 
 		// 3. Trigger score ingestion process
-		console.log(`🤖 Cron trigger received. Simulating: ${simulate}`);
-		const result = await fetchLiveScores({ simulate });
+		console.log(
+			`🤖 Cron trigger received. Sport: ${sport}, Simulating: ${simulate}`,
+		);
+		const result = await fetchLiveScores({
+			sport,
+			simulate,
+			dryRun,
+		});
 
-		if (!result.success) {
+		if (!result.success && result.status !== 'already_running') {
 			return NextResponse.json(
-				{ success: false, error: result.error },
+				{
+					success: false,
+					error: result.error || 'Ingestion failure',
+					summary: result.summary,
+				},
 				{ status: 500 },
 			);
 		}
 
 		return NextResponse.json({
 			success: true,
-			message: `Score sync successfully executed. Updated ${result.updated} matches.`,
+			status: result.status,
+			message: `Score sync successfully processed. Updated ${result.updated} records.`,
 			updated: result.updated,
+			summary: result.summary,
 			timestamp: new Date().toISOString(),
 		});
 	} catch (err: any) {
