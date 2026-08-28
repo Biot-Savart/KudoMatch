@@ -16,7 +16,8 @@ on conflict (slug) do update set
 insert into public.data_providers (slug, name, server_config_id, is_active)
 values
   ('api-football', 'API-Football (RapidAPI)', 'rapidapi_api_football', true),
-  ('api-rugby', 'API-Rugby (RapidAPI)', 'rapidapi_api_rugby', true)
+  ('api-sports', 'API-Sports Rugby (direct)', 'api_sports_rugby', true),
+  ('thesportsdb', 'TheSportsDB Rugby backfill', 'thesportsdb_rugby', true)
 on conflict (slug) do update set
   name = excluded.name,
   server_config_id = excluded.server_config_id,
@@ -26,7 +27,11 @@ on conflict (slug) do update set
 insert into public.competitions (sport_slug, slug, name, kind, country, logo_url, is_active)
 values
   ('football', 'premier-league', 'Premier League', 'league', 'England', 'https://media.api-sports.io/football/leagues/39.png', true),
-  ('rugby-union', 'six-nations', 'Six Nations Championship', 'cup', 'Europe', 'https://media.api-sports.io/rugby/leagues/1.png', true)
+  ('rugby-union', 'six-nations', 'Six Nations Championship', 'cup', 'Europe', 'https://media.api-sports.io/rugby/leagues/11.png', true),
+  ('rugby-union', 'united-rugby-championship', 'United Rugby Championship', 'league', 'Europe', null, false),
+  ('rugby-union', 'rugby-championship', 'The Rugby Championship', 'cup', 'World', null, false),
+  ('rugby-union', 'premiership-rugby', 'Premiership Rugby', 'league', 'England', null, false),
+  ('rugby-union', 'champions-cup', 'European Rugby Champions Cup', 'cup', 'Europe', null, false)
 on conflict (sport_slug, slug) do update set
   name = excluded.name,
   kind = excluded.kind,
@@ -277,12 +282,12 @@ from public.competitions c
 where c.sport_slug = 'football' and c.slug = 'premier-league'
 on conflict (provider_slug, entity_kind, external_key) do nothing;
 
--- Provider mapping for Six Nations (api-rugby league 1)
+-- Provider mapping for Six Nations (API-Sports league id 11; verified in the launch manifest)
 insert into public.external_entity_refs (provider_slug, entity_kind, external_key, competition_id, is_primary)
 select
-  'api-rugby',
+  'api-sports',
   'competition',
-  '1',
+  '11',
   c.id,
   true
 from public.competitions c
@@ -317,14 +322,23 @@ on conflict (provider_slug, entity_kind, external_key) do nothing;
 -- ============================================================================
 
 -- 10. Test Profiles (for deterministic pool and prediction seeding)
-insert into public.profiles (id, username, display_name, avatar_url)
+-- The profile foreign key targets auth.users; create disposable local users so
+-- the deterministic pool fixtures are valid after a clean reset.
+insert into auth.users (id, aud, role, email, encrypted_password, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
-  ('11111111-1111-1111-1111-111111111111', 'alice_predictor', 'Alice Walker', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alice'),
-  ('22222222-2222-2222-2222-222222222222', 'bob_tipster', 'Bob Turner', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Bob'),
-  ('33333333-3333-3333-3333-333333333333', 'carol_guru', 'Carol Davis', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Carol')
+  ('11111111-1111-1111-1111-111111111111', 'authenticated', 'authenticated', 'alice@example.local', '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('22222222-2222-2222-2222-222222222222', 'authenticated', 'authenticated', 'bob@example.local', '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('33333333-3333-3333-3333-333333333333', 'authenticated', 'authenticated', 'carol@example.local', '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now())
+on conflict (id) do nothing;
+
+insert into public.profiles (id, email, full_name, avatar_url)
+values
+  ('11111111-1111-1111-1111-111111111111', 'alice@example.local', 'Alice Walker', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alice'),
+  ('22222222-2222-2222-2222-222222222222', 'bob@example.local', 'Bob Turner', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Bob'),
+  ('33333333-3333-3333-3333-333333333333', 'carol@example.local', 'Carol Davis', 'https://api.dicebear.com/7.x/avataaars/svg?seed=Carol')
 on conflict (id) do update set
-  username = excluded.username,
-  display_name = excluded.display_name,
+  email = excluded.email,
+  full_name = excluded.full_name,
   avatar_url = excluded.avatar_url;
 
 -- 11. Scoring Rulesets
@@ -346,7 +360,7 @@ values
     1,
     3,
     '{"kind": "team_scoreline", "version": 1}'::jsonb,
-    '{"score_unit": "goals", "limits": {"home": [0, 20], "away": [0, 20]}}'::jsonb,
+    '{"renderer_key": "football-scoreline-v1", "score_unit": "goals", "limits": {"home": [0, 20], "away": [0, 20]}, "increments": [1], "quick_picks": {"home": {"home": 2, "away": 1}, "draw": {"home": 1, "away": 1}, "away": {"home": 1, "away": 2}}, "presets": [{"home": 2, "away": 1, "label": "2 - 1"}, {"home": 1, "away": 1, "label": "1 - 1"}, {"home": 1, "away": 2, "label": "1 - 2"}]}'::jsonb,
     true
   ),
   (
@@ -356,7 +370,7 @@ values
     1,
     6,
     '{"kind": "team_scoreline", "version": 1, "margin_close_threshold": 5}'::jsonb,
-    '{"score_unit": "points", "limits": {"home": [0, 100], "away": [0, 100]}}'::jsonb,
+    '{"renderer_key": "rugby-union-scoreline-v1", "score_unit": "points", "limits": {"home": [0, 100], "away": [0, 100]}, "increments": [1, 3, 5, 7], "quick_picks": {"home": {"home": 24, "away": 17}, "draw": {"home": 19, "away": 19}, "away": {"home": 17, "away": 24}}, "presets": [{"home": 24, "away": 17, "label": "24 - 17"}, {"home": 31, "away": 20, "label": "31 - 20"}, {"home": 19, "away": 15, "label": "19 - 15"}]}'::jsonb,
     true
   )
 on conflict (sport_slug, market_kind, version) do update set

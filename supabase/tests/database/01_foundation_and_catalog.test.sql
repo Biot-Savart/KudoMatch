@@ -1,6 +1,6 @@
 -- pgTAP Database & Security Tests for Phase 11: Multi-Sport Core Schema
 begin;
-select plan(30);
+select plan(29);
 
 -- 1. Schema & Table existence
 select has_schema('private', 'Private schema exists');
@@ -50,7 +50,7 @@ select throws_ok(
        (select ce.id from public.competition_editions ce join public.competitions c on c.id = ce.competition_id where c.sport_slug = 'football' limit 1),
        (select id from public.competitors where sport_slug = 'rugby-union' limit 1)
      ) $$,
-  'check_violation',
+  '23514',
   NULL,
   'Rejects edition_competitor with mismatched sport'
 );
@@ -64,7 +64,7 @@ select throws_ok(
        3,
        'participant'
      ) $$,
-  'check_violation',
+  '23514',
   NULL,
   'Rejects event_competitor with mismatched sport'
 );
@@ -96,14 +96,14 @@ select is(
 
 select is(
   (select count(*)::int from public.competitions),
-  2,
-  'Deterministic seeds contain 2 competitions'
+  6,
+  'Deterministic seeds contain the football competition and five Rugby launch competitions'
 );
 
 select is(
   (select count(*)::int from public.data_providers),
-  2,
-  'Deterministic seeds contain 2 data providers'
+  5,
+  'Deterministic seeds contain configured provider catalog entries'
 );
 
 -- 4. RLS & Visibility Tests

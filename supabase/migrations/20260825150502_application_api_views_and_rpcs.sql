@@ -191,6 +191,11 @@ grant execute on function public.get_market_community_stats(bigint) to anon, aut
 -- 3. POOL LEADERBOARD RPC
 -- ----------------------------------------------------------------------------
 
+-- The preceding pool migration defined this function with a different table
+-- return shape. PostgreSQL cannot change OUT-parameter types via CREATE OR
+-- REPLACE, so remove the old signature before installing the canonical RPC.
+drop function if exists public.get_pool_leaderboard(uuid);
+
 create or replace function public.get_pool_leaderboard(
   p_pool_id uuid
 )

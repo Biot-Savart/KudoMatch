@@ -1,6 +1,6 @@
 -- pgTAP Database & Security Tests for Phase 12: Prediction Markets, Scoring Engine, and Pools
 begin;
-select plan(40);
+select plan(44);
 
 -- 1. Table and Schema Existence
 select has_table('public', 'scoring_rulesets', 'Public scoring_rulesets table exists');
@@ -303,8 +303,8 @@ select is(
 
 select is(
   (select tier_code from public.predictions where user_id = '22222222-2222-2222-2222-222222222222' and event_market_id = (select id from public.event_markets order by id limit 1)),
-  'exact_margin',
-  'Bob (3-1 pred vs 2-1 actual) receives exact_margin tier'
+  'outcome',
+  'Bob (3-1 pred vs 2-1 actual) receives outcome tier'
 );
 
 select is(
@@ -327,14 +327,14 @@ select is(
 
 -- 6. Pool Leaderboard RPC Assertion
 select is(
-  (select displayed_score from public.get_pool_leaderboard('a0000000-0000-0000-0000-000000000001') where user_id = '11111111-1111-1111-1111-111111111111'),
+  (select total_points from public.get_pool_leaderboard('a0000000-0000-0000-0000-000000000001') where user_id = '11111111-1111-1111-1111-111111111111'),
   10000::bigint,
   'Global pool leaderboard returns 10000 normalized points for Alice'
 );
 
 select is(
   (select rank from public.get_pool_leaderboard('a0000000-0000-0000-0000-000000000001') where user_id = '11111111-1111-1111-1111-111111111111'),
-  1,
+  1::bigint,
   'Alice is rank 1 on global pool leaderboard'
 );
 
