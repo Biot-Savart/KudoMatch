@@ -2,7 +2,7 @@
 // Core Domain Models & Schemas - Phase 13 Application Event-Model Refactor
 // ============================================================================
 
-export type SportSlug = 'football' | 'rugby_union' | (string & {});
+export type SportSlug = 'football' | 'rugby-union' | (string & {});
 
 export interface Sport {
 	slug: SportSlug;
@@ -190,6 +190,18 @@ export interface ScoringRuleTier {
 }
 
 export interface ScoringRulesetUiConfig {
+	renderer_key?: 'football-scoreline-v1' | 'rugby-union-scoreline-v1' | (string & {});
+	score_unit?: string;
+	limits?: {
+		home: [number, number];
+		away: [number, number];
+	};
+	increments?: number[];
+	quick_picks?: {
+		home: { home: number; away: number; label?: string };
+		draw: { home: number; away: number; label?: string };
+		away: { home: number; away: number; label?: string };
+	};
 	unit?: string;
 	home_label?: string;
 	away_label?: string;
@@ -205,6 +217,17 @@ export interface ScoringRulesetUiConfig {
 	}[];
 	[key: string]: any;
 }
+
+/** Ruleset UI configuration used by the team-scoreline renderer registry. */
+export type TeamScorelineUiConfig = ScoringRulesetUiConfig & {
+	renderer_key: 'football-scoreline-v1' | 'rugby-union-scoreline-v1';
+	score_unit: string;
+	limits: {
+		home: [number, number];
+		away: [number, number];
+	};
+	increments: number[];
+};
 
 export interface ScoringRuleset {
 	id: string; // bigint mapped to string
@@ -494,6 +517,7 @@ export interface KickoffReminderEvent {
 	startsAt?: string;
 	kickoffTime?: string;
 	roundLabel?: string | null;
+	deepLink?: string;
 }
 
 export type KickoffReminderMatch = KickoffReminderEvent;
@@ -533,4 +557,5 @@ export interface WeeklyDigestSummary {
 	topPoolRank?: number | null;
 	upcomingEventsCount?: number;
 	upcomingMatchesCount?: number;
+	tierCounts?: Partial<Record<'exact_score' | 'exact_margin' | 'close_margin' | 'outcome' | 'miss', number>>;
 }
