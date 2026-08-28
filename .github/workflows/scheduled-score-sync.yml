@@ -2,7 +2,8 @@ name: Scheduled Live Score Sync
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # Vercel handles bounded live polling; Actions owns nightly full reconciliation.
+    - cron: "17 2 * * *"
   workflow_dispatch:
     inputs:
       simulate:
@@ -10,6 +11,12 @@ on:
         required: false
         type: boolean
         default: false
+      operation:
+        description: "Ingestion operation"
+        required: false
+        type: choice
+        options: [full_reconcile, sync_fixtures, sync_live]
+        default: full_reconcile
 
 jobs:
   sync-scores:
@@ -49,12 +56,13 @@ jobs:
           if [ "${{ github.event.inputs.simulate }}" = "true" ]; then
             npm run scores:simulate-sync
           else
-            npm run scores:sync
+            npm run scores:sync -- --operation=${{ github.event.inputs.operation || 'full_reconcile' }}
           fi
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+          API_SPORTS_KEY: ${{ secrets.API_SPORTS_KEY }}
           RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
           CI: "true"
 
