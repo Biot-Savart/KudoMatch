@@ -10,6 +10,7 @@ export default defineConfig({
 		setupFiles: ['./tests/setup.ts'],
 		exclude: [
 			'node_modules/**',
+			'tests/playwright/**',
 			'tests/components/components.test.tsx',
 			'tests/components/drawers-modals-auth.test.tsx',
 			'tests/app/pages.test.tsx',
