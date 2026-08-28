@@ -57,11 +57,12 @@ export async function sendKickoffReminders(
 				`
 				id,
 				locks_at,
-				events:events(
+					events:events(
 					id,
 					starts_at,
 					round_label,
 					status,
+					competition_editions:competition_editions(competition_id, competitions(sport_slug)),
 					event_competitors:event_competitors(
 						slot,
 						role,
@@ -121,6 +122,7 @@ export async function sendKickoffReminders(
 					locksAt: m.locks_at,
 					startsAt: ev.starts_at,
 					roundLabel: ev.round_label,
+					deepLink: `/predict?sport=${encodeURIComponent(ev.competition_editions?.competitions?.sport_slug || 'football')}&competition=${encodeURIComponent(ev.competition_editions?.competition_id || '')}&edition=${encodeURIComponent(ev.competition_editions?.id || '')}&round=${encodeURIComponent(ev.round_label || '')}`,
 				};
 			});
 
@@ -188,7 +190,7 @@ export async function sendKickoffReminders(
 			usersNotified++;
 			const count = unpredictedEvents.length;
 			const nextEvent = unpredictedEvents[0];
-			const title = `⚽ Upcoming Kickoff Reminder!`;
+			const title = `🏟️ Upcoming Kickoff Reminder!`;
 			const body =
 				count === 1
 					? `${nextEvent.homeTeamName} vs ${nextEvent.awayTeamName} locks soon. Submit your pick!`
@@ -201,7 +203,7 @@ export async function sendKickoffReminders(
 				const pushResult = await sendPushToUser(userId, {
 					title,
 					body,
-					url: '/predict',
+					url: nextEvent.deepLink || '/predict',
 					data: { type: 'kickoff_reminder', count },
 				});
 				if (pushResult && pushResult.sent > 0) {

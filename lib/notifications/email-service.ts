@@ -136,10 +136,13 @@ export function generateWeeklyDigestHtml(
           </div>
 
           <!-- Total Points & Standings Info -->
-          <div style="background-color: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
+			<div style="background-color: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
             <div style="font-size: 14px; color: #c7d2fe; font-weight: 600;">
               Total Global Score: <span style="color: #ffffff; font-weight: 800;">${summary.totalPoints} PTS</span>
-            </div>
+			</div>
+			<div style="font-size: 12px; color: #94a3b8; margin: 12px 0; text-align: center;">
+				Semantic tiers across sports: exact ${summary.tierCounts?.exact_score || 0} · margin ${summary.tierCounts?.exact_margin || 0} · close margin ${summary.tierCounts?.close_margin || 0} · outcome ${summary.tierCounts?.outcome || 0}
+			</div>
             ${
 							summary.topPoolName
 								? `<div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">Current Rank in <strong>${summary.topPoolName}</strong>: #${summary.topPoolRank || 1}</div>`
@@ -166,6 +169,7 @@ export function generateWeeklyDigestHtml(
 
 - Points Earned This Week: +${summary.pointsEarnedThisWeek}
 - Exact Predictions: ${summary.exactPredictionsThisWeek} / ${summary.totalPredictionsThisWeek}
+- Semantic tiers (all sports): exact ${summary.tierCounts?.exact_score || 0}, margin ${summary.tierCounts?.exact_margin || 0}, close margin ${summary.tierCounts?.close_margin || 0}, outcome ${summary.tierCounts?.outcome || 0}
 - Total Global Points: ${summary.totalPoints}
 ${summary.topPoolName ? `- Rank in ${summary.topPoolName}: #${summary.topPoolRank || 1}` : ''}
 
