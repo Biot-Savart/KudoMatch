@@ -57,13 +57,11 @@ export default function Dashboard() {
 		SportEvent[]
 	>({
 		queryKey: eventsQueryKeys.list({
-			sportSlug: 'football',
 			userId: user?.id,
 			limit: 6,
 		}),
 		queryFn: () =>
 			fetchEvents({
-				sportSlug: 'football',
 				userId: user?.id,
 				limit: 6,
 			}),
@@ -174,8 +172,8 @@ export default function Dashboard() {
 						Predict Scores. Challenge Friends. Claim Bragging Rights.
 					</h1>
 					<p className="text-sm sm:text-base text-slate-400">
-						Lock in your football scorelines before kickoff. Compete across
-						private leagues, test what-if scenarios, and rise up the
+						Lock in football and rugby scorelines before kickoff. Compete across
+						private pools, test what-if scenarios, and rise up the
 						leaderboards.
 					</p>
 					<div className="flex items-center justify-center md:justify-start gap-3 pt-2">

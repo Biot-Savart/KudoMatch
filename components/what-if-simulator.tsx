@@ -2,6 +2,7 @@
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { ParticipantCrest } from '@/components/participant-crest';
 import { simulatePoolStandings } from '@/lib/utils/scoring';
 import { PoolLeaderboardEntry, SportEvent } from '@/types';
 import { motion } from 'framer-motion';
@@ -25,6 +26,7 @@ export interface WhatIfSimulatorProps {
 	predictionsByMember?: Record<string, Record<string, any>>;
 	currentUserId?: string | null;
 	poolName?: string;
+	poolScoringMode?: 'raw' | 'normalized';
 }
 
 export function WhatIfScenarioSimulator({
@@ -36,6 +38,7 @@ export function WhatIfScenarioSimulator({
 	predictionsByMember = {},
 	currentUserId,
 	poolName,
+	poolScoringMode = 'raw',
 }: WhatIfSimulatorProps) {
 	const items = events.length > 0 ? events : matches;
 
@@ -102,6 +105,7 @@ export function WhatIfScenarioSimulator({
 		predictionsByMember,
 		items,
 		simulatedScores,
+		{ sportSlug: 'football', poolScoringMode },
 	);
 
 	const currentUserSim = simulatedLeaderboard.find(
@@ -212,11 +216,7 @@ export function WhatIfScenarioSimulator({
 										<div className="flex items-center gap-2 flex-1 min-w-0">
 											<div className="h-7 w-7 rounded-lg bg-white/5 p-1 flex items-center justify-center shrink-0">
 												{homeComp?.media_url || homeComp?.logo_url ? (
-													<img
-														src={homeComp.media_url || homeComp.logo_url}
-														alt={homeComp.name}
-														className="max-h-full max-w-full object-contain"
-													/>
+									<ParticipantCrest src={homeComp.media_url || homeComp.logo_url} alt={homeComp.name} />
 												) : (
 													<span className="text-[10px] font-bold">
 														{homeComp?.short_name || 'H'}
@@ -278,11 +278,7 @@ export function WhatIfScenarioSimulator({
 											</span>
 											<div className="h-7 w-7 rounded-lg bg-white/5 p-1 flex items-center justify-center shrink-0">
 												{awayComp?.media_url || awayComp?.logo_url ? (
-													<img
-														src={awayComp.media_url || awayComp.logo_url}
-														alt={awayComp.name}
-														className="max-h-full max-w-full object-contain"
-													/>
+									<ParticipantCrest src={awayComp.media_url || awayComp.logo_url} alt={awayComp.name} />
 												) : (
 													<span className="text-[10px] font-bold">
 														{awayComp?.short_name || 'A'}

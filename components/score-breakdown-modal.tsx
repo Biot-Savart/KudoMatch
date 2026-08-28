@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { ParticipantCrest } from '@/components/participant-crest';
 import { triggerConfetti } from '@/lib/utils/confetti';
 import { getScoringExplanation, SCORING_RULES } from '@/lib/utils/scoring';
 import { motion } from 'framer-motion';
@@ -191,11 +192,7 @@ export function ScoreBreakdownModal({
 						<div className="flex items-center gap-2.5">
 							<div className="h-9 w-9 rounded-xl bg-white/5 p-1.5 flex items-center justify-center border border-white/10 shrink-0">
 								{homeLogo ? (
-									<img
-										src={homeLogo}
-										alt={homeName}
-										className="max-h-full max-w-full object-contain"
-									/>
+									<ParticipantCrest src={homeLogo} alt={homeName} />
 								) : (
 									<span className="text-xs font-bold text-slate-400">
 										{homeComp?.short_name || 'H'}
@@ -233,11 +230,7 @@ export function ScoreBreakdownModal({
 							</span>
 							<div className="h-9 w-9 rounded-xl bg-white/5 p-1.5 flex items-center justify-center border border-white/10 shrink-0">
 								{awayLogo ? (
-									<img
-										src={awayLogo}
-										alt={awayName}
-										className="max-h-full max-w-full object-contain"
-									/>
+									<ParticipantCrest src={awayLogo} alt={awayName} />
 								) : (
 									<span className="text-xs font-bold text-slate-400">
 										{awayComp?.short_name || 'A'}

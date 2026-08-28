@@ -5,8 +5,8 @@ export const competitionsQueryKeys = {
 	all: ['competitions'] as const,
 	bySport: (sportSlug?: string) =>
 		[...competitionsQueryKeys.all, 'sport', sportSlug ?? 'all'] as const,
-	editions: (competitionId?: string) =>
-		['competition_editions', competitionId ?? 'all'] as const,
+	editions: (sportSlug?: string, competitionId?: string, statuses?: string[]) =>
+		['competition_editions', sportSlug ?? 'all', competitionId ?? 'all', ...(statuses ?? ['active'])] as const,
 	editionRounds: (editionId?: string) =>
 		['competition_edition_rounds', editionId ?? 'all'] as const,
 };
@@ -46,19 +46,29 @@ export async function fetchActiveCompetitions(
 	}));
 }
 
-export async function fetchActiveCompetitionEditions(
-	competitionId?: string,
-): Promise<CompetitionEdition[]> {
+export async function fetchCompetitionEditions({
+	sportSlug,
+	competitionId,
+	statuses = ['active'],
+}: {
+	sportSlug?: string;
+	competitionId?: string;
+	statuses?: string[];
+} = {}): Promise<CompetitionEdition[]> {
 	const supabase = createClient();
 	let query = supabase
 		.from('competition_editions')
-		.select('*, competition:competitions(*)')
-		.eq('status', 'active')
+		.select('*, competition:competitions!inner(*)')
 		.order('starts_at', { ascending: false });
+	if (statuses.length === 1) query = query.eq('status', statuses[0]);
+	else if (statuses.length > 1) query = query.in('status', statuses);
 
 	if (competitionId) {
 		query = query.eq('competition_id', competitionId);
 	}
+	if (sportSlug) query = query.eq('competition.sport_slug', sportSlug);
+	// Disabled competitions must never become the implicit edition fallback.
+	query = query.eq('competition.is_active', true);
 
 	const { data, error } = await query;
 
@@ -93,6 +103,13 @@ export async function fetchActiveCompetitionEditions(
 				}
 			: undefined,
 	}));
+}
+
+/** Backward-compatible helper for callers that only need active editions. */
+export async function fetchActiveCompetitionEditions(
+	competitionId?: string,
+): Promise<CompetitionEdition[]> {
+	return fetchCompetitionEditions({ competitionId, statuses: ['active'] });
 }
 
 export async function fetchEditionRounds(editionId: string): Promise<string[]> {

@@ -212,9 +212,9 @@ export async function fetchEvents(
 		.select(
 			`
 			*,
-			competition_editions:competition_editions(
+			competition_editions:competition_editions!inner(
 				*,
-				competitions:competitions(*)
+				competitions:competitions!inner(*)
 			),
 			event_competitors:event_competitors(
 				*,
@@ -236,6 +236,13 @@ export async function fetchEvents(
 	if (filters.editionId && filters.editionId !== 'all') {
 		query = query.eq('edition_id', filters.editionId);
 	}
+	if (filters.competitionId && filters.competitionId !== 'all') {
+		query = query.eq('competition_editions.competition_id', filters.competitionId);
+	}
+	if (filters.sportSlug && filters.sportSlug !== 'all') {
+		query = query.eq('competition_editions.competitions.sport_slug', filters.sportSlug);
+	}
+	query = query.eq('competition_editions.competitions.is_active', true);
 
 	if (filters.roundLabel && filters.roundLabel !== 'all') {
 		query = query.eq('round_label', filters.roundLabel);
