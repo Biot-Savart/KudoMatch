@@ -1,7 +1,9 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { submitPrediction } from '@/lib/queries/predictions';
+import { ParticipantCrest } from '@/components/participant-crest';
+import { deletePrediction, submitPrediction } from '@/lib/queries/predictions';
+import { parseTeamScorelineUiConfig } from '@/lib/sports/scoreline-config';
 import { TeamScorelineSelection } from '@/types';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -43,10 +45,25 @@ export function PredictionDrawer({
 		target?.away_team;
 
 	const currentMarket = target?.current_market ?? target?.markets?.[0];
+	const targetSport = target?.edition?.competition?.sport_slug;
 	const marketId = currentMarket?.id ?? target?.id;
-	const uiConfig = currentMarket?.ruleset?.ui_config ?? {};
-	const scoreMin = uiConfig.score_min ?? 0;
-	const scoreMax = uiConfig.score_max ?? 99;
+	const parsedUiConfig = parseTeamScorelineUiConfig(
+		currentMarket?.ruleset?.ui_config,
+	);
+	// Legacy records are kept readable during migration; newly-ingested markets
+	// must provide a valid renderer contract and never silently fall back to a
+	// different sport's controls.
+	const uiConfig = parsedUiConfig ?? currentMarket?.ruleset?.ui_config ?? {};
+	const scoreMin = parsedUiConfig?.limits.home[0] ?? uiConfig.score_min ?? 0;
+	const scoreMax = parsedUiConfig?.limits.home[1] ?? uiConfig.score_max ?? 99;
+	const awayScoreMin = parsedUiConfig?.limits.away[0] ?? scoreMin;
+	const awayScoreMax = parsedUiConfig?.limits.away[1] ?? scoreMax;
+	const increments = parsedUiConfig?.increments ?? [uiConfig.step ?? 1];
+	const isLocked = Boolean(
+		currentMarket?.status && currentMarket.status !== 'open',
+	) || Boolean(
+		currentMarket?.locks_at && new Date(currentMarket.locks_at).getTime() <= Date.now(),
+	);
 
 	// Reset scores when a new event/prediction is loaded
 	useEffect(() => {
@@ -105,8 +122,28 @@ export function PredictionDrawer({
 			toast.error(err.message || 'Failed to save prediction.');
 		},
 	});
+	const clearMutation = useMutation({
+		mutationFn: async () => {
+			if (!userId || !marketId) throw new Error('Authentication and active market required');
+			return deletePrediction(userId, String(marketId));
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ['predictions'] });
+			queryClient.invalidateQueries({ queryKey: ['events'] });
+			toast.success('Prediction cleared.');
+			onClose();
+		},
+		onError: (err: any) => toast.error(err.message || 'Failed to clear prediction.'),
+	});
 
 	if (!target) return null;
+	if (targetSport === 'rugby-union' && !parsedUiConfig) {
+		return isOpen ? (
+			<div role="alert" className="fixed inset-x-4 bottom-6 z-[60] rounded-2xl border border-amber-400/30 bg-slate-900 p-5 text-sm text-amber-200 shadow-2xl">
+				This Rugby market is temporarily unavailable because its scoreline configuration is invalid. The operations team has been notified.
+			</div>
+		) : null;
+	}
 
 	const getOutcomeText = () => {
 		if (homeScore > awayScore) return `${homeComp?.name || 'Home'} Win`;
@@ -115,6 +152,10 @@ export function PredictionDrawer({
 	};
 
 	const handleSave = () => {
+		if (isLocked) {
+			toast.error('This market is locked; predictions can no longer be changed.');
+			return;
+		}
 		if (!userId) {
 			toast.error('Please sign in to save predictions!');
 			return;
@@ -195,6 +236,11 @@ export function PredictionDrawer({
 										minute: '2-digit',
 									})}
 								</div>
+								{isLocked && (
+									<div role="status" className="mt-2 text-xs font-semibold text-amber-300">
+										Market locked — your pick is read-only.
+									</div>
+								)}
 							</div>
 
 							{/* Interactive Score Steppers */}
@@ -203,11 +249,7 @@ export function PredictionDrawer({
 								<div className="glass-card p-4 rounded-2xl flex flex-col items-center border border-white/10">
 									<div className="h-12 w-12 rounded-xl bg-white/5 p-2 flex items-center justify-center mb-2">
 										{homeComp?.media_url || homeComp?.logo_url ? (
-											<img
-												src={homeComp.media_url || homeComp.logo_url}
-												alt={homeComp.name}
-												className="max-h-full max-w-full object-contain"
-											/>
+																			<ParticipantCrest src={homeComp.media_url || homeComp.logo_url} alt={homeComp.name} />
 										) : (
 											<span className="font-bold text-xs">
 												{homeComp?.short_name || 'HOME'}
@@ -221,6 +263,7 @@ export function PredictionDrawer({
 									{/* Stepper Controls */}
 									<div className="flex items-center gap-3">
 										<button
+											aria-label={`Decrease ${homeComp?.name || 'home'} score by 1`}
 											onClick={() =>
 												setHomeScore((prev) => Math.max(scoreMin, prev - 1))
 											}
@@ -229,12 +272,19 @@ export function PredictionDrawer({
 										>
 											<Minus className="h-4 w-4" />
 										</button>
-										<span className="text-3xl font-black text-white w-8 text-center">
-											{homeScore}
-										</span>
+										<input
+											aria-label="Home score"
+											type="number"
+											min={scoreMin}
+											max={scoreMax}
+											value={homeScore}
+											onChange={(e) => setHomeScore(Math.max(scoreMin, Math.min(scoreMax, Number(e.target.value) || 0)))}
+											className="text-3xl font-black text-white w-16 text-center bg-transparent border-b border-white/20 focus:border-indigo-400 outline-none"
+										/>
 										<button
+											aria-label={`Increase ${homeComp?.name || 'home'} score by ${increments[0]}`}
 											onClick={() =>
-												setHomeScore((prev) => Math.min(scoreMax, prev + 1))
+												setHomeScore((prev) => Math.min(scoreMax, prev + increments[0]))
 											}
 											disabled={homeScore >= scoreMax}
 											className="h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 transition active:scale-95"
@@ -242,17 +292,20 @@ export function PredictionDrawer({
 											<Plus className="h-4 w-4" />
 										</button>
 									</div>
+									{increments.length > 1 && (
+										<div className="flex gap-1 mt-2" aria-label="Home score increments">
+											{increments.slice(1).map((step) => (
+												<button key={step} type="button" aria-label={`Increase home score by ${step}`} onClick={() => setHomeScore((prev) => Math.min(scoreMax, prev + step))} className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-400 hover:text-white">+{step}</button>
+											))}
+										</div>
+									)}
 								</div>
 
 								{/* Away Team Stepper */}
 								<div className="glass-card p-4 rounded-2xl flex flex-col items-center border border-white/10">
 									<div className="h-12 w-12 rounded-xl bg-white/5 p-2 flex items-center justify-center mb-2">
 										{awayComp?.media_url || awayComp?.logo_url ? (
-											<img
-												src={awayComp.media_url || awayComp.logo_url}
-												alt={awayComp.name}
-												className="max-h-full max-w-full object-contain"
-											/>
+																			<ParticipantCrest src={awayComp.media_url || awayComp.logo_url} alt={awayComp.name} />
 										) : (
 											<span className="font-bold text-xs">
 												{awayComp?.short_name || 'AWAY'}
@@ -266,27 +319,42 @@ export function PredictionDrawer({
 									{/* Stepper Controls */}
 									<div className="flex items-center gap-3">
 										<button
+											aria-label={`Decrease ${awayComp?.name || 'away'} score by 1`}
 											onClick={() =>
-												setAwayScore((prev) => Math.max(scoreMin, prev - 1))
+												setAwayScore((prev) => Math.max(awayScoreMin, prev - 1))
 											}
-											disabled={awayScore <= scoreMin}
+											disabled={awayScore <= awayScoreMin}
 											className="h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 transition active:scale-95"
 										>
 											<Minus className="h-4 w-4" />
 										</button>
-										<span className="text-3xl font-black text-white w-8 text-center">
-											{awayScore}
-										</span>
+										<input
+											aria-label="Away score"
+											type="number"
+											min={awayScoreMin}
+											max={awayScoreMax}
+											value={awayScore}
+											onChange={(e) => setAwayScore(Math.max(awayScoreMin, Math.min(awayScoreMax, Number(e.target.value) || 0)))}
+											className="text-3xl font-black text-white w-16 text-center bg-transparent border-b border-white/20 focus:border-indigo-400 outline-none"
+										/>
 										<button
+											aria-label={`Increase ${awayComp?.name || 'away'} score by ${increments[0]}`}
 											onClick={() =>
-												setAwayScore((prev) => Math.min(scoreMax, prev + 1))
+												setAwayScore((prev) => Math.min(awayScoreMax, prev + increments[0]))
 											}
-											disabled={awayScore >= scoreMax}
+											disabled={awayScore >= awayScoreMax}
 											className="h-10 w-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed border border-white/10 transition active:scale-95"
 										>
 											<Plus className="h-4 w-4" />
 										</button>
 									</div>
+									{increments.length > 1 && (
+										<div className="flex gap-1 mt-2" aria-label="Away score increments">
+											{increments.slice(1).map((step) => (
+												<button key={step} type="button" aria-label={`Increase away score by ${step}`} onClick={() => setAwayScore((prev) => Math.min(awayScoreMax, prev + step))} className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-400 hover:text-white">+{step}</button>
+											))}
+										</div>
+									)}
 								</div>
 							</div>
 
@@ -300,7 +368,7 @@ export function PredictionDrawer({
 								<span className="text-xs font-semibold text-slate-400 block mb-2">
 									Common Presets:
 								</span>
-								<div className="grid grid-cols-4 gap-2">
+										<div className="grid grid-cols-4 gap-2">
 									{presets.map((preset: any, idx: number) => (
 										<button
 											key={idx}
@@ -330,9 +398,19 @@ export function PredictionDrawer({
 							>
 								Cancel
 							</Button>
+							{existingPrediction && !isLocked && (
+								<Button
+									variant="outline"
+									onClick={() => clearMutation.mutate()}
+									disabled={clearMutation.isPending}
+									className="border-rose-400/30 text-rose-300 hover:bg-rose-500/10"
+								>
+									{clearMutation.isPending ? 'Clearing…' : 'Clear prediction'}
+								</Button>
+							)}
 							<Button
 								onClick={handleSave}
-								disabled={saveMutation.isPending}
+								disabled={saveMutation.isPending || isLocked}
 								className="w-2/3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold gap-2 shadow-lg shadow-indigo-600/30"
 							>
 								{saveMutation.isPending ? (
@@ -343,7 +421,7 @@ export function PredictionDrawer({
 								) : (
 									<>
 										<Save className="h-4 w-4" />
-										<span>Confirm Pick</span>
+									<span>Confirm Pick</span>
 									</>
 								)}
 							</Button>

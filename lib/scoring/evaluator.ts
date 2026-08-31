@@ -180,7 +180,7 @@ export function evaluateMarketPrediction(
 	result: ScorelinePayload,
 ): EvaluatedScoreResult {
 	if (marketKind === 'team_scoreline') {
-		if (sportSlug === 'rugby_union') {
+		if (sportSlug === 'rugby-union') {
 			return evaluatePrediction(
 				'rugby_union_scoreline_v1',
 				{},

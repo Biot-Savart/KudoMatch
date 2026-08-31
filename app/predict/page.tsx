@@ -10,7 +10,7 @@ import { ScoringRulesModal } from '@/components/scoring-rules-modal';
 import { Button } from '@/components/ui/button';
 import { MatchCardSkeleton } from '@/components/ui/match-card-skeleton';
 import {
-	fetchActiveCompetitionEditions,
+	fetchCompetitionEditions,
 	fetchEditionRounds
 } from '@/lib/queries/competitions';
 import { eventsQueryKeys, fetchEvents } from '@/lib/queries/events';
@@ -33,6 +33,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { formatEditionLabel } from '@/lib/utils/display';
 
 function PredictContent() {
 	const supabase = createClient();
@@ -48,6 +49,7 @@ function PredictContent() {
 
 	// URL-backed Filter Dimensions
 	const sportParam = searchParams.get('sport') || 'football';
+	const competitionParam = searchParams.get('competition') || '';
 	const editionParam = searchParams.get('edition') || '';
 	const roundParam = searchParams.get('round') || '';
 
@@ -91,13 +93,16 @@ function PredictContent() {
 
 	// Fetch active editions for selected sport
 	const { data: editions = [] } = useQuery({
-		queryKey: ['competition_editions', sportParam],
-		queryFn: () => fetchActiveCompetitionEditions(),
+		queryKey: ['competition_editions', sportParam, competitionParam],
+		queryFn: () => fetchCompetitionEditions({ sportSlug: sportParam, competitionId: competitionParam || undefined, statuses: ['active', 'planned', 'completed'] }),
 	});
 
-	const activeEdition =
-		editions.find((ed) => ed.id === editionParam) ??
-		editions.find((ed) => ed.competition?.sport_slug === sportParam) ??
+	const now = Date.now();
+	const activeEdition = editions.find((ed) => ed.id === editionParam) ??
+		editions.find((ed) => ed.status === 'active' && new Date(ed.starts_at).getTime() <= now && (!ed.ends_at || new Date(ed.ends_at).getTime() >= now)) ??
+		editions.filter((ed) => ed.status === 'active').sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())[0] ??
+		editions.filter((ed) => ed.status === 'planned' && new Date(ed.starts_at).getTime() >= now).sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0] ??
+		editions.filter((ed) => ed.status === 'completed').sort((a, b) => new Date(b.ends_at || b.starts_at).getTime() - new Date(a.ends_at || a.starts_at).getTime())[0] ??
 		editions[0];
 
 	const activeEditionId = activeEdition?.id;
@@ -118,9 +123,10 @@ function PredictContent() {
 			: availableRounds[0] || 'Round 1';
 
 	// Update URL when dimension changes
-	const updateFilters = (sport: string, editionId?: string, round?: string) => {
+	const updateFilters = (sport: string, editionId?: string, round?: string, competitionId?: string) => {
 		const params = new URLSearchParams();
 		params.set('sport', sport);
+		if (competitionId) params.set('competition', competitionId);
 		if (editionId) params.set('edition', editionId);
 		if (round) params.set('round', round);
 		router.push(`/predict?${params.toString()}`);
@@ -167,6 +173,7 @@ function PredictContent() {
 	} = useQuery({
 		queryKey: eventsQueryKeys.list({
 			sportSlug: sportParam,
+			competitionId: competitionParam || undefined,
 			editionId: activeEditionId,
 			roundLabel: activeRound,
 			userId: user?.id,
@@ -174,6 +181,7 @@ function PredictContent() {
 		queryFn: () =>
 			fetchEvents({
 				sportSlug: sportParam,
+				competitionId: competitionParam || undefined,
 				editionId: activeEditionId,
 				roundLabel: activeRound,
 				userId: user?.id,
@@ -261,7 +269,7 @@ function PredictContent() {
 				<div className="space-y-2">
 					<div className="flex items-center gap-2">
 						<span className="px-3 py-1 rounded-full text-xs font-black tracking-wider uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-							{activeEdition?.name ?? 'Premier League'}
+							{formatEditionLabel(activeEdition)}
 						</span>
 						<span className="text-xs text-slate-400 font-medium">
 							{activeRound}
@@ -288,7 +296,7 @@ function PredictContent() {
 									: 'bg-white/5 text-slate-400 hover:bg-white/10'
 							}`}
 						>
-							<span>{sp.slug === 'rugby_union' ? '🏉' : '⚽'}</span>
+							<span>{sp.slug === 'rugby-union' ? '🏉' : '⚽'}</span>
 							<span>{sp.name}</span>
 						</button>
 					))}

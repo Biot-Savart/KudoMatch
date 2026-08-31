@@ -451,8 +451,9 @@ export function simulatePoolStandings(
 	predictionsByMember: Record<string, Record<string, any>>,
 	events: any[],
 	simulatedScores: Record<string, { home_score: number; away_score: number }>,
-	sportSlug: SportSlug = 'football',
+	sportSlugOrOptions: SportSlug | { sportSlug?: SportSlug; poolScoringMode?: 'raw' | 'normalized' } = 'football',
 ): { simulatedLeaderboard: SimulatedLeaderboardEntry[] } {
+	const options = typeof sportSlugOrOptions === 'string' ? { sportSlug: sportSlugOrOptions, poolScoringMode: 'raw' as const } : sportSlugOrOptions;
 	const entries: SimulatedLeaderboardEntry[] = leaderboard.map((entry) => {
 		let addedPoints = 0;
 		let addedExact = 0;
@@ -472,14 +473,15 @@ export function simulatePoolStandings(
 				pick.predicted_away_score ?? pick.away ?? pick.selection?.away;
 
 			if (typeof homePick === 'number' && typeof awayPick === 'number') {
+				const eventSport = ev.edition?.competition?.sport_slug || options.sportSlug || 'football';
 				const evalRes = evaluateScoreline(
 					homePick,
 					awayPick,
 					sim.home_score,
 					sim.away_score,
-					sportSlug,
+					eventSport,
 				);
-				addedPoints += evalRes.rawPoints;
+				addedPoints += options.poolScoringMode === 'normalized' ? evalRes.normalizedBasisPoints : evalRes.rawPoints;
 				if (evalRes.tierCode === 'exact_score') {
 					addedExact++;
 				}

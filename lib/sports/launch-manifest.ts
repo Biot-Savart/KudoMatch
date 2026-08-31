@@ -1,0 +1,30 @@
+import { SportSlug } from '@/types';
+
+export interface RugbyLaunchCompetition {
+	slug: string;
+	name: string;
+	kind: 'league' | 'cup';
+	country: string;
+	/** Verified API-Sports league id; omitted until provider proof supplies it. */
+	providerExternalKey?: string;
+	seasonPolicy: 'current-and-upcoming' | 'history-and-current';
+	displayOrder: number;
+	isEnabled: boolean;
+}
+
+/** Versioned, reviewable launch contract. IDs are intentionally not guessed. */
+export const RUGBY_LAUNCH_MANIFEST = {
+	version: 1,
+	sportSlug: 'rugby-union' as SportSlug,
+	providerSlug: 'api-sports',
+	competitions: [
+		{ slug: 'six-nations', name: 'Six Nations Championship', kind: 'cup', country: 'Europe', providerExternalKey: '11', seasonPolicy: 'history-and-current', displayOrder: 1, isEnabled: true },
+		{ slug: 'united-rugby-championship', name: 'United Rugby Championship', kind: 'league', country: 'Europe', seasonPolicy: 'current-and-upcoming', displayOrder: 2, isEnabled: false },
+		{ slug: 'rugby-championship', name: 'Rugby Championship', kind: 'cup', country: 'Southern Hemisphere', seasonPolicy: 'current-and-upcoming', displayOrder: 3, isEnabled: false },
+		{ slug: 'premiership-rugby', name: 'Premiership Rugby', kind: 'league', country: 'England', seasonPolicy: 'current-and-upcoming', displayOrder: 4, isEnabled: false },
+		{ slug: 'champions-cup', name: 'European Rugby Champions Cup', kind: 'cup', country: 'Europe', seasonPolicy: 'current-and-upcoming', displayOrder: 5, isEnabled: false },
+	] satisfies RugbyLaunchCompetition[],
+} as const;
+
+export const RUGBY_COMPETITION_SLUGS = RUGBY_LAUNCH_MANIFEST.competitions.map((competition) => competition.slug);
+

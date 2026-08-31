@@ -120,6 +120,11 @@ export async function sendWeeklyDigest(
 			const exactsThisWeek = recentPreds.filter(
 				(p) => p.tier_code === 'exact_score',
 			).length;
+			const tierCounts = recentPreds.reduce((counts, prediction) => {
+				const tier = prediction.tier_code as keyof NonNullable<WeeklyDigestSummary['tierCounts']>;
+				if (tier) counts[tier] = (counts[tier] || 0) + 1;
+				return counts;
+			}, {} as NonNullable<WeeklyDigestSummary['tierCounts']>);
 
 			const summaryData: WeeklyDigestSummary = {
 				userId: profile.id,
@@ -130,6 +135,7 @@ export async function sendWeeklyDigest(
 				exactPredictionsThisWeek: exactsThisWeek,
 				totalPredictionsThisWeek: recentPreds.length,
 				upcomingEventsCount: upcomingCount || 0,
+				tierCounts,
 			};
 
 			if (simulate) {

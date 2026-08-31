@@ -7,12 +7,15 @@ import { SportProviderAdapter } from '../lib/sports/ingestion/adapter';
 import { FootballDataAdapter } from '../lib/sports/ingestion/adapters/football-data';
 import { MockSportProviderAdapter } from '../lib/sports/ingestion/adapters/mock';
 import { RugbyApiSportsAdapter } from '../lib/sports/ingestion/adapters/rugby-api-sports';
+import { TheSportsDbRugbyAdapter } from '../lib/sports/ingestion/adapters/thesportsdb-rugby';
 import { IngestionRunSummary } from '../lib/sports/ingestion/dto';
 import { orchestrateIngestion } from '../lib/sports/ingestion/orchestrate';
 import { createServiceRoleClient } from '../lib/supabase/server';
+import * as dotenv from 'dotenv';
+import * as path from 'node:path';
 
 export interface FetchLiveScoresOptions {
-	provider?: 'football-data' | 'api-sports' | 'mock-provider';
+	provider?: 'football-data' | 'api-sports' | 'thesportsdb' | 'mock-provider';
 	sport?: 'football' | 'rugby-union';
 	editionExternalKey?: string;
 	competitionExternalKey?: string;
@@ -21,6 +24,7 @@ export interface FetchLiveScoresOptions {
 	simulate?: boolean;
 	dryRun?: boolean;
 	recordedPayload?: unknown;
+	allEditions?: boolean;
 }
 
 export interface FetchLiveScoresResult {
@@ -69,6 +73,13 @@ export async function fetchLiveScores(
 		adapter = new RugbyApiSportsAdapter({
 			recordedGames: options.recordedPayload,
 		});
+	} else if (explicitProvider === 'thesportsdb') {
+		if (sport !== 'rugby-union') {
+			throw new Error(
+				`Provider 'thesportsdb' is incompatible with sport '${sport}'`,
+			);
+		}
+		adapter = new TheSportsDbRugbyAdapter();
 	} else {
 		// Default provider selection based on sport
 		if (sport === 'rugby-union') {
@@ -113,8 +124,12 @@ export async function fetchLiveScores(
 		}
 
 		if (!editionExternalKey) {
-			// Default to active seeded editions (Six Nations 2026, PL 2025/2026)
+			// Direct production access must be backed by a catalog reference. The
+			// legacy fixture default remains only for local recorded/test runs.
 			if (sport === 'rugby-union') {
+				if (process.env.API_SPORTS_KEY && !options.recordedPayload) {
+					throw new Error('No active API-Sports rugby edition is configured; refusing guessed Six Nations fallback');
+				}
 				editionExternalKey = '11-2026';
 				competitionExternalKey = competitionExternalKey || '11';
 			} else {
@@ -156,16 +171,25 @@ export async function fetchLiveScores(
 }
 
 if (require.main === module) {
+	dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 	const args = process.argv.slice(2);
 	const dryRun = args.includes('--dry-run');
 	const simulate = args.includes('--simulate');
 	const isRugby =
 		args.includes('--rugby') || args.includes('--sport=rugby-union');
+	const providerArg = args.find((arg) => arg.startsWith('--provider='))?.split('=')[1] as FetchLiveScoresOptions['provider'] | undefined;
+	const operationArg = args.find((arg) => arg.startsWith('--operation='))?.split('=')[1] as FetchLiveScoresOptions['operation'] | undefined;
+	const editionArg = args.find((arg) => arg.startsWith('--edition='))?.split('=')[1];
+	const competitionArg = args.find((arg) => arg.startsWith('--competition='))?.split('=')[1];
 
 	fetchLiveScores({
 		sport: isRugby ? 'rugby-union' : 'football',
+		provider: providerArg,
+		editionExternalKey: editionArg,
+		competitionExternalKey: competitionArg,
 		dryRun,
 		simulate,
+		operation: operationArg,
 	})
 		.then((res) => {
 			console.log('Result:', JSON.stringify(res, null, 2));

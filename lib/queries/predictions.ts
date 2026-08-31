@@ -115,6 +115,25 @@ export async function submitPrediction(
 	};
 }
 
+/** Clear an existing prediction while the market is still open. The database
+ * trigger is the final authority and rejects deletes at or after lock time. */
+export async function deletePrediction(
+	userId: string,
+	marketId: string,
+): Promise<void> {
+	const supabase = createClient();
+	const { error } = await supabase
+		.from('predictions')
+		.delete()
+		.eq('user_id', userId)
+		.eq('event_market_id', Number(marketId));
+
+	if (error) {
+		console.error('Error clearing prediction:', error);
+		throw error;
+	}
+}
+
 // Backward-compatible aliases for transition & legacy tests
 export async function upsertPrediction(
 	userId: string,

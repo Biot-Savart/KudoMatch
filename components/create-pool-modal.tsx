@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createPool } from '@/lib/queries/pools';
+import { fetchActiveCompetitions, fetchCompetitionEditions } from '@/lib/queries/competitions';
+import { formatEditionLabel } from '@/lib/utils/display';
 import { PoolScopeKind, PoolScoringMode } from '@/types';
+import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Globe, Lock, Trophy, X } from 'lucide-react';
 import { useState } from 'react';
@@ -25,10 +28,21 @@ export function CreatePoolModal({
 	const [name, setName] = useState('');
 	const [scopeKind, setScopeKind] = useState<PoolScopeKind>('sport');
 	const [sportSlug, setSportSlug] = useState<string>('football');
+	const [competitionId, setCompetitionId] = useState('');
+	const [editionId, setEditionId] = useState('');
 	const [scoringMode, setScoringMode] = useState<PoolScoringMode>('raw');
 	const [isPrivate, setIsPrivate] = useState(true);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const { data: competitions = [] } = useQuery({
+		queryKey: ['pool-competitions', sportSlug],
+		queryFn: () => fetchActiveCompetitions(sportSlug),
+	});
+	const { data: editions = [] } = useQuery({
+		queryKey: ['pool-editions', sportSlug, competitionId],
+		queryFn: () => fetchCompetitionEditions({ sportSlug, competitionId, statuses: ['active', 'planned'] }),
+		enabled: scopeKind === 'competition' || scopeKind === 'edition',
+	});
 
 	if (!isOpen) return null;
 
@@ -37,12 +51,22 @@ export function CreatePoolModal({
 		if (scope === 'all_sports') {
 			setScoringMode('normalized');
 		}
+		if (scope === 'sport') { setCompetitionId(''); setEditionId(''); }
+		if (scope === 'competition') setEditionId('');
 	};
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (name.trim().length < 3) {
 			setError('Pool name must be at least 3 characters.');
+			return;
+		}
+		if ((scopeKind === 'competition' || scopeKind === 'edition') && !competitionId) {
+			setError('Select a competition for this pool scope.');
+			return;
+		}
+		if (scopeKind === 'edition' && !editionId) {
+			setError('Select an edition for this pool scope.');
 			return;
 		}
 
@@ -54,7 +78,9 @@ export function CreatePoolModal({
 				name: name.trim(),
 				created_by: userId,
 				scope_kind: scopeKind,
-				sport_slug: scopeKind === 'all_sports' ? null : sportSlug,
+				sport_slug: scopeKind === 'sport' ? sportSlug : null,
+				competition_id: scopeKind === 'competition' || scopeKind === 'edition' ? Number(competitionId) : null,
+				edition_id: scopeKind === 'edition' ? Number(editionId) : null,
 				scoring_mode: scopeKind === 'all_sports' ? 'normalized' : scoringMode,
 				is_private: isPrivate,
 			});
@@ -145,8 +171,8 @@ export function CreatePoolModal({
 						<Label className="text-xs text-slate-300 font-semibold uppercase tracking-wider">
 							Pool Scope
 						</Label>
-						<div className="grid grid-cols-2 gap-2">
-							<button
+		<div className="grid grid-cols-2 gap-2">
+			<button
 								type="button"
 								onClick={() => handleScopeChange('sport')}
 								className={`p-3 rounded-xl border text-left transition flex flex-col gap-1 ${
@@ -174,12 +200,18 @@ export function CreatePoolModal({
 								<span className="text-[10px] opacity-70">
 									Multi-sport normalized leaderboard
 								</span>
-							</button>
-						</div>
+			</button>
+			{(['competition', 'edition'] as PoolScopeKind[]).map((scope) => (
+				<button key={scope} type="button" onClick={() => handleScopeChange(scope)} className={`p-3 rounded-xl border text-left transition flex flex-col gap-1 ${scopeKind === scope ? 'bg-indigo-600/20 border-indigo-500 text-white' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}>
+					<span className="text-xs font-bold">{scope === 'competition' ? '🏆 Competition' : '📅 Edition'}</span>
+					<span className="text-[10px] opacity-70">{scope === 'competition' ? 'One competition' : 'One edition'}</span>
+				</button>
+			))}
+		</div>
 					</div>
 
 					{/* Sport Selection if scope is sport */}
-					{scopeKind === 'sport' && (
+					{scopeKind !== 'all_sports' && (
 						<div className="space-y-1.5">
 							<Label className="text-xs text-slate-300 font-semibold uppercase tracking-wider">
 								Sport
@@ -190,10 +222,20 @@ export function CreatePoolModal({
 								className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
 							>
 								<option value="football">Football (Soccer)</option>
-								<option value="rugby_union">Rugby Union</option>
+								<option value="rugby-union">Rugby Union</option>
 							</select>
 						</div>
-					)}
+		)}
+		{(scopeKind === 'competition' || scopeKind === 'edition') && (
+			<div className="space-y-2">
+				<Label className="text-xs text-slate-300 font-semibold uppercase tracking-wider">Competition</Label>
+				<select value={competitionId} onChange={(e) => { setCompetitionId(e.target.value); setEditionId(''); }} className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white">
+					<option value="">Select competition</option>
+					{competitions.map((competition) => <option key={competition.id} value={competition.id}>{competition.name}</option>)}
+				</select>
+                           {scopeKind === 'edition' && <select value={editionId} onChange={(e) => setEditionId(e.target.value)} disabled={!competitionId} className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white"><option value="">Select edition</option>{editions.map((edition) => <option key={edition.id} value={edition.id}>{formatEditionLabel(edition)}</option>)}</select>}
+			</div>
+		)}
 
 					{/* Scoring Mode if single sport */}
 					{scopeKind !== 'all_sports' && (
@@ -225,6 +267,9 @@ export function CreatePoolModal({
 									Normalized (10,000 basis pts)
 								</button>
 							</div>
+							<p className="text-[10px] text-slate-500">
+								Normalized scoring awards up to 10,000 basis points per eligible market; it does not equalize the number of events between sports.
+							</p>
 						</div>
 					)}
 

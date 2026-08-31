@@ -14,6 +14,7 @@ import { fetchEvents } from '@/lib/queries/events';
 import {
 	fetchPoolById,
 	fetchPoolLeaderboard,
+	fetchPoolPicksMatrix,
 	leavePool,
 	poolsQueryKeys,
 } from '@/lib/queries/pools';
@@ -116,6 +117,11 @@ export default function PoolDetailPage() {
 				sportSlug: pool?.sport_slug || undefined,
 				roundLabel: selectedRound,
 			}),
+		enabled: !!pool,
+	});
+	const { data: picksMatrix = { matches: [], predictions: {} } } = useQuery({
+		queryKey: poolsQueryKeys.picksMatrix(poolId, selectedRound),
+		queryFn: () => fetchPoolPicksMatrix(poolId, selectedRound),
 		enabled: !!pool,
 	});
 
@@ -253,7 +259,7 @@ export default function PoolDetailPage() {
 								<span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
 									{pool.scope_kind === 'all_sports'
 										? '🌐 All Sports'
-										: pool.sport_slug === 'rugby_union'
+										: pool.sport_slug === 'rugby-union'
 											? '🏉 Rugby Union'
 											: '⚽ Football'}
 								</span>
@@ -279,6 +285,9 @@ export default function PoolDetailPage() {
 							<p className="text-xs text-slate-400">
 								Created by {pool.creator?.full_name || 'Admin'} •{' '}
 								{pool.member_count ?? leaderboard.length} members
+							</p>
+							<p className="text-[11px] text-slate-500">
+								{pool.competition?.name || pool.edition?.name || (pool.scope_kind === 'all_sports' ? 'All active sports' : 'All competitions in scope')} · scoring starts {pool.scoring_starts_at ? new Date(pool.scoring_starts_at).toLocaleString() : 'now'} · membership period applies from join time
 							</p>
 						</div>
 
@@ -583,10 +592,7 @@ export default function PoolDetailPage() {
 							currentUserId={user?.id || ''}
 							leaderboard={leaderboard}
 							members={[]}
-							matrixData={{
-								events,
-								predictions: {},
-							}}
+							matrixData={picksMatrix}
 						/>
 					</TabsContent>
 
@@ -616,9 +622,10 @@ export default function PoolDetailPage() {
 				onClose={() => setIsSimulatorOpen(false)}
 				events={events}
 				leaderboard={leaderboard}
-				predictionsByMember={{}}
+				predictionsByMember={Object.entries(picksMatrix.predictions).reduce((acc, [key, prediction]) => { const [memberId, eventId] = key.split('_'); (acc[memberId] ||= {})[eventId] = prediction; return acc; }, {} as Record<string, Record<string, any>>)}
 				currentUserId={user?.id}
-				poolName={pool.name}
+		poolName={pool.name}
+		poolScoringMode={pool.scoring_mode}
 			/>
 
 			<ScoreBreakdownModal

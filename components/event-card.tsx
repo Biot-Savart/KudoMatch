@@ -1,11 +1,14 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { ParticipantCrest } from '@/components/participant-crest';
 import { Card, CardContent } from '@/components/ui/card';
 import {
 	calculatePredictionPoints,
 	getScoringExplanation,
 } from '@/lib/utils/scoring';
+import { parseTeamScorelineUiConfig } from '@/lib/sports/scoreline-config';
+import { formatEditionLabel, formatMatchStart } from '@/lib/utils/display';
 import { MarketPrediction, SportEvent } from '@/types';
 import { ChevronRight, Info, Lock, Timer, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -49,6 +52,10 @@ export function EventCard(props: EventCardProps) {
 			?.competitor ?? event.competitors?.[1]?.competitor;
 
 	const currentMarket = event.current_market ?? event.markets?.[0];
+	const scorelineUi = parseTeamScorelineUiConfig(currentMarket?.ruleset?.ui_config);
+	const quickPicks = scorelineUi?.quick_picks ?? {
+		home: { home: 2, away: 1 }, draw: { home: 1, away: 1 }, away: { home: 1, away: 2 },
+	};
 	const marketResult = currentMarket?.result?.result as
 		| { home: number; away: number }
 		| undefined;
@@ -91,11 +98,7 @@ export function EventCard(props: EventCardProps) {
 
 			if (hours > 24) {
 				setTimeLeft(
-					new Date(event.starts_at).toLocaleDateString(undefined, {
-						weekday: 'short',
-						hour: '2-digit',
-						minute: '2-digit',
-					}),
+					formatMatchStart(event.starts_at),
 				);
 			} else {
 				setTimeLeft(`Starts in ${hours}h ${minutes}m`);
@@ -119,13 +122,13 @@ export function EventCard(props: EventCardProps) {
 
 	const handleQuickSelection = (option: 'home' | 'draw' | 'away') => {
 		if (isLocked || !userId || !currentMarket) return;
-		if (option === 'home') onQuickPredict(currentMarket.id, 2, 1);
-		else if (option === 'away') onQuickPredict(currentMarket.id, 1, 2);
-		else onQuickPredict(currentMarket.id, 1, 1);
+		const pick = quickPicks[option];
+		onQuickPredict(currentMarket.id, pick.home, pick.away);
 	};
 
 	const isLive = event.status === 'live';
 	const isFinished = event.status === 'completed';
+	const isUnavailable = ['postponed', 'cancelled', 'abandoned'].includes(event.status);
 	const isResolvedOrLive = isLive || isFinished;
 
 	const scoringExplanation =
@@ -161,7 +164,7 @@ export function EventCard(props: EventCardProps) {
 						</span>
 					)}
 					<span className="hidden sm:inline">
-						{event.edition?.name ?? event.edition?.competition?.name ?? 'Match'}
+						{formatEditionLabel(event.edition)}
 					</span>
 				</div>
 
@@ -174,6 +177,10 @@ export function EventCard(props: EventCardProps) {
 						<span className="flex items-center gap-1 text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20 text-[10px] tracking-wider animate-pulse">
 							<span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
 							LIVE
+						</span>
+					) : isUnavailable ? (
+						<span className="flex items-center gap-1 text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 text-[10px] tracking-wider">
+							{event.status.toUpperCase()}
 						</span>
 					) : isLocked ? (
 						<span className="flex items-center gap-1 text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 text-[10px]">
@@ -196,11 +203,7 @@ export function EventCard(props: EventCardProps) {
 					<div className="flex flex-col items-center text-center gap-2">
 						<div className="relative h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/5 p-2 flex items-center justify-center border border-white/10 group-hover:scale-105 transition">
 							{homeComp?.media_url ? (
-								<img
-									src={homeComp.media_url}
-									alt={homeComp.name}
-									className="max-h-full max-w-full object-contain"
-								/>
+								<ParticipantCrest src={homeComp.media_url} alt={homeComp.name} />
 							) : (
 								<span className="text-sm font-bold text-slate-400">
 									{homeComp?.short_name || 'HOME'}
@@ -248,11 +251,7 @@ export function EventCard(props: EventCardProps) {
 					<div className="flex flex-col items-center text-center gap-2">
 						<div className="relative h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/5 p-2 flex items-center justify-center border border-white/10 group-hover:scale-105 transition">
 							{awayComp?.media_url ? (
-								<img
-									src={awayComp.media_url}
-									alt={awayComp.name}
-									className="max-h-full max-w-full object-contain"
-								/>
+								<ParticipantCrest src={awayComp.media_url} alt={awayComp.name} />
 							) : (
 								<span className="text-sm font-bold text-slate-400">
 									{awayComp?.short_name || 'AWAY'}
@@ -277,7 +276,7 @@ export function EventCard(props: EventCardProps) {
 									: 'hover:bg-white/5 text-slate-400'
 							}`}
 						>
-							<span>1</span>
+							<span>{quickPicks.home.home}-{quickPicks.home.away}</span>
 							<span className="text-[10px] opacity-70 font-normal">
 								{homeComp?.short_name || 'Home'}
 							</span>
@@ -291,7 +290,7 @@ export function EventCard(props: EventCardProps) {
 									: 'hover:bg-white/5 text-slate-400'
 							}`}
 						>
-							<span>X</span>
+							<span>{quickPicks.draw.home}-{quickPicks.draw.away}</span>
 							<span className="text-[10px] opacity-70 font-normal">Draw</span>
 						</button>
 						<button
@@ -303,7 +302,7 @@ export function EventCard(props: EventCardProps) {
 									: 'hover:bg-white/5 text-slate-400'
 							}`}
 						>
-							<span>2</span>
+							<span>{quickPicks.away.home}-{quickPicks.away.away}</span>
 							<span className="text-[10px] opacity-70 font-normal">
 								{awayComp?.short_name || 'Away'}
 							</span>

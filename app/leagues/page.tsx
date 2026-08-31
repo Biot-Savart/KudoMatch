@@ -183,7 +183,7 @@ export default function LeaguesPage() {
 												<span className="px-2 py-0.5 rounded bg-white/5 border border-white/5">
 													{pool.scope_kind === 'all_sports'
 														? '🌐 All Sports'
-														: pool.sport_slug === 'rugby_union'
+														: pool.sport_slug === 'rugby-union'
 															? '🏉 Rugby'
 															: '⚽ Football'}
 												</span>
