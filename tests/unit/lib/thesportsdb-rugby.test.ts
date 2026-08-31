@@ -82,4 +82,30 @@ describe('TheSportsDbRugbyAdapter', () => {
 		]);
 		vi.unstubAllGlobals();
 	});
+
+	it('handles configuration, empty schedules, caching, and malformed events', async () => {
+		vi.stubEnv('THESPORTSDB_RUGBY_LEAGUES', '[]');
+		expect(() => new TheSportsDbRugbyAdapter()).toThrow('THESPORTSDB_RUGBY_LEAGUES must be a JSON object');
+		vi.stubEnv('THESPORTSDB_RUGBY_LEAGUES', '{"unknown":""}');
+		vi.stubEnv('THESPORTSDB_RUGBY_SEASONS', '{}');
+		const configured = new TheSportsDbRugbyAdapter({ leagues: { unknown: '' }, seasons: {} });
+		await expect(configured.fetchCompetitions()).resolves.toEqual([]);
+		await expect(configured.fetchEditions('unknown')).resolves.toEqual([]);
+
+		const fetchSpy = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ events: null }) });
+		vi.stubGlobal('fetch', fetchSpy);
+		const empty = new TheSportsDbRugbyAdapter({ leagues: { 'rugby-championship': '4986' }, seasons: { '4986': '2026' } });
+		await expect(empty.fetchEvents({ editionExternalKey: '4986-2026' })).resolves.toEqual([]);
+		await expect(empty.fetchEvents({ editionExternalKey: '4986-2026' })).resolves.toEqual([]);
+		await expect(empty.fetchCompetitors('4986-2026')).rejects.toThrow('no Rugby competitors');
+		expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+		const transformed = empty.transformEvents([
+			{},
+			{ idEvent: 'postponed', idHomeTeam: 'h', idAwayTeam: 'a', strTimestamp: '2026-09-01T12:00:00Z', strPostponed: 'yes', intHomeScore: '', intAwayScore: 'x' },
+		], '4986-2026');
+		expect(transformed).toMatchObject([{ externalKey: 'postponed', status: 'postponed', result: undefined }]);
+		vi.unstubAllGlobals();
+		vi.unstubAllEnvs();
+	});
 });
