@@ -369,7 +369,7 @@ function PredictContent() {
 							<Trophy className="h-3.5 w-3.5 text-amber-400" />
 							<span>Tournaments</span>
 						</span>
-						{editions.length > 1 && (
+						{competitionParam && editions.length > 1 && (
 							<div className="flex items-center gap-1.5">
 								<span className="text-[11px] text-slate-500 font-medium">
 									Edition:
@@ -464,7 +464,17 @@ function PredictContent() {
 						{availableRounds.map((r) => (
 							<button
 								key={r}
-								onClick={() => updateFilters(sportParam, activeEditionId, r)}
+								onClick={() =>
+									updateFilters(
+										sportParam,
+										activeEditionId,
+										r,
+										competitionParam ||
+											(activeCompetitionId
+												? String(activeCompetitionId)
+												: undefined),
+									)
+								}
 								className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition ${
 									activeRound === r
 										? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 border border-indigo-500'
