@@ -444,6 +444,77 @@ describe('Sports Ingestion Engine (Phase 14 Review Findings)', () => {
 	});
 
 	describe('Active Edition & Provider Resolution in fetchLiveScores (Finding 2 & 4)', () => {
+		it('syncs the deployed legacy matches schema when canonical events are unavailable', async () => {
+			const update = vi.fn().mockReturnValue({
+				eq: vi.fn().mockResolvedValue({ error: null }),
+			});
+			const matchesBuilder = {
+				select: vi.fn().mockReturnThis(),
+				or: vi.fn().mockReturnThis(),
+				lte: vi.fn().mockResolvedValue({
+					data: [
+						{
+							id: 'legacy-match-1',
+							external_id: 123,
+							status: 'live',
+							home_score: 1,
+							away_score: 0,
+							kickoff_time: '2026-08-01T12:00:00.000Z',
+						},
+					],
+					error: null,
+				}),
+				update,
+			};
+			const mockSupabase: any = {
+				from: vi.fn().mockImplementation((table: string) => {
+					if (table === 'events') {
+						return {
+							select: vi.fn().mockReturnThis(),
+							limit: vi.fn().mockResolvedValue({
+								data: null,
+								error: {
+									code: 'PGRST205',
+									message: "Could not find the table 'public.events' in the schema cache",
+								},
+							}),
+						};
+					}
+					if (table === 'matches') return matchesBuilder;
+					throw new Error(`Unexpected table: ${table}`);
+				}),
+			};
+
+			const result = await fetchLiveScores(
+				{
+					provider: 'football-data',
+					operation: 'full_reconcile',
+					recordedPayload: {
+						matches: [
+							{
+								id: 123,
+								utcDate: '2026-08-01T12:00:00.000Z',
+								status: 'FINISHED',
+								homeTeam: { id: 1 },
+								awayTeam: { id: 2 },
+								score: { fullTime: { home: 2, away: 1 } },
+							},
+						],
+					},
+				},
+				mockSupabase,
+			);
+
+			expect(result).toMatchObject({ success: true, updated: 1 });
+			expect(update).toHaveBeenCalledWith(
+				expect.objectContaining({
+					status: 'finished',
+					home_score: 2,
+					away_score: 1,
+				}),
+			);
+		});
+
 		it('resolves active edition from database for rugby and football', async () => {
 			const mockSupabase: any = {
 				rpc: vi.fn().mockResolvedValue({ data: true, error: null }),

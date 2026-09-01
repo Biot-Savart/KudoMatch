@@ -140,40 +140,92 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 			const payload = Array.isArray(this.recordedCompetitions)
 				? this.recordedCompetitions
 				: this.recordedCompetitions.response;
-			if (!Array.isArray(payload)) throw new Error('Recorded rugby competition payload is malformed');
+			if (!Array.isArray(payload))
+				throw new Error('Recorded rugby competition payload is malformed');
 			return payload.map((item: any) => {
 				const league = item.league ?? item;
 				return {
-				externalKey: String(league.id ?? league.externalKey),
-				sportSlug: 'rugby-union',
-				slug: String(league.slug ?? league.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-				name: String(league.name),
-				kind: league.kind === 'league' ? 'league' : 'cup',
-				country: item.country?.name ?? item.country ?? undefined,
-				logoUrl: league.logo ?? league.logoUrl ?? undefined,
-				isActive: league.isActive !== false,
+					externalKey: String(league.id ?? league.externalKey),
+					sportSlug: 'rugby-union',
+					slug: String(league.slug ?? league.name)
+						.toLowerCase()
+						.replace(/[^a-z0-9]+/g, '-')
+						.replace(/(^-|-$)/g, ''),
+					name: String(league.name),
+					kind: league.kind === 'league' ? 'league' : 'cup',
+					country: item.country?.name ?? item.country ?? undefined,
+					logoUrl: league.logo ?? league.logoUrl ?? undefined,
+					isActive: league.isActive !== false,
 				};
 			});
 		}
 
 		// In production IDs are supplied by the verified launch manifest. There is
 		// intentionally no guessed fallback for the four non-Six-Nations leagues.
-		const names: Record<string, { name: string; kind: 'league' | 'cup'; country: string }> = {
-			'six-nations': { name: 'Six Nations Championship', kind: 'cup', country: 'Europe' },
-			'united-rugby-championship': { name: 'United Rugby Championship', kind: 'league', country: 'Europe' },
-			'rugby-championship': { name: 'Rugby Championship', kind: 'cup', country: 'Southern Hemisphere' },
-			'premiership-rugby': { name: 'Premiership Rugby', kind: 'league', country: 'England' },
-			'champions-cup': { name: 'European Rugby Champions Cup', kind: 'cup', country: 'Europe' },
+		const names: Record<
+			string,
+			{ name: string; kind: 'league' | 'cup'; country: string }
+		> = {
+			'six-nations': {
+				name: 'Six Nations Championship',
+				kind: 'cup',
+				country: 'Europe',
+			},
+			'united-rugby-championship': {
+				name: 'United Rugby Championship',
+				kind: 'league',
+				country: 'Europe',
+			},
+			'rugby-championship': {
+				name: 'Rugby Championship',
+				kind: 'cup',
+				country: 'Southern Hemisphere',
+			},
+			'premiership-rugby': {
+				name: 'Premiership Rugby',
+				kind: 'league',
+				country: 'England',
+			},
+			'champions-cup': {
+				name: 'European Rugby Champions Cup',
+				kind: 'cup',
+				country: 'Europe',
+			},
+			'top-14': { name: 'French Top 14', kind: 'league', country: 'France' },
+			'super-rugby-pacific': {
+				name: 'Super Rugby Pacific',
+				kind: 'league',
+				country: 'Southern Hemisphere',
+			},
+			'rugby-world-cup': {
+				name: 'Rugby World Cup',
+				kind: 'cup',
+				country: 'World',
+			},
+			'currie-cup': {
+				name: 'Currie Cup',
+				kind: 'league',
+				country: 'South Africa',
+			},
 		};
 		const configured = process.env.RUGBY_COMPETITION_IDS;
 		if (configured) {
 			let ids: Record<string, string>;
-			try { ids = JSON.parse(configured) as Record<string, string>; }
-			catch { throw new Error('RUGBY_COMPETITION_IDS must be valid JSON'); }
-			return Object.entries(names).filter(([slug]) => ids[slug]).map(([slug, meta]) => ({
-				externalKey: String(ids[slug]), sportSlug: 'rugby-union', slug, ...meta,
-				logoUrl: undefined, isActive: true,
-			}));
+			try {
+				ids = JSON.parse(configured) as Record<string, string>;
+			} catch {
+				throw new Error('RUGBY_COMPETITION_IDS must be valid JSON');
+			}
+			return Object.entries(names)
+				.filter(([slug]) => ids[slug])
+				.map(([slug, meta]) => ({
+					externalKey: String(ids[slug]),
+					sportSlug: 'rugby-union',
+					slug,
+					...meta,
+					logoUrl: undefined,
+					isActive: true,
+				}));
 		}
 		if (this.apiSportsKey) {
 			const payload = await this.request<{ response?: any[] }>('/leagues');
@@ -183,22 +235,53 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 				'rugby-championship': ['rugby championship'],
 				'premiership-rugby': ['premiership rugby'],
 				'champions-cup': ['champions cup', 'european rugby champions cup'],
+				'top-14': ['top 14', 'french top 14'],
+				'super-rugby-pacific': ['super rugby pacific', 'super rugby'],
+				'rugby-world-cup': ['rugby world cup', 'world cup'],
+				'currie-cup': ['currie cup', 'premier division currie cup'],
 			};
-			const discovered = (payload.response ?? []).map((item: any) => item.league ?? item);
+			const discovered = (payload.response ?? []).map(
+				(item: any) => item.league ?? item,
+			);
 			const matches = Object.entries(aliases).flatMap(([slug, accepted]) => {
-				const league = discovered.find((item) => accepted.includes(String(item.name).toLowerCase()));
+				const league = discovered.find((item) =>
+					accepted.includes(String(item.name).toLowerCase()),
+				);
 				if (!league?.id) return [];
 				const meta = names[slug];
-				return [{ externalKey: String(league.id), sportSlug: 'rugby-union', slug, ...meta, logoUrl: league.logo, isActive: true }];
+				return [
+					{
+						externalKey: String(league.id),
+						sportSlug: 'rugby-union',
+						slug,
+						...meta,
+						logoUrl: league.logo,
+						isActive: true,
+					},
+				];
 			});
-			if (matches.length === 0) throw new Error('API-Sports returned no verified launch competitions');
+			if (matches.length === 0)
+				throw new Error('API-Sports returned no verified launch competitions');
 			return matches;
 		}
 
 		if (process.env.NODE_ENV === 'production') {
-			throw new Error('Rugby competition discovery requires API_SPORTS_KEY/RAPIDAPI_KEY or a recorded competition payload; refusing a guessed Six Nations fallback');
+			throw new Error(
+				'Rugby competition discovery requires API_SPORTS_KEY/RAPIDAPI_KEY or a recorded competition payload; refusing a guessed Six Nations fallback',
+			);
 		}
-		return [{ externalKey: '11', sportSlug: 'rugby-union', slug: 'six-nations', name: 'Six Nations Championship', kind: 'cup', country: 'Europe', logoUrl: 'https://media.api-sports.io/rugby/leagues/11.png', isActive: true }];
+		return [
+			{
+				externalKey: '11',
+				sportSlug: 'rugby-union',
+				slug: 'six-nations',
+				name: 'Six Nations Championship',
+				kind: 'cup',
+				country: 'Europe',
+				logoUrl: 'https://media.api-sports.io/rugby/leagues/11.png',
+				isActive: true,
+			},
+		];
 	}
 
 	async fetchEditions(
@@ -208,15 +291,32 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 			const payload = Array.isArray(this.recordedEditions)
 				? this.recordedEditions
 				: this.recordedEditions.response;
-			if (!Array.isArray(payload)) throw new Error('Recorded rugby edition payload is malformed');
-			return payload.filter((item: any) => String(item.competitionExternalKey ?? item.leagueId ?? competitionExternalKey) === competitionExternalKey).map((item: any) => ({
-				externalKey: String(item.externalKey ?? `${competitionExternalKey}-${item.seasonKey ?? item.season}`),
-				competitionExternalKey,
-				seasonKey: String(item.seasonKey ?? item.season),
-				name: String(item.name ?? `${competitionExternalKey} ${item.seasonKey ?? item.season}`),
-				startsAt: item.startsAt ?? undefined, endsAt: item.endsAt ?? undefined,
-				status: item.status === 'completed' ? 'completed' : 'active',
-			}));
+			if (!Array.isArray(payload))
+				throw new Error('Recorded rugby edition payload is malformed');
+			return payload
+				.filter(
+					(item: any) =>
+						String(
+							item.competitionExternalKey ??
+								item.leagueId ??
+								competitionExternalKey,
+						) === competitionExternalKey,
+				)
+				.map((item: any) => ({
+					externalKey: String(
+						item.externalKey ??
+							`${competitionExternalKey}-${item.seasonKey ?? item.season}`,
+					),
+					competitionExternalKey,
+					seasonKey: String(item.seasonKey ?? item.season),
+					name: String(
+						item.name ??
+							`${competitionExternalKey} ${item.seasonKey ?? item.season}`,
+					),
+					startsAt: item.startsAt ?? undefined,
+					endsAt: item.endsAt ?? undefined,
+					status: item.status === 'completed' ? 'completed' : 'active',
+				}));
 		}
 		// Direct API-Sports editions are keyed by the verified league ID and the
 		// configured provider season. This keeps ingestion generic across all
@@ -226,22 +326,32 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 				process.env.RUGBY_PROVIDER_SEASON ||
 				new Date().getUTCFullYear().toString();
 			const seasonNumber = Number.parseInt(seasonKey, 10);
-			const isCompleted = Number.isFinite(seasonNumber)
-				&& seasonNumber < new Date().getUTCFullYear();
-			return [{
-				externalKey: `${competitionExternalKey}-${seasonKey}`,
-				competitionExternalKey,
-				seasonKey,
-				name: `${competitionExternalKey} ${seasonKey}`,
-				status: isCompleted ? 'completed' : 'active',
-			}];
+			const isCompleted =
+				Number.isFinite(seasonNumber) &&
+				seasonNumber < new Date().getUTCFullYear();
+			return [
+				{
+					externalKey: `${competitionExternalKey}-${seasonKey}`,
+					competitionExternalKey,
+					seasonKey,
+					name: `${competitionExternalKey} ${seasonKey}`,
+					status: isCompleted ? 'completed' : 'active',
+				},
+			];
 		}
 
 		if (competitionExternalKey && competitionExternalKey !== '11') {
 			return [];
 		}
-		if (!this.recordedGames && !this.apiSportsKey && !this.rapidApiKey && process.env.NODE_ENV === 'production') {
-			throw new Error('Rugby edition discovery requires provider access or recorded catalog data');
+		if (
+			!this.recordedGames &&
+			!this.apiSportsKey &&
+			!this.rapidApiKey &&
+			process.env.NODE_ENV === 'production'
+		) {
+			throw new Error(
+				'Rugby edition discovery requires provider access or recorded catalog data',
+			);
 		}
 		return [
 			{
@@ -323,10 +433,15 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 			}
 		}
 		if (teams.length === 0 && process.env.NODE_ENV !== 'production') {
-			teams = [16, 17, 18, 19, 20, 21].map((id) => ({ id, name: `Rugby Team ${id}` }));
+			teams = [16, 17, 18, 19, 20, 21].map((id) => ({
+				id,
+				name: `Rugby Team ${id}`,
+			}));
 		}
 		if (teams.length === 0) {
-			throw new Error(`Cannot discover rugby competitors for '${editionExternalKey}': direct provider access or a recorded fixture payload is required`);
+			throw new Error(
+				`Cannot discover rugby competitors for '${editionExternalKey}': direct provider access or a recorded fixture payload is required`,
+			);
 		}
 
 		return teams.map((team) => ({

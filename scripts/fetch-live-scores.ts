@@ -14,6 +14,19 @@ import { createServiceRoleClient } from '../lib/supabase/server';
 import * as dotenv from 'dotenv';
 import * as path from 'node:path';
 
+type SupabaseError = {
+	code?: string;
+	message?: string;
+};
+
+type LegacyMatch = {
+	id: string;
+	external_id: number | null;
+	status: string | null;
+	home_score: number | null;
+	away_score: number | null;
+};
+
 export interface FetchLiveScoresOptions {
 	provider?: 'football-data' | 'api-sports' | 'thesportsdb' | 'mock-provider';
 	sport?: 'football' | 'rugby-union';
@@ -33,6 +46,143 @@ export interface FetchLiveScoresResult {
 	updated?: number;
 	summary?: IngestionRunSummary;
 	error?: string;
+}
+
+function isMissingCanonicalEventsError(error: SupabaseError | null): boolean {
+	if (!error) return false;
+
+	return (
+		error.code === 'PGRST205' ||
+		error.code === '42P01' ||
+		/relationship .*events|relation .*events.*does not exist|table .*events.*(?:not found|schema cache)/i.test(
+			error.message || '',
+		)
+	);
+}
+
+async function hasCanonicalIngestionSchema(supabase: any): Promise<boolean> {
+	const { error } = await supabase.from('events').select('id').limit(1);
+
+	if (!error) return true;
+	if (isMissingCanonicalEventsError(error)) return false;
+
+	throw new Error(
+		`Database preflight failed while checking the ingestion schema: ${error.message || 'Unknown error'}`,
+	);
+}
+
+function legacyStatus(status: string): string {
+	switch (status) {
+		case 'completed':
+			return 'finished';
+		case 'postponed':
+			return 'scheduled';
+		default:
+			return status;
+	}
+}
+
+function resultScores(event: {
+	result?: { resultPayload?: Record<string, unknown> };
+}): { home: number | null; away: number | null } {
+	const payload = event.result?.resultPayload;
+	const home = payload?.homeScore ?? payload?.home;
+	const away = payload?.awayScore ?? payload?.away;
+
+	return {
+		home: home === null || home === undefined ? null : Number(home),
+		away: away === null || away === undefined ? null : Number(away),
+	};
+}
+
+/**
+ * Keeps the scheduled job usable while a project is still on the pre-Phase 11
+ * schema. This is intentionally read-only with respect to schema detection and
+ * only writes the legacy matches table after a successful provider fetch.
+ */
+async function syncLegacyFootballMatches(
+	supabase: any,
+	adapter: SportProviderAdapter,
+	operation: FetchLiveScoresOptions['operation'],
+): Promise<FetchLiveScoresResult> {
+	const { data: matches, error: fetchError } = await supabase
+		.from('matches')
+		.select('id, external_id, status, home_score, away_score, kickoff_time')
+		.or('status.eq.live,status.eq.scheduled')
+		.lte('kickoff_time', new Date().toISOString());
+
+	if (fetchError) {
+		return {
+			success: false,
+			status: 'failed',
+			error: `Failed to read legacy matches: ${fetchError.message}`,
+		};
+	}
+
+	const legacyMatches = (matches || []) as LegacyMatch[];
+	if (legacyMatches.length === 0) {
+		return { success: true, status: 'success', updated: 0 };
+	}
+
+	const editionExternalKey = '2021-2025';
+	const events =
+		operation === 'sync_live'
+			? await adapter.fetchLiveUpdates({
+					editionExternalKey,
+					competitionExternalKey: '2021',
+				})
+			: await adapter.fetchEvents({
+					editionExternalKey,
+					competitionExternalKey: '2021',
+				});
+	const eventsByExternalId = new Map(
+		events.map((event) => [event.externalKey, event]),
+	);
+
+	let updated = 0;
+	for (const match of legacyMatches) {
+		if (match.external_id === null || match.external_id === undefined) {
+			continue;
+		}
+
+		const event = eventsByExternalId.get(String(match.external_id));
+		if (!event) continue;
+
+		const scores = resultScores(event);
+		const status = legacyStatus(event.status);
+		const hasScoreChange =
+			scores.home !== null &&
+			scores.away !== null &&
+			(match.home_score !== scores.home || match.away_score !== scores.away);
+		const hasStatusChange = match.status !== status;
+
+		if (!hasScoreChange && !hasStatusChange) continue;
+
+		const update: Record<string, unknown> = {
+			status,
+			updated_at: new Date().toISOString(),
+		};
+		if (scores.home !== null && scores.away !== null) {
+			update.home_score = scores.home;
+			update.away_score = scores.away;
+		}
+
+		const { error: updateError } = await supabase
+			.from('matches')
+			.update(update)
+			.eq('id', match.id);
+
+		if (updateError) {
+			return {
+				success: false,
+				status: 'failed',
+				error: `Failed to update legacy match ${match.id}: ${updateError.message}`,
+			};
+		}
+		updated++;
+	}
+
+	return { success: true, status: 'success', updated };
 }
 
 export async function fetchLiveScores(
@@ -90,6 +240,21 @@ export async function fetchLiveScores(
 			adapter = new FootballDataAdapter({
 				recordedMatches: options.recordedPayload,
 			});
+		}
+	}
+
+	// The hosted project may still be on the legacy Phase 1-10 schema while
+	// this branch uses the Phase 11 canonical ingestion model. Keep the job
+	// operational during that rollout instead of failing on the first RPC call.
+	if (!dryRun && sport === 'football' && !(await hasCanonicalIngestionSchema(supabase))) {
+		try {
+			return await syncLegacyFootballMatches(supabase, adapter, operation);
+		} catch (error: any) {
+			return {
+				success: false,
+				status: 'failed',
+				error: error.message || String(error),
+			};
 		}
 	}
 
