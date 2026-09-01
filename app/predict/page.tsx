@@ -4,20 +4,24 @@ import { ErrorBoundary } from '@/components/error-boundary';
 import { EventCard } from '@/components/event-card';
 import { GameweekPerformanceSummary } from '@/components/gameweek-performance-summary';
 import { MatchPoolInsightsModal } from '@/components/match-pool-insights-modal';
+import { ParticipantCrest } from '@/components/participant-crest';
 import { PredictionDrawer } from '@/components/prediction-drawer';
 import { ScoreBreakdownModal } from '@/components/score-breakdown-modal';
 import { ScoringRulesModal } from '@/components/scoring-rules-modal';
 import { Button } from '@/components/ui/button';
 import { MatchCardSkeleton } from '@/components/ui/match-card-skeleton';
 import {
+	fetchActiveCompetitions,
 	fetchCompetitionEditions,
-	fetchEditionRounds
+	fetchEditionRounds,
 } from '@/lib/queries/competitions';
 import { eventsQueryKeys, fetchEvents } from '@/lib/queries/events';
 import { submitPrediction } from '@/lib/queries/predictions';
 import { fetchActiveSports } from '@/lib/queries/sports';
 import { createClient } from '@/lib/supabase/client';
+import { formatEditionLabel } from '@/lib/utils/display';
 import {
+	Competition,
 	MarketPrediction,
 	Sport,
 	SportEvent,
@@ -28,12 +32,12 @@ import {
 	BookOpen,
 	ChevronLeft,
 	ChevronRight,
-	Clock
+	Clock,
+	Trophy,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { formatEditionLabel } from '@/lib/utils/display';
 
 function PredictContent() {
 	const supabase = createClient();
@@ -91,21 +95,58 @@ function PredictContent() {
 		queryFn: fetchActiveSports,
 	});
 
+	// Fetch active competitions for selected sport
+	const { data: competitions = [] } = useQuery<Competition[]>({
+		queryKey: ['competitions', sportParam],
+		queryFn: () => fetchActiveCompetitions(sportParam),
+	});
+
 	// Fetch active editions for selected sport
 	const { data: editions = [] } = useQuery({
 		queryKey: ['competition_editions', sportParam, competitionParam],
-		queryFn: () => fetchCompetitionEditions({ sportSlug: sportParam, competitionId: competitionParam || undefined, statuses: ['active', 'planned', 'completed'] }),
+		queryFn: () =>
+			fetchCompetitionEditions({
+				sportSlug: sportParam,
+				competitionId: competitionParam || undefined,
+				statuses: ['active', 'planned', 'completed'],
+			}),
 	});
 
 	const now = Date.now();
-	const activeEdition = editions.find((ed) => ed.id === editionParam) ??
-		editions.find((ed) => ed.status === 'active' && new Date(ed.starts_at).getTime() <= now && (!ed.ends_at || new Date(ed.ends_at).getTime() >= now)) ??
-		editions.filter((ed) => ed.status === 'active').sort((a, b) => new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime())[0] ??
-		editions.filter((ed) => ed.status === 'planned' && new Date(ed.starts_at).getTime() >= now).sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0] ??
-		editions.filter((ed) => ed.status === 'completed').sort((a, b) => new Date(b.ends_at || b.starts_at).getTime() - new Date(a.ends_at || a.starts_at).getTime())[0] ??
+	const activeEdition =
+		editions.find((ed) => ed.id === editionParam) ??
+		editions.find(
+			(ed) =>
+				ed.status === 'active' &&
+				new Date(ed.starts_at).getTime() <= now &&
+				(!ed.ends_at || new Date(ed.ends_at).getTime() >= now),
+		) ??
+		editions
+			.filter((ed) => ed.status === 'active')
+			.sort(
+				(a, b) =>
+					new Date(b.starts_at).getTime() - new Date(a.starts_at).getTime(),
+			)[0] ??
+		editions
+			.filter(
+				(ed) =>
+					ed.status === 'planned' && new Date(ed.starts_at).getTime() >= now,
+			)
+			.sort(
+				(a, b) =>
+					new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
+			)[0] ??
+		editions
+			.filter((ed) => ed.status === 'completed')
+			.sort(
+				(a, b) =>
+					new Date(b.ends_at || b.starts_at).getTime() -
+					new Date(a.ends_at || a.starts_at).getTime(),
+			)[0] ??
 		editions[0];
 
 	const activeEditionId = activeEdition?.id;
+	const activeCompetitionId = competitionParam || activeEdition?.competition_id;
 
 	// Fetch rounds for active edition
 	const { data: availableRounds = [] } = useQuery<string[]>({
@@ -123,7 +164,12 @@ function PredictContent() {
 			: availableRounds[0] || 'Round 1';
 
 	// Update URL when dimension changes
-	const updateFilters = (sport: string, editionId?: string, round?: string, competitionId?: string) => {
+	const updateFilters = (
+		sport: string,
+		editionId?: string,
+		round?: string,
+		competitionId?: string,
+	) => {
 		const params = new URLSearchParams();
 		params.set('sport', sport);
 		if (competitionId) params.set('competition', competitionId);
@@ -289,7 +335,9 @@ function PredictContent() {
 					{sports.map((sp) => (
 						<button
 							key={sp.slug}
-							onClick={() => updateFilters(sp.slug, undefined, undefined)}
+							onClick={() =>
+								updateFilters(sp.slug, undefined, undefined, undefined)
+							}
 							className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
 								sportParam === sp.slug
 									? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30'
@@ -313,6 +361,92 @@ function PredictContent() {
 				</div>
 			</div>
 
+			{/* Tournament / Competition Switcher Rail */}
+			{competitions.length > 1 && (
+				<div className="space-y-3 p-4 rounded-3xl glass-card border border-white/10 bg-slate-900/40">
+					<div className="flex items-center justify-between px-1">
+						<span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+							<Trophy className="h-3.5 w-3.5 text-amber-400" />
+							<span>Tournaments</span>
+						</span>
+						{competitionParam && editions.length > 1 && (
+							<div className="flex items-center gap-1.5">
+								<span className="text-[11px] text-slate-500 font-medium">
+									Edition:
+								</span>
+								<div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+									{editions.map((ed) => (
+										<button
+											key={ed.id}
+											onClick={() =>
+												updateFilters(
+													sportParam,
+													ed.id,
+													undefined,
+													ed.competition_id,
+												)
+											}
+											className={`px-2.5 py-1 rounded-lg text-xs font-medium transition whitespace-nowrap ${
+												activeEditionId === ed.id
+													? 'bg-indigo-600/40 text-indigo-200 border border-indigo-500/60 shadow-sm'
+													: 'bg-white/5 text-slate-400 hover:text-slate-200 border border-white/5'
+											}`}
+										>
+											{ed.season_key || ed.name}
+										</button>
+									))}
+								</div>
+							</div>
+						)}
+					</div>
+					<div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+						<button
+							onClick={() =>
+								updateFilters(sportParam, undefined, undefined, undefined)
+							}
+							className={`px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap transition flex items-center gap-2 ${
+								!competitionParam
+									? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40'
+									: 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white border border-white/5'
+							}`}
+						>
+							<span>🌐</span>
+							<span>All Tournaments</span>
+						</button>
+						{competitions.map((comp) => (
+							<button
+								key={comp.id}
+								onClick={() =>
+									updateFilters(sportParam, undefined, undefined, comp.id)
+								}
+								className={`px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap transition flex items-center gap-2 ${
+									activeCompetitionId === comp.id &&
+									competitionParam === comp.id
+										? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40'
+										: 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white border border-white/5'
+								}`}
+							>
+								{comp.logo_url ? (
+									<ParticipantCrest
+										src={comp.logo_url}
+										alt={comp.name}
+										className="h-4 w-4 object-contain"
+									/>
+								) : (
+									<span>🏆</span>
+								)}
+								<span>{comp.name}</span>
+								{comp.country && (
+									<span className="text-[10px] text-slate-300/80 font-normal px-1.5 py-0.5 rounded bg-white/10">
+										{comp.country}
+									</span>
+								)}
+							</button>
+						))}
+					</div>
+				</div>
+			)}
+
 			{/* Round Navigation Pill Rail */}
 			{availableRounds.length > 1 && (
 				<div className="relative flex items-center">
@@ -330,7 +464,17 @@ function PredictContent() {
 						{availableRounds.map((r) => (
 							<button
 								key={r}
-								onClick={() => updateFilters(sportParam, activeEditionId, r)}
+								onClick={() =>
+									updateFilters(
+										sportParam,
+										activeEditionId,
+										r,
+										competitionParam ||
+											(activeCompetitionId
+												? String(activeCompetitionId)
+												: undefined),
+									)
+								}
 								className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition ${
 									activeRound === r
 										? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 border border-indigo-500'

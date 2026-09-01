@@ -35,7 +35,7 @@ export const RUGBY_LAUNCH_MANIFEST = {
 			country: 'Europe',
 			seasonPolicy: 'current-and-upcoming',
 			displayOrder: 2,
-			isEnabled: false,
+			isEnabled: true,
 		},
 		{
 			slug: 'rugby-championship',
@@ -44,7 +44,7 @@ export const RUGBY_LAUNCH_MANIFEST = {
 			country: 'Southern Hemisphere',
 			seasonPolicy: 'current-and-upcoming',
 			displayOrder: 3,
-			isEnabled: false,
+			isEnabled: true,
 		},
 		{
 			slug: 'premiership-rugby',
@@ -53,7 +53,7 @@ export const RUGBY_LAUNCH_MANIFEST = {
 			country: 'England',
 			seasonPolicy: 'current-and-upcoming',
 			displayOrder: 4,
-			isEnabled: false,
+			isEnabled: true,
 		},
 		{
 			slug: 'champions-cup',
@@ -62,7 +62,7 @@ export const RUGBY_LAUNCH_MANIFEST = {
 			country: 'Europe',
 			seasonPolicy: 'current-and-upcoming',
 			displayOrder: 5,
-			isEnabled: false,
+			isEnabled: true,
 		},
 		{
 			slug: 'top-14',
@@ -71,7 +71,7 @@ export const RUGBY_LAUNCH_MANIFEST = {
 			country: 'France',
 			seasonPolicy: 'current-and-upcoming',
 			displayOrder: 6,
-			isEnabled: false,
+			isEnabled: true,
 		},
 		{
 			slug: 'super-rugby-pacific',
@@ -80,7 +80,7 @@ export const RUGBY_LAUNCH_MANIFEST = {
 			country: 'Southern Hemisphere',
 			seasonPolicy: 'current-and-upcoming',
 			displayOrder: 7,
-			isEnabled: false,
+			isEnabled: true,
 		},
 		{
 			slug: 'rugby-world-cup',
@@ -89,7 +89,7 @@ export const RUGBY_LAUNCH_MANIFEST = {
 			country: 'World',
 			seasonPolicy: 'current-and-upcoming',
 			displayOrder: 8,
-			isEnabled: false,
+			isEnabled: true,
 		},
 		{
 			slug: 'currie-cup',
@@ -98,7 +98,7 @@ export const RUGBY_LAUNCH_MANIFEST = {
 			country: 'South Africa',
 			seasonPolicy: 'current-and-upcoming',
 			displayOrder: 9,
-			isEnabled: false,
+			isEnabled: true,
 		},
 	] satisfies RugbyLaunchCompetition[],
 } as const;

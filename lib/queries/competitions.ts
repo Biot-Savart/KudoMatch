@@ -6,7 +6,12 @@ export const competitionsQueryKeys = {
 	bySport: (sportSlug?: string) =>
 		[...competitionsQueryKeys.all, 'sport', sportSlug ?? 'all'] as const,
 	editions: (sportSlug?: string, competitionId?: string, statuses?: string[]) =>
-		['competition_editions', sportSlug ?? 'all', competitionId ?? 'all', ...(statuses ?? ['active'])] as const,
+		[
+			'competition_editions',
+			sportSlug ?? 'all',
+			competitionId ?? 'all',
+			...(statuses ?? ['active']),
+		] as const,
 	editionRounds: (editionId?: string) =>
 		['competition_edition_rounds', editionId ?? 'all'] as const,
 };
@@ -116,10 +121,10 @@ export async function fetchEditionRounds(editionId: string): Promise<string[]> {
 	const supabase = createClient();
 	const { data, error } = await supabase
 		.from('events')
-		.select('round_label')
+		.select('round_label, starts_at')
 		.eq('edition_id', editionId)
 		.not('round_label', 'is', null)
-		.order('sequence_number', { ascending: true });
+		.order('starts_at', { ascending: true });
 
 	if (error) {
 		console.error('Error fetching edition rounds:', error);
@@ -133,6 +138,16 @@ export async function fetchEditionRounds(editionId: string): Promise<string[]> {
 				.filter((r): r is string => Boolean(r)),
 		),
 	);
+
+	rounds.sort((a, b) => {
+		const numA = parseInt(a.replace(/\D+/g, ''), 10);
+		const numB = parseInt(b.replace(/\D+/g, ''), 10);
+		if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+		return a.localeCompare(b, undefined, {
+			numeric: true,
+			sensitivity: 'base',
+		});
+	});
 
 	return rounds;
 }

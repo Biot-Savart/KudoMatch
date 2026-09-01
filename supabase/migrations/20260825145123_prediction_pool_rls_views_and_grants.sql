@@ -274,6 +274,16 @@ grant select, insert, update (selection, updated_at), delete on public.predictio
 -- Grant controlled permissions on pool_messages to authenticated
 grant select, insert, delete on public.pool_messages to authenticated;
 
+-- Grant full operational privileges to service_role and postgres
+grant all on public.scoring_rulesets to service_role, postgres;
+grant all on public.scoring_rule_tiers to service_role, postgres;
+grant all on public.event_markets to service_role, postgres;
+grant all on public.market_results to service_role, postgres;
+grant all on public.predictions to service_role, postgres;
+grant all on public.pools to service_role, postgres;
+grant all on public.pool_members to service_role, postgres;
+grant all on public.pool_messages to service_role, postgres;
+
 -- Grant RPC function execution
 grant execute on function public.get_pool_eligible_markets(uuid) to anon, authenticated;
 grant execute on function public.get_pool_leaderboard(uuid) to anon, authenticated;

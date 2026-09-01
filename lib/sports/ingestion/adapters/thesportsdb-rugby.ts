@@ -45,10 +45,9 @@ const DEFAULT_LEAGUES: Record<string, string> = {
 	'rugby-championship': '4986',
 	'premiership-rugby': '4414',
 	'champions-cup': '4550',
-	'top-14': '4447',
-	'super-rugby-pacific': '4448',
-	'rugby-world-cup': '4715',
-	'currie-cup': '4551',
+	'top-14': '4430',
+	'super-rugby-pacific': '4551',
+	'currie-cup': '5069',
 };
 
 const DEFAULT_SEASONS: Record<string, string> = {
@@ -57,10 +56,9 @@ const DEFAULT_SEASONS: Record<string, string> = {
 	'4986': '2025',
 	'4414': '2025-2026',
 	'4550': '2025-2026',
-	'4447': '2025-2026',
-	'4448': '2026',
-	'4715': '2027',
-	'4551': '2026',
+	'4430': '2024-2025',
+	'4551': '2024',
+	'5069': '2024',
 };
 
 const COMPETITION_META: Record<

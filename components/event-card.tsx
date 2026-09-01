@@ -1,14 +1,14 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { ParticipantCrest } from '@/components/participant-crest';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { parseTeamScorelineUiConfig } from '@/lib/sports/scoreline-config';
+import { formatEditionLabel, formatMatchStart } from '@/lib/utils/display';
 import {
 	calculatePredictionPoints,
 	getScoringExplanation,
 } from '@/lib/utils/scoring';
-import { parseTeamScorelineUiConfig } from '@/lib/sports/scoreline-config';
-import { formatEditionLabel, formatMatchStart } from '@/lib/utils/display';
 import { MarketPrediction, SportEvent } from '@/types';
 import { ChevronRight, Info, Lock, Timer, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -52,13 +52,25 @@ export function EventCard(props: EventCardProps) {
 			?.competitor ?? event.competitors?.[1]?.competitor;
 
 	const currentMarket = event.current_market ?? event.markets?.[0];
-	const scorelineUi = parseTeamScorelineUiConfig(currentMarket?.ruleset?.ui_config);
+	const scorelineUi = parseTeamScorelineUiConfig(
+		currentMarket?.ruleset?.ui_config,
+	);
 	const quickPicks = scorelineUi?.quick_picks ?? {
-		home: { home: 2, away: 1 }, draw: { home: 1, away: 1 }, away: { home: 1, away: 2 },
+		home: { home: 2, away: 1 },
+		draw: { home: 1, away: 1 },
+		away: { home: 1, away: 2 },
 	};
-	const marketResult = currentMarket?.result?.result as
-		| { home: number; away: number }
-		| undefined;
+	const marketResultRaw = (currentMarket?.result?.result ??
+		(event as any).result?.resultPayload) as any;
+	const marketResult =
+		marketResultRaw &&
+		(marketResultRaw.home !== undefined ||
+			marketResultRaw.homeScore !== undefined)
+			? {
+					home: Number(marketResultRaw.home ?? marketResultRaw.homeScore),
+					away: Number(marketResultRaw.away ?? marketResultRaw.awayScore),
+				}
+			: undefined;
 
 	const pred = existingPrediction ?? currentMarket?.user_prediction;
 	const predSelection = pred?.selection as
@@ -97,9 +109,7 @@ export function EventCard(props: EventCardProps) {
 			const minutes = Math.floor((diff / 1000 / 60) % 60);
 
 			if (hours > 24) {
-				setTimeLeft(
-					formatMatchStart(event.starts_at),
-				);
+				setTimeLeft(formatMatchStart(event.starts_at));
 			} else {
 				setTimeLeft(`Starts in ${hours}h ${minutes}m`);
 			}
@@ -128,7 +138,9 @@ export function EventCard(props: EventCardProps) {
 
 	const isLive = event.status === 'live';
 	const isFinished = event.status === 'completed';
-	const isUnavailable = ['postponed', 'cancelled', 'abandoned'].includes(event.status);
+	const isUnavailable = ['postponed', 'cancelled', 'abandoned'].includes(
+		event.status,
+	);
 	const isResolvedOrLive = isLive || isFinished;
 
 	const scoringExplanation =
@@ -163,14 +175,24 @@ export function EventCard(props: EventCardProps) {
 							{event.round_label}
 						</span>
 					)}
-					<span className="hidden sm:inline">
-						{formatEditionLabel(event.edition)}
+					<span
+						className="text-[11px] text-slate-400 font-medium flex items-center gap-1 cursor-help hover:text-slate-200 transition"
+						title={`Kickoff Time: ${new Date(event.starts_at).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}`}
+					>
+						<span>•</span>
+						<span>{formatMatchStart(event.starts_at)}</span>
+					</span>
+					<span className="hidden md:inline text-[11px] text-slate-500">
+						({formatEditionLabel(event.edition)})
 					</span>
 				</div>
 
 				<div className="flex items-center gap-1.5">
 					{isFinished ? (
-						<span className="flex items-center gap-1 text-slate-400 font-bold bg-slate-500/10 px-2 py-0.5 rounded-full border border-slate-500/20 text-[10px] tracking-wider">
+						<span
+							title={`Full Time (Match Finished) · Kickoff: ${new Date(event.starts_at).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}`}
+							className="flex items-center gap-1 text-slate-400 font-bold bg-slate-500/10 px-2 py-0.5 rounded-full border border-slate-500/20 text-[10px] tracking-wider cursor-help hover:bg-slate-500/20 transition"
+						>
 							FT
 						</span>
 					) : isLive ? (
@@ -203,7 +225,10 @@ export function EventCard(props: EventCardProps) {
 					<div className="flex flex-col items-center text-center gap-2">
 						<div className="relative h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/5 p-2 flex items-center justify-center border border-white/10 group-hover:scale-105 transition">
 							{homeComp?.media_url ? (
-								<ParticipantCrest src={homeComp.media_url} alt={homeComp.name} />
+								<ParticipantCrest
+									src={homeComp.media_url}
+									alt={homeComp.name}
+								/>
 							) : (
 								<span className="text-sm font-bold text-slate-400">
 									{homeComp?.short_name || 'HOME'}
@@ -251,7 +276,10 @@ export function EventCard(props: EventCardProps) {
 					<div className="flex flex-col items-center text-center gap-2">
 						<div className="relative h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-white/5 p-2 flex items-center justify-center border border-white/10 group-hover:scale-105 transition">
 							{awayComp?.media_url ? (
-								<ParticipantCrest src={awayComp.media_url} alt={awayComp.name} />
+								<ParticipantCrest
+									src={awayComp.media_url}
+									alt={awayComp.name}
+								/>
 							) : (
 								<span className="text-sm font-bold text-slate-400">
 									{awayComp?.short_name || 'AWAY'}
@@ -276,7 +304,9 @@ export function EventCard(props: EventCardProps) {
 									: 'hover:bg-white/5 text-slate-400'
 							}`}
 						>
-							<span>{quickPicks.home.home}-{quickPicks.home.away}</span>
+							<span>
+								{quickPicks.home.home}-{quickPicks.home.away}
+							</span>
 							<span className="text-[10px] opacity-70 font-normal">
 								{homeComp?.short_name || 'Home'}
 							</span>
@@ -290,7 +320,9 @@ export function EventCard(props: EventCardProps) {
 									: 'hover:bg-white/5 text-slate-400'
 							}`}
 						>
-							<span>{quickPicks.draw.home}-{quickPicks.draw.away}</span>
+							<span>
+								{quickPicks.draw.home}-{quickPicks.draw.away}
+							</span>
 							<span className="text-[10px] opacity-70 font-normal">Draw</span>
 						</button>
 						<button
@@ -302,7 +334,9 @@ export function EventCard(props: EventCardProps) {
 									: 'hover:bg-white/5 text-slate-400'
 							}`}
 						>
-							<span>{quickPicks.away.home}-{quickPicks.away.away}</span>
+							<span>
+								{quickPicks.away.home}-{quickPicks.away.away}
+							</span>
 							<span className="text-[10px] opacity-70 font-normal">
 								{awayComp?.short_name || 'Away'}
 							</span>
