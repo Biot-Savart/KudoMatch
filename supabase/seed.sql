@@ -31,7 +31,11 @@ values
   ('rugby-union', 'united-rugby-championship', 'United Rugby Championship', 'league', 'Europe', null, false),
   ('rugby-union', 'rugby-championship', 'The Rugby Championship', 'cup', 'World', null, false),
   ('rugby-union', 'premiership-rugby', 'Premiership Rugby', 'league', 'England', null, false),
-  ('rugby-union', 'champions-cup', 'European Rugby Champions Cup', 'cup', 'Europe', null, false)
+  ('rugby-union', 'champions-cup', 'European Rugby Champions Cup', 'cup', 'Europe', null, false),
+  ('rugby-union', 'top-14', 'French Top 14', 'league', 'France', null, false),
+  ('rugby-union', 'super-rugby-pacific', 'Super Rugby Pacific', 'league', 'Southern Hemisphere', null, false),
+  ('rugby-union', 'rugby-world-cup', 'Rugby World Cup', 'cup', 'World', null, false),
+  ('rugby-union', 'currie-cup', 'Currie Cup', 'league', 'South Africa', null, false)
 on conflict (sport_slug, slug) do update set
   name = excluded.name,
   kind = excluded.kind,
