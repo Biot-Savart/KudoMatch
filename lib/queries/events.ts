@@ -98,8 +98,10 @@ function mapEventRow(
 		}
 
 		let result: MarketResult | undefined;
-		if (m.market_results && m.market_results.length > 0) {
-			const resRow = m.market_results[0];
+		const resRow = Array.isArray(m.market_results)
+			? m.market_results[0]
+			: m.market_results;
+		if (resRow) {
 			result = {
 				event_market_id: String(resRow.event_market_id),
 				result: resRow.result,
@@ -237,10 +239,16 @@ export async function fetchEvents(
 		query = query.eq('edition_id', filters.editionId);
 	}
 	if (filters.competitionId && filters.competitionId !== 'all') {
-		query = query.eq('competition_editions.competition_id', filters.competitionId);
+		query = query.eq(
+			'competition_editions.competition_id',
+			filters.competitionId,
+		);
 	}
 	if (filters.sportSlug && filters.sportSlug !== 'all') {
-		query = query.eq('competition_editions.competitions.sport_slug', filters.sportSlug);
+		query = query.eq(
+			'competition_editions.competitions.sport_slug',
+			filters.sportSlug,
+		);
 	}
 	query = query.eq('competition_editions.competitions.is_active', true);
 

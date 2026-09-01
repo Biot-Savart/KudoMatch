@@ -1,7 +1,7 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
 import { ParticipantCrest } from '@/components/participant-crest';
+import { Button } from '@/components/ui/button';
 import { triggerConfetti } from '@/lib/utils/confetti';
 import { getScoringExplanation, SCORING_RULES } from '@/lib/utils/scoring';
 import { motion } from 'framer-motion';
@@ -40,13 +40,17 @@ export function ScoreBreakdownModal({
 		target?.away_team;
 
 	const currentMarket = target?.current_market ?? target?.markets?.[0];
+	const rawRes = (currentMarket?.result?.result ??
+		(target as any)?.result?.resultPayload) as any;
 	const marketResult =
-		(currentMarket?.result?.result as
-			| { home: number; away: number }
-			| undefined) ??
-		(target?.home_score !== null && target?.home_score !== undefined
-			? { home: target.home_score, away: target.away_score }
-			: undefined);
+		rawRes && (rawRes.home !== undefined || rawRes.homeScore !== undefined)
+			? {
+					home: Number(rawRes.home ?? rawRes.homeScore),
+					away: Number(rawRes.away ?? rawRes.awayScore),
+				}
+			: target?.home_score !== null && target?.home_score !== undefined
+				? { home: Number(target.home_score), away: Number(target.away_score) }
+				: undefined;
 
 	const pred = prediction ?? currentMarket?.user_prediction;
 	const predSelection =
@@ -192,7 +196,10 @@ export function ScoreBreakdownModal({
 						<div className="flex items-center gap-2.5">
 							<div className="h-9 w-9 rounded-xl bg-white/5 p-1.5 flex items-center justify-center border border-white/10 shrink-0">
 								{homeLogo ? (
-									<ParticipantCrest src={homeLogo} alt={homeName} />
+									<ParticipantCrest
+										src={homeLogo}
+										alt={homeName}
+									/>
 								) : (
 									<span className="text-xs font-bold text-slate-400">
 										{homeComp?.short_name || 'H'}
@@ -230,7 +237,10 @@ export function ScoreBreakdownModal({
 							</span>
 							<div className="h-9 w-9 rounded-xl bg-white/5 p-1.5 flex items-center justify-center border border-white/10 shrink-0">
 								{awayLogo ? (
-									<ParticipantCrest src={awayLogo} alt={awayName} />
+									<ParticipantCrest
+										src={awayLogo}
+										alt={awayName}
+									/>
 								) : (
 									<span className="text-xs font-bold text-slate-400">
 										{awayComp?.short_name || 'A'}
