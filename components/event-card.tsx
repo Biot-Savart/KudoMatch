@@ -175,14 +175,24 @@ export function EventCard(props: EventCardProps) {
 							{event.round_label}
 						</span>
 					)}
-					<span className="hidden sm:inline">
-						{formatEditionLabel(event.edition)}
+					<span
+						className="text-[11px] text-slate-400 font-medium flex items-center gap-1 cursor-help hover:text-slate-200 transition"
+						title={`Kickoff Time: ${new Date(event.starts_at).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}`}
+					>
+						<span>•</span>
+						<span>{formatMatchStart(event.starts_at)}</span>
+					</span>
+					<span className="hidden md:inline text-[11px] text-slate-500">
+						({formatEditionLabel(event.edition)})
 					</span>
 				</div>
 
 				<div className="flex items-center gap-1.5">
 					{isFinished ? (
-						<span className="flex items-center gap-1 text-slate-400 font-bold bg-slate-500/10 px-2 py-0.5 rounded-full border border-slate-500/20 text-[10px] tracking-wider">
+						<span
+							title={`Full Time (Match Finished) · Kickoff: ${new Date(event.starts_at).toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })}`}
+							className="flex items-center gap-1 text-slate-400 font-bold bg-slate-500/10 px-2 py-0.5 rounded-full border border-slate-500/20 text-[10px] tracking-wider cursor-help hover:bg-slate-500/20 transition"
+						>
 							FT
 						</span>
 					) : isLive ? (

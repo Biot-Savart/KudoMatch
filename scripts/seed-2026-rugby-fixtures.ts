@@ -629,8 +629,32 @@ async function seedAllRugby() {
 			}
 		}
 
-		// Delete old placeholder events for this edition before re-inserting
-		await supabase.from('events').delete().eq('edition_id', edition.id);
+		// Clean up previous events, markets, and results for this edition
+		const { data: existingEvents } = await supabase
+			.from('events')
+			.select('id, event_markets(id)')
+			.eq('edition_id', edition.id);
+
+		if (existingEvents && existingEvents.length > 0) {
+			const evIds = existingEvents.map((e) => e.id);
+			const marketIds = existingEvents.flatMap((e) =>
+				(e.event_markets || []).map((m: any) => m.id),
+			);
+
+			if (marketIds.length > 0) {
+				await supabase
+					.from('market_results')
+					.delete()
+					.in('event_market_id', marketIds);
+				await supabase
+					.from('predictions')
+					.delete()
+					.in('event_market_id', marketIds);
+				await supabase.from('event_markets').delete().in('id', marketIds);
+			}
+			await supabase.from('event_competitors').delete().in('event_id', evIds);
+			await supabase.from('events').delete().in('id', evIds);
+		}
 
 		const n = competitorIds.length;
 		const baseTime = new Date(t.startDate).getTime();
