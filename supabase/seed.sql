@@ -4,7 +4,7 @@
 insert into public.sports (slug, name, icon_key, default_score_unit, is_active, display_order)
 values
   ('football', 'Football', 'football', 'goals', true, 1),
-  ('rugby-union', 'Rugby Union', 'rugby', 'points', false, 2)
+  ('rugby-union', 'Rugby Union', 'rugby', 'points', true, 2)
 on conflict (slug) do update set
   name = excluded.name,
   icon_key = excluded.icon_key,
