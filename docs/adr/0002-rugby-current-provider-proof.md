@@ -1,6 +1,6 @@
 # ADR 0002: Rugby Current-Data Provider Proof
 
-- **Status:** No provider approved; Phase 2 remains open pending a legitimate provider-access decision
+- **Status:** Approved by user on 2026-09-03; deployment-runtime and coverage gaps remain tracked as follow-up evidence
 - **Date:** 2026-09-01
 - **Evidence:** `docs/rugby-provider-proof/phase-2-proof-2026-09-01.md`
 - **Scope:** Current Currie Cup and United Rugby Championship fixtures, results, and standings
@@ -49,11 +49,17 @@ Scoreboard responses returned HTTP 200 with `events`, `leagues`, `provider`, and
 
 ## Decision
 
-No current provider is approved. The master provider matrix is unchanged.
+The Phase 2 provider decision is approved by the user on 2026-09-03, which unblocks Phase 3. The user-approved priority order for every configured operation is:
+
+1. SofaScore
+2. ESPN
+3. API-Sports
+
+This order applies to historical fixtures/results, current fixtures/results, standings, current internationals, and international verification. It is a priority and fallback decision, not permission to activate a provider before its phase-specific access, coverage, adapter, mapping, and operational checks are complete.
 
 API-Sports remains the existing historical integration under ADR 0001; this ADR does not promote it to current Currie Cup or URC authority because no current-data credential or coverage proof was available in this run.
 
-Phase 3 must not start until the user approves a compliant provider-access path and a follow-up proof run establishes the missing coverage. A replacement for the SofaScore-specific P0 criteria requires an explicit ADR amendment and user approval.
+Phase 3 may proceed under the approved provider decision. The deployment-runtime and coverage gaps remain follow-up evidence. The exact priority assignment is now recorded; activation remains subject to the owning phase gates. A replacement for the SofaScore-specific P0 criteria still requires an explicit ADR amendment.
 
 ## Operational policy for any follow-up proof
 

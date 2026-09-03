@@ -1,6 +1,6 @@
 # Phase 2: Provider Proof and Selection
 
-- Status: in progress; provider approval blocked by runtime access and coverage gaps.
+- Status: approved by user on 2026-09-03; deployment-runtime and coverage gaps remain recorded as follow-up evidence.
 - Depends on: [Phase 1: Documentation Set](01_documentation_set.md) approved and merged.
 - Unlocks: [Phase 3: Source Ledger and Reconciliation Foundation](03_source_ledger_and_reconciliation_foundation.md).
 - Migration impact: none.
