@@ -2,6 +2,7 @@ import { SportProviderAdapter } from './adapter';
 import { FootballDataAdapter } from './adapters/football-data';
 import { MockSportProviderAdapter } from './adapters/mock';
 import { RugbyApiSportsAdapter } from './adapters/rugby-api-sports';
+import { EspnRugbyAdapter } from './adapters/espn-rugby';
 import { SofaScoreProvider } from './adapters/sofascore';
 import { TheSportsDbRugbyAdapter } from './adapters/thesportsdb-rugby';
 
@@ -10,6 +11,7 @@ export type SupportedProviderSlug =
 	| 'api-sports'
 	| 'thesportsdb'
 	| 'sofascore'
+	| 'espn'
 	| 'mock-provider';
 
 export interface ProviderFactoryOptions {
@@ -53,6 +55,10 @@ export function createSportProviderAdapter(
 	if (provider === 'thesportsdb') {
 		assertSport(provider, 'rugby-union', options.sport);
 		return new TheSportsDbRugbyAdapter();
+	}
+	if (provider === 'espn') {
+		assertSport(provider, 'rugby-union', options.sport);
+		return new EspnRugbyAdapter({ recordedResponses: recordedResponses(options.recordedPayload) });
 	}
 	assertSport(provider, 'rugby-union', options.sport);
 	return new SofaScoreProvider({ recordedResponses: recordedResponses(options.recordedPayload) });

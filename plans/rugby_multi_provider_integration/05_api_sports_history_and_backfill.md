@@ -1,6 +1,6 @@
 # Phase 5: API-Sports History and Backfill
 
-- Status: in progress.
+- Status: complete by user direction; implementation and verification recorded below.
 - Depends on: [Phase 4: Primary Current-Provider Pilot](04_primary_current_provider_pilot.md) approved and merged.
 - Unlocks: [Phase 6: Fallback, Quality, and Conflicts](06_fallback_quality_and_conflicts.md).
 - Migration ownership: create one imperative `provider_sync_targets` migration with the installed Supabase CLI.

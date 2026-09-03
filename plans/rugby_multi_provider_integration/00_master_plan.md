@@ -1,6 +1,6 @@
 # Rugby Multi-Provider Integration Master Plan
 
-- Status: Phase 1 documentation complete; Phase 2 approved by user; Phase 3 complete; Phase 4 complete; Phase 5 implementation in progress; Phases 6–8 not started.
+- Status: Phase 1 documentation complete; Phase 2 approved by user; Phases 3–5 complete; Phase 6 implementation in progress; Phases 7–8 not started.
 - Source specification: [Rugby Multi-Provider Data Integration Specification](../../docs/specs/rugby_multi_provider_data_integration_specification.md).
 - Architectural prerequisite: [Multi-Sport Architecture Master Specification](../multi_sport_architecture_master.md).
 - Delivery rule: exactly one phase is implemented, reviewed, tested, and merged before the next phase starts.
@@ -33,8 +33,8 @@ If current work changes a future requirement, update that future phase document 
 | 2 | Approved by user; evidence follow-ups retained | Prove and select the current-data provider | [Provider Proof and Selection](02_provider_proof_and_selection.md) |
 | 3 | Complete | Add source ledger, approved mapping, and deterministic reconciliation | [Source Ledger and Reconciliation Foundation](03_source_ledger_and_reconciliation_foundation.md) |
 | 4 | Complete | Deliver the approved current provider, including the SofaScore gateway when selected, and pilot Currie Cup and URC | [Primary Current-Provider Pilot](04_primary_current_provider_pilot.md) |
-| 5 | In progress | Reconcile API-Sports history with resumable backfills | [API-Sports History and Backfill](05_api_sports_history_and_backfill.md) |
-| 6 | Not started | Add ESPN fallback, health, quality, and conflict control | [Fallback, Quality, and Conflicts](06_fallback_quality_and_conflicts.md) |
+| 5 | Complete | Reconcile API-Sports history with resumable backfills | [API-Sports History and Backfill](05_api_sports_history_and_backfill.md) |
+| 6 | In progress | Add ESPN fallback, health, quality, and conflict control | [Fallback, Quality, and Conflicts](06_fallback_quality_and_conflicts.md) |
 | 7 | Not started | Add standings, scheduling, diagnostics, and release gates | [Standings, Operations, Admin, and Release](07_standings_operations_admin_and_release.md) |
 | 8 | Not started | Decide whether World Rugby is viable | [World Rugby Feasibility Spike](08_world_rugby_feasibility_spike.md) |
 

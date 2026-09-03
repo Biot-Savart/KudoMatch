@@ -102,7 +102,7 @@ select is(
 
 select is(
   (select count(*)::int from public.data_providers),
-  6,
+  7,
   'Deterministic seeds contain configured provider catalog entries'
 );
 

@@ -5,7 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config();
 
-const OPERATIONS = ['list', 'map', 'create-and-map', 'ignore', 'remap', 'restore'] as const;
+const OPERATIONS = ['list', 'map', 'create-and-map', 'ignore', 'remap', 'restore', 'resolve-conflict'] as const;
 type Operation = (typeof OPERATIONS)[number];
 
 function value(args: string[], name: string): string | undefined {
@@ -14,7 +14,7 @@ function value(args: string[], name: string): string | undefined {
 
 function usage(): never {
 	throw new Error(
-		'Usage: tsx scripts/manage-provider-mapping.ts <list|map|create-and-map|ignore|remap|restore> --source-id=<id> [--canonical-id=<id>] [--reason=<text>] [--apply] [--force]',
+		'Usage: tsx scripts/manage-provider-mapping.ts <list|map|create-and-map|ignore|remap|restore> --source-id=<id> [--canonical-id=<id>] [--reason=<text>] [--apply] [--force] | resolve-conflict --event-id=<id> --provider=<slug> --reason=<text> --apply',
 	);
 }
 
@@ -24,6 +24,22 @@ async function main() {
 	if (!OPERATIONS.includes(operation)) usage();
 
 	const db = createServiceRoleClient();
+	if (operation === 'resolve-conflict') {
+		const eventId = Number(value(args, '--event-id'));
+		const providerSlug = value(args, '--provider');
+		const reason = value(args, '--reason') || '';
+		if (!Number.isSafeInteger(eventId) || eventId <= 0 || !providerSlug || !reason.trim() || !args.includes('--apply')) usage();
+		const { data, error } = await db.rpc('resolve_provider_result_conflict', {
+			p_event_id: eventId,
+			p_chosen_provider_slug: providerSlug,
+			p_reason: reason,
+			p_actor_identity: value(args, '--actor') || 'conflict-cli',
+			p_apply: true,
+		});
+		if (error) throw error;
+		console.log(JSON.stringify({ operation, eventId, providerSlug, reason, applied: true, result: data }, null, 2));
+		return;
+	}
 	if (operation === 'list') {
 		let query = db
 			.from('provider_catalog_sources')
