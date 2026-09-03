@@ -18,6 +18,7 @@
 		"scores:simulate-sync": "tsx scripts/fetch-live-scores.ts --simulate",
 		"provider:proof:rugby": "tsx scripts/prove-rugby-provider.ts",
 		"provider:proof:rugby:multi": "tsx scripts/prove-rugby-multi-provider.ts",
+		"provider:proof:world-rugby": "tsx scripts/probe-world-rugby.ts",
 		"provider:proof:sofascore:curl-cffi": "python scripts/prove-sofascore-curl-cffi.py --confirm-permitted-access",
 		"provider:pilot:rugby": "tsx scripts/run-rugby-provider-pilot.ts",
 		"provider:contract:rugby": "tsx scripts/check-rugby-provider-contract.ts",

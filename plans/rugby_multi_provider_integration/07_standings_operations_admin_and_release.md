@@ -1,6 +1,6 @@
 # Phase 7: Standings, Operations, Admin, and Release
 
-- Status: in progress; implementation complete in working tree, release gates awaiting provider activation and deployment evidence.
+- Status: complete by user direction; implementation complete in working tree, with deployment evidence deferred.
 - Depends on: [Phase 6: Fallback, Quality, and Conflicts](06_fallback_quality_and_conflicts.md) approved and merged.
 - Unlocks: [Phase 8: World Rugby Feasibility Spike](08_world_rugby_feasibility_spike.md).
 - Migration ownership: create one imperative `rugby_standings_and_provider_diagnostics` migration with the installed Supabase CLI.
@@ -185,4 +185,4 @@ Use the exact installed CLI flags and run deployment-runtime smoke tests after l
 - Full verification and relevant advisors pass.
 - Work stops for user review, testing, and the Phase 7 PR.
 
-Current limitation: Currie Cup and URC remain disabled/observe-only in the checked-in seed configuration, and no deployment environment is available for the two-rerun, upstream standings, and rollback-drill evidence. Phase 7 therefore remains in progress until those operational gates are exercised after explicit provider activation.
+Current limitation: Currie Cup and URC remain disabled/observe-only in the checked-in seed configuration, and no deployment environment is available for the two-rerun, upstream standings, and rollback-drill evidence. This deployment evidence remains deferred until explicit provider activation and operational exercise.
