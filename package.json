@@ -17,6 +17,8 @@
 		"scores:sync": "tsx scripts/fetch-live-scores.ts",
 		"scores:simulate-sync": "tsx scripts/fetch-live-scores.ts --simulate",
 		"provider:proof:rugby": "tsx scripts/prove-rugby-provider.ts",
+		"provider:proof:rugby:multi": "tsx scripts/prove-rugby-multi-provider.ts",
+		"provider:proof:sofascore:curl-cffi": "python scripts/prove-sofascore-curl-cffi.py --confirm-permitted-access",
 		"competition:manage": "tsx scripts/manage-competition.ts",
 		"data:import-real": "tsx scripts/import-real-premier-league.ts",
 		"cron:setup": "tsx scripts/setup-cron.ts",

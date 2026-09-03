@@ -1,0 +1,22 @@
+{
+  "provider": "sofascore",
+  "evidenceDate": "2026-09-03",
+  "eventId": 16393687,
+  "customId": "eersher",
+  "uniqueTournamentId": 796,
+  "uniqueTournamentName": "Currie Cup",
+  "stageTournamentId": 2239,
+  "stageTournamentName": "Currie Cup",
+  "seasonId": 97057,
+  "homeTeamId": 42704,
+  "homeTeamName": "Airlink Pumas",
+  "awayTeamId": 42707,
+  "awayTeamName": "Hollywoodbets Sharks",
+  "statusType": "finished",
+  "startTimestamp": 1784300400,
+  "round": null,
+  "homeScoreCurrent": 24,
+  "awayScoreCurrent": 26,
+  "homeScoreNormaltime": 24,
+  "awayScoreNormaltime": 26
+}

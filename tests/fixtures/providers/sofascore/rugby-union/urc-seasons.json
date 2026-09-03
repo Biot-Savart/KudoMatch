@@ -1,0 +1,27 @@
+{
+  "provider": "sofascore",
+  "evidenceDate": "2026-09-03",
+  "uniqueTournamentId": 419,
+  "seasons": [
+    { "name": "United Rugby Championship 26/27", "year": "26/27", "editor": false, "id": 98406 },
+    { "name": "United Rugby Championship 25/26", "year": "25/26", "editor": false, "id": 79019 },
+    { "name": "United Rugby Championship 24/25", "year": "24/25", "editor": false, "id": 64655 },
+    { "name": "United Rugby Championship 23/24", "year": "23/24", "editor": false, "id": 53246 },
+    { "name": "United Rugby Championship 22/23", "year": "22/23", "editor": false, "id": 44886 },
+    { "name": "United Rugby Championship 21/22", "year": "21/22", "editor": false, "id": 38442 },
+    { "name": "Pro 14 20/21", "year": "20/21", "editor": false, "id": 32809 },
+    { "name": "Pro 14 19/20", "year": "19/20", "editor": false, "id": 24445 },
+    { "name": "Pro 14 18/19", "year": "18/19", "editor": false, "id": 18029 },
+    { "name": "Pro 14 17/18", "year": "17/18", "editor": false, "id": 14189 },
+    { "name": "Pro 12 16/17", "year": "16/17", "editor": false, "id": 11920 },
+    { "name": "Pro 12 15/16", "year": "15/16", "editor": false, "id": 10568 },
+    { "name": "Pro 12 14/15", "year": "14/15", "editor": false, "id": 8416 },
+    { "name": "Pro 12 13/14", "year": "13/14", "editor": false, "id": 6735 },
+    { "name": "Celtic League 12/13", "year": "12/13", "editor": false, "id": 5003 },
+    { "name": "Celtic League 11/12", "year": "11/12", "editor": false, "id": 3691 },
+    { "name": "Magners League 10/11", "year": "10/11", "editor": false, "id": 2965 },
+    { "name": "Magners League 09/10", "year": "09/10", "editor": false, "id": 2288 },
+    { "name": "Magners League 08/09", "year": "08/09", "editor": false, "id": 1347 },
+    { "name": "Magners League 07/08", "year": "07/08", "editor": false, "id": 42994 }
+  ]
+}

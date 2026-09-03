@@ -1,0 +1,19 @@
+{
+  "provider": "sofascore",
+  "evidenceDate": "2026-09-03",
+  "eventId": 16966295,
+  "customId": "JIbsier",
+  "uniqueTournamentId": 796,
+  "uniqueTournamentName": "Currie Cup",
+  "stageTournamentId": 14046,
+  "stageTournamentName": "Currie Cup, Playoffs",
+  "seasonId": 97057,
+  "homeTeamId": 42708,
+  "homeTeamName": "Suzuki Griquas",
+  "awayTeamId": 4184,
+  "awayTeamName": "Fidelity ADT Lions",
+  "statusType": "notstarted",
+  "startTimestamp": 1788692400,
+  "round": "Semifinals",
+  "scoresPresent": false
+}

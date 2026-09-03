@@ -1,0 +1,37 @@
+{
+  "provider": "sofascore",
+  "evidenceDate": "2026-09-03",
+  "competition": "Currie Cup",
+  "uniqueTournamentId": 796,
+  "seasonId": 97057,
+  "hasNextPage": false,
+  "eventCount": 2,
+  "events": [
+    {
+      "id": 16966295,
+      "customId": "JIbsier",
+      "tournamentName": "Currie Cup, Playoffs",
+      "tournamentId": 796,
+      "homeTeamId": 42708,
+      "homeTeamName": "Suzuki Griquas",
+      "awayTeamId": 4184,
+      "awayTeamName": "Fidelity ADT Lions",
+      "statusType": "notstarted",
+      "startTimestamp": 1788692400,
+      "round": "Semifinals"
+    },
+    {
+      "id": 16966296,
+      "customId": "TOiseer",
+      "tournamentName": "Currie Cup, Playoffs",
+      "tournamentId": 796,
+      "homeTeamId": 21993,
+      "homeTeamName": "Toyota Cheetahs",
+      "awayTeamId": 42704,
+      "awayTeamName": "Airlink Pumas",
+      "statusType": "notstarted",
+      "startTimestamp": 1788701400,
+      "round": "Semifinals"
+    }
+  ]
+}
