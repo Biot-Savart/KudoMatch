@@ -55,6 +55,7 @@ export interface ProviderSourceLedgerBatch {
 	observe_only: boolean;
 	operation?: 'sync_fixtures' | 'sync_live' | 'full_reconcile' | 'historical_backfill';
 	correlation_id?: string;
+	quality_aware_results?: boolean;
 	catalog_sources: ProviderCatalogSourceInput[];
 	event_sources: ProviderEventSourceInput[];
 }
@@ -164,6 +165,7 @@ export function buildProviderSourceLedgerBatch(options: {
 	observeOnly?: boolean;
 	operation?: ProviderSourceLedgerBatch['operation'];
 	correlationId?: string;
+	qualityAwareResults?: boolean;
 }): ProviderSourceLedgerBatch {
 	const { adapter } = options;
 	return {
@@ -173,6 +175,7 @@ export function buildProviderSourceLedgerBatch(options: {
 		observe_only: options.observeOnly ?? true,
 		operation: options.operation,
 		correlation_id: options.correlationId,
+		quality_aware_results: options.qualityAwareResults ?? false,
 		catalog_sources: [
 			...(options.competitions ?? []).map((dto) => catalogSource('competition', dto, adapter.providerSlug)),
 			...(options.editions ?? []).map((dto) => catalogSource('edition', dto, adapter.providerSlug)),
@@ -244,7 +247,9 @@ export async function applyProviderSourceBatch(
 	};
 	if (!sourceResult.success || batch.observe_only || batch.event_sources.length === 0) return sourceResult;
 
-	const resultFunction = batch.operation === 'historical_backfill'
+	const resultFunction = batch.quality_aware_results
+		? 'apply_provider_quality_result_batch'
+		: batch.operation === 'historical_backfill'
 		? 'apply_historical_provider_result_batch'
 		: 'apply_provider_result_batch';
 	const { data: resultData, error: resultError } = await supabase.rpc(resultFunction, {

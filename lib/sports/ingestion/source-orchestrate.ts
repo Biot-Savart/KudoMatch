@@ -21,6 +21,7 @@ export interface ProviderSourceIngestionOptions {
 	operation?: 'sync_fixtures' | 'sync_live' | 'full_reconcile';
 	observeOnly?: boolean;
 	dryRun?: boolean;
+	qualityAwareResults?: boolean;
 	correlationId?: string;
 }
 
@@ -166,6 +167,7 @@ export async function orchestrateProviderSourceIngestion(
 			observeOnly: options.observeOnly ?? true,
 			operation: options.operation,
 			correlationId,
+			qualityAwareResults: options.qualityAwareResults,
 		});
 
 		if (!options.dryRun) {

@@ -18,7 +18,8 @@ values
   ('api-football', 'API-Football (RapidAPI)', 'rapidapi_api_football', true),
   ('api-sports', 'API-Sports Rugby (direct)', 'api_sports_rugby', true),
   ('thesportsdb', 'TheSportsDB Rugby backfill', 'thesportsdb_rugby', true),
-  ('sofascore', 'SofaScore Rugby Union via internal gateway', 'sofascore_gateway', true)
+  ('sofascore', 'SofaScore Rugby Union via internal gateway', 'sofascore_gateway', true),
+  ('espn', 'ESPN Rugby secondary provider', null, true)
 on conflict (slug) do update set
   name = excluded.name,
   server_config_id = excluded.server_config_id,
@@ -81,6 +82,28 @@ on conflict (competition_id, provider_slug) do update set
   result_priority = excluded.result_priority,
   standings_priority = excluded.standings_priority,
   config = excluded.config;
+
+-- Phase 6: ESPN is registered for fixture/result fallback but remains disabled
+-- until explicit activation after the per-competition coverage review.
+insert into public.competition_provider_settings (
+  competition_id, provider_slug, enabled, observe_only,
+  fixture_priority, result_priority, history_priority, standings_priority,
+  fixture_authority, allow_single_source_result_finalization, config
+)
+select c.id, 'espn', false, true, 2, 2, null, null, false, false,
+  jsonb_build_object('competition_external_key', case c.slug when 'currie-cup' then '270555' when 'united-rugby-championship' then '270557' end,
+                     'coverage', 'scoreboard_fixture_result_only')
+from public.competitions c
+where c.slug in ('currie-cup', 'united-rugby-championship')
+on conflict (competition_id, provider_slug) do update set
+  config = excluded.config,
+  fixture_priority = excluded.fixture_priority,
+  result_priority = excluded.result_priority,
+  standings_priority = excluded.standings_priority;
+
+insert into public.provider_runtime_state (provider_slug, minute_request_limit, day_request_limit)
+select slug, 12, 120 from public.data_providers
+on conflict (provider_slug) do nothing;
 
 -- Phase 5 API-Sports historical authority. Current-provider authority remains
 -- owned by the SofaScore pilot settings above.
