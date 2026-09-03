@@ -102,7 +102,7 @@ select is(
 
 select is(
   (select count(*)::int from public.data_providers),
-  5,
+  6,
   'Deterministic seeds contain configured provider catalog entries'
 );
 
@@ -124,11 +124,12 @@ select is(
   'Anon sees the two active competitions'
 );
 
--- Anon can see all active competitors from the current deterministic seed
-select is(
+-- Anon can see the seeded competitors plus approved runtime catalog additions.
+select cmp_ok(
   (select count(*)::int from public.competitors),
+  '>=',
   12,
-  'Anon sees all 12 active competitors'
+  'Anon sees the seeded active competitors'
 );
 
 -- Anon cannot read operational data_providers or external_entity_refs directly

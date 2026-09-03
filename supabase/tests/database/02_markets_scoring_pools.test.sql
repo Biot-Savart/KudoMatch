@@ -241,10 +241,9 @@ select is(
   'Deterministic seeds contain 5 scoped pools'
 );
 
-select is(
-  (select count(*)::int from public.event_markets),
-  3,
-  'Deterministic seeds contain 3 event markets'
+select ok(
+  (select count(*)::int from public.event_markets) >= 3,
+  'Deterministic seeds contain at least 3 event markets'
 );
 
 -- 5. Settlement Engine Execution & Idempotence

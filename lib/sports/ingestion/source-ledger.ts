@@ -67,6 +67,10 @@ export interface ProviderSourceBatchResult {
 	ambiguous_event_sources: number;
 	unresolved_event_sources: number;
 	created_events: number;
+	markets_upserted: number;
+	results_applied: number;
+	settled_results: number;
+	skipped_results: number;
 	error?: string;
 }
 
@@ -213,11 +217,15 @@ export async function applyProviderSourceBatch(
 			ambiguous_event_sources: 0,
 			unresolved_event_sources: 0,
 			created_events: 0,
+			markets_upserted: 0,
+			results_applied: 0,
+			settled_results: 0,
+			skipped_results: 0,
 			error: error.message,
 		};
 	}
 	const result = (data ?? {}) as Record<string, unknown>;
-	return {
+	const sourceResult: ProviderSourceBatchResult = {
 		success: Boolean(result.success ?? true),
 		observe_only: Boolean(result.observe_only ?? batch.observe_only),
 		catalog_sources_upserted: Number(result.catalog_sources_upserted ?? 0),
@@ -226,6 +234,33 @@ export async function applyProviderSourceBatch(
 		ambiguous_event_sources: Number(result.ambiguous_event_sources ?? 0),
 		unresolved_event_sources: Number(result.unresolved_event_sources ?? 0),
 		created_events: Number(result.created_events ?? 0),
+		markets_upserted: 0,
+		results_applied: 0,
+		settled_results: 0,
+		skipped_results: 0,
+	};
+	if (!sourceResult.success || batch.observe_only || batch.event_sources.length === 0) return sourceResult;
+
+	const { data: resultData, error: resultError } = await supabase.rpc('apply_provider_result_batch', {
+		p_provider_slug: batch.provider_slug,
+		p_event_keys: batch.event_sources.map((event) => event.provider_event_key),
+	});
+	if (resultError) {
+		return {
+			...sourceResult,
+			success: false,
+			error: `Provider result batch failed: ${resultError.message}`,
+		};
+	}
+	const resultBatch = (resultData ?? {}) as Record<string, unknown>;
+	return {
+		...sourceResult,
+		markets_upserted: Number(resultBatch.markets_upserted ?? 0),
+		results_applied: Number(resultBatch.results_applied ?? 0),
+		settled_results: Number(resultBatch.settled_results ?? 0),
+		skipped_results: Number(resultBatch.skipped_results ?? 0),
+		success: Boolean(resultBatch.success ?? true),
+		error: typeof resultBatch.error === 'string' ? resultBatch.error : undefined,
 	};
 }
 

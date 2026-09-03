@@ -4,10 +4,7 @@
  */
 
 import { SportProviderAdapter } from '../lib/sports/ingestion/adapter';
-import { FootballDataAdapter } from '../lib/sports/ingestion/adapters/football-data';
-import { MockSportProviderAdapter } from '../lib/sports/ingestion/adapters/mock';
-import { RugbyApiSportsAdapter } from '../lib/sports/ingestion/adapters/rugby-api-sports';
-import { TheSportsDbRugbyAdapter } from '../lib/sports/ingestion/adapters/thesportsdb-rugby';
+import { createSportProviderAdapter, SupportedProviderSlug } from '../lib/sports/ingestion/provider-factory';
 import { IngestionRunSummary } from '../lib/sports/ingestion/dto';
 import { orchestrateIngestion } from '../lib/sports/ingestion/orchestrate';
 import { createServiceRoleClient } from '../lib/supabase/server';
@@ -28,7 +25,7 @@ type LegacyMatch = {
 };
 
 export interface FetchLiveScoresOptions {
-	provider?: 'football-data' | 'api-sports' | 'thesportsdb' | 'mock-provider';
+	provider?: SupportedProviderSlug;
 	sport?: 'football' | 'rugby-union';
 	editionExternalKey?: string;
 	competitionExternalKey?: string;
@@ -200,48 +197,15 @@ export async function fetchLiveScores(
 		throw new Error('Simulation mode is not permitted in production');
 	}
 
-	// 1. Validate and select the requested adapter
-	let adapter: SportProviderAdapter;
-
-	if (simulate || explicitProvider === 'mock-provider') {
-		adapter = new MockSportProviderAdapter(sport);
-	} else if (explicitProvider === 'football-data') {
-		if (sport !== 'football') {
-			throw new Error(
-				`Provider 'football-data' is incompatible with sport '${sport}'`,
-			);
-		}
-		adapter = new FootballDataAdapter({
-			recordedMatches: options.recordedPayload,
-		});
-	} else if (explicitProvider === 'api-sports') {
-		if (sport !== 'rugby-union') {
-			throw new Error(
-				`Provider 'api-sports' is configured for sport 'rugby-union', incompatible with '${sport}'`,
-			);
-		}
-		adapter = new RugbyApiSportsAdapter({
-			recordedGames: options.recordedPayload,
-		});
-	} else if (explicitProvider === 'thesportsdb') {
-		if (sport !== 'rugby-union') {
-			throw new Error(
-				`Provider 'thesportsdb' is incompatible with sport '${sport}'`,
-			);
-		}
-		adapter = new TheSportsDbRugbyAdapter();
-	} else {
-		// Default provider selection based on sport
-		if (sport === 'rugby-union') {
-			adapter = new RugbyApiSportsAdapter({
-				recordedGames: options.recordedPayload,
-			});
-		} else {
-			adapter = new FootballDataAdapter({
-				recordedMatches: options.recordedPayload,
-			});
-		}
-	}
+	// 1. Validate and select the requested adapter. Simulation remains mock;
+	// production defaults preserve the existing provider choices.
+	const selectedProvider = simulate
+		? 'mock-provider'
+		: explicitProvider ?? (sport === 'rugby-union' ? 'api-sports' : 'football-data');
+	const adapter = createSportProviderAdapter(selectedProvider, {
+		sport,
+		recordedPayload: options.recordedPayload,
+	});
 
 	// The hosted project may still be on the legacy Phase 1-10 schema while
 	// this branch uses the Phase 11 canonical ingestion model. Keep the job

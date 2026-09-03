@@ -66,6 +66,10 @@ async function applyWithIsolation(
 			ambiguous_event_sources: left.result.ambiguous_event_sources + right.result.ambiguous_event_sources,
 			unresolved_event_sources: left.result.unresolved_event_sources + right.result.unresolved_event_sources,
 			created_events: left.result.created_events + right.result.created_events,
+			markets_upserted: left.result.markets_upserted + right.result.markets_upserted,
+			results_applied: left.result.results_applied + right.result.results_applied,
+			settled_results: left.result.settled_results + right.result.settled_results,
+			skipped_results: left.result.skipped_results + right.result.skipped_results,
 			error: [left.result.error, right.result.error].filter(Boolean).join('; ') || undefined,
 		},
 		failed: left.failed + right.failed,
@@ -167,9 +171,10 @@ export async function orchestrateProviderSourceIngestion(
 			const applied = await applyWithIsolation(options.supabase, batch);
 			if (applied.result.success) {
 				summary.insertedCount = applied.result.event_sources_upserted + applied.result.created_events;
-				summary.updatedCount = applied.result.mapped_event_sources;
-				summary.unchangedCount = applied.result.unresolved_event_sources;
-				summary.failedCount += applied.failed;
+					summary.updatedCount = applied.result.mapped_event_sources;
+					summary.unchangedCount = applied.result.unresolved_event_sources;
+					summary.settledCount = applied.result.settled_results;
+					summary.failedCount += applied.failed;
 				if (applied.failed > 0) {
 					summary.errors.push({ code: 'SOURCE_BATCH_PARTIAL_FAILURE', message: applied.result.error ?? 'one or more source records failed' });
 				}
