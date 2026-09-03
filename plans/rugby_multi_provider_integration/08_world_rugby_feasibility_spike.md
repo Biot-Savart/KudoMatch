@@ -1,6 +1,6 @@
 # Phase 8: World Rugby Feasibility Spike
 
-- Status: not started.
+- Status: complete; no-go for automated production integration.
 - Depends on: [Phase 7: Standings, Operations, Admin, and Release](07_standings_operations_admin_and_release.md) approved and merged.
 - Unlocks: no implementation automatically; an approved result requires a new separately planned phase.
 - Migration impact: none.
@@ -75,15 +75,15 @@ A go decision requires stable provider/team/competition/event identities, reliab
 
 ## Implementation checklist
 
-- [ ] Confirm Phase 7 PR is approved/merged.
-- [ ] Define permitted read-only proof procedure.
-- [ ] Verify relevant endpoint/feed availability and authentication.
-- [ ] Record stable identities, coverage, schemas, and rate behavior.
-- [ ] Compare overlapping Springbok/international events/results.
-- [ ] Capture and redact evidence only where permitted.
-- [ ] Write go/no-go ADR with explicit limitations.
-- [ ] Propose future capability/priority changes without applying them.
-- [ ] Run evidence integrity and secret scans.
+- [x] Confirm Phase 7 is complete by user direction; deployment evidence remains deferred.
+- [x] Define permitted read-only proof procedure. (Fixed six-request proof tool is permission-gated and metadata-only.)
+- [x] Verify relevant endpoint/feed availability and authentication. (Limited public GET probes returned structured HTTP 200 responses without credentials; this does not establish permission.)
+- [x] Record stable identities, coverage, schemas, and rate behavior. (RWC 2023, Nations Championship 2026, Rugby Championship 2023, Lions 2025 catalog coverage, rankings, IDs, timestamps, and observed rate headers are recorded.)
+- [x] Compare overlapping Springbok/international events/results. (RWC 2023 final agrees across World Rugby, ESPN, and API-Sports; SofaScore international overlap remains an explicit gap.)
+- [x] Capture and redact evidence only where permitted. (Only sanitized metadata is checked in; no raw provider payloads or credentials are stored.)
+- [x] Write go/no-go ADR with explicit limitations. ([ADR 0003](../../docs/adr/0003-world-rugby-feasibility.md) records no-go.)
+- [x] Propose future capability/priority changes without applying them. (Future international-only priority is proposed in the ADR and remains inactive.)
+- [x] Run evidence integrity and secret scans. (Probe refuses without explicit confirmation; repository secret scan and verification commands are recorded below.)
 
 ## Test scenarios and commands
 
@@ -103,6 +103,15 @@ npm run build
 
 No database reset is required because Phase 8 owns no migration.
 
+Evidence integrity checks completed:
+
+```bash
+npm run provider:proof:world-rugby
+git diff --check
+```
+
+The proof command exits with code 2 without `--confirm-permitted-access` and makes no network request. A targeted secret scan found no suspicious credential literals in the Phase 8 artifacts.
+
 ## Rollback
 
 Remove only the Phase 8 proof/evidence/ADR changes. Production configuration, database state, and provider priority remain unchanged.
@@ -115,3 +124,5 @@ Remove only the Phase 8 proof/evidence/ADR changes. Production configuration, da
 - No production adapter, schema, or provider priority changed.
 - A go decision points to a new separately approved implementation phase.
 - Work stops for user review, testing, and the Phase 8 PR.
+
+Phase 8 outcome: the feasibility spike is complete with a no-go decision. World Rugby is not added to production provider behavior. The remaining permission, deployment, SofaScore-overlap, and broader historical-coverage items are prerequisites for any future reconsideration.
