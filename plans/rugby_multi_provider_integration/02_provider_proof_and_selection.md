@@ -1,6 +1,6 @@
 # Phase 2: Provider Proof and Selection
 
-- Status: not started.
+- Status: in progress; provider approval blocked by runtime access and coverage gaps.
 - Depends on: [Phase 1: Documentation Set](01_documentation_set.md) approved and merged.
 - Unlocks: [Phase 3: Source Ledger and Reconciliation Foundation](03_source_ledger_and_reconciliation_foundation.md).
 - Migration impact: none.
@@ -75,16 +75,19 @@ If SofaScore is rejected, the Phase 4 SofaScore-specific P0 criteria remain unme
 
 ## Implementation checklist
 
-- [ ] Confirm Phase 1 PR is approved/merged.
-- [ ] Define reproducible proof commands that default to read-only and no fixture write.
+- [x] Confirm Phase 1 PR is approved/merged.
+- [x] Define reproducible proof commands that default to read-only and no fixture write.
+- [x] Run the guarded local `curl_cffi` SofaScore proof for both season endpoints and event `16393687`.
 - [ ] Probe SofaScore from the deployment runtime.
-- [ ] Verify Currie Cup and URC IDs, seasons, teams, events, results, and standings.
-- [ ] Probe and verify ESPN competition slugs and overlap.
-- [ ] Capture and redact the required fixture corpus only with explicit write mode.
-- [ ] Record numerical request budgets, timeouts, retries, and `Retry-After` behavior.
-- [ ] Write the provider ADR with pass/fail evidence and fallback recommendation.
-- [ ] Update the master provider matrix only if the ADR changes `approved-current`.
-- [ ] Run fixture integrity and secret scans.
+- [x] Verify the user-supplied Currie Cup and URC IDs, seasons, teams, events, results, and available standings shapes.
+- [ ] Complete deployment-runtime verification and close the remaining coverage gaps.
+- [x] Probe ESPN competition IDs and overlap.
+- [x] Capture and redact the supplied catalog, season, team, event, result, and Currie Cup standings evidence.
+- [x] Record the remaining exceptional-state fixture gaps explicitly in the ADR.
+- [x] Record numerical request budgets, timeouts, retries, and `Retry-After` behavior.
+- [x] Write the provider ADR with pass/fail evidence and fallback recommendation.
+- [x] Leave the master provider matrix unchanged because no provider was approved.
+- [x] Run fixture integrity and secret scans.
 
 ## Test scenarios and commands
 
