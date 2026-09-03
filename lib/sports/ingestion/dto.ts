@@ -1,3 +1,11 @@
+/** Provider provenance carried by server-side normalized DTOs. */
+export interface ProviderSourceMetadata {
+	fetchedAt: string;
+	providerUpdatedAt?: string;
+	schemaVersion: number;
+	rawPayload: unknown;
+}
+
 /**
  * Canonical Sports Ingestion Data Transfer Objects (DTOs)
  * All external keys are strings, timestamps are ISO-8601 UTC strings,
@@ -22,6 +30,7 @@ export interface CanonicalCompetitorDTO {
 	mediaUrl?: string;
 	kind?: 'team' | 'individual' | 'pair';
 	isActive?: boolean;
+	sourceMetadata?: ProviderSourceMetadata;
 }
 
 export interface CanonicalParticipantDTO {
@@ -72,6 +81,7 @@ export interface CanonicalEventDTO {
 	market?: CanonicalMarketDTO;
 	result?: CanonicalResultDTO;
 	metadata?: Record<string, unknown>;
+	sourceMetadata?: ProviderSourceMetadata;
 }
 
 export interface CanonicalEditionDTO {
@@ -83,6 +93,7 @@ export interface CanonicalEditionDTO {
 	endsAt?: string;
 	status: 'planned' | 'active' | 'completed' | 'archived';
 	metadata?: Record<string, unknown>;
+	sourceMetadata?: ProviderSourceMetadata;
 }
 
 export interface CanonicalCompetitionDTO {
@@ -94,6 +105,7 @@ export interface CanonicalCompetitionDTO {
 	country?: string;
 	logoUrl?: string;
 	isActive?: boolean;
+	sourceMetadata?: ProviderSourceMetadata;
 }
 
 export interface IngestionRunSummary {
@@ -109,6 +121,10 @@ export interface IngestionRunSummary {
 	failedCount: number;
 	settledCount: number;
 	retriesCount: number;
+	requestCount?: number;
+	schemaErrorCount?: number;
+	rateLimitCount?: number;
+	conflictCount?: number;
 	errors: Array<{
 		code: string;
 		message: string;

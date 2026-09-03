@@ -407,6 +407,7 @@ export async function quarantineRecord(
 		reasonCode: string;
 		errorSummary: string;
 		payloadFingerprint?: string;
+		rawPayload?: unknown;
 	},
 ): Promise<void> {
 	try {
@@ -417,6 +418,7 @@ export async function quarantineRecord(
 			reason_code: options.reasonCode,
 			error_summary: options.errorSummary,
 			payload_fingerprint: options.payloadFingerprint,
+			raw_payload: options.rawPayload,
 			occurrence_count: 1,
 			status: 'unresolved',
 		});

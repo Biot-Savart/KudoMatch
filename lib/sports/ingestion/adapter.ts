@@ -3,7 +3,20 @@ import {
 	CanonicalCompetitorDTO,
 	CanonicalEditionDTO,
 	CanonicalEventDTO,
+	ProviderSourceMetadata,
 } from './dto';
+
+export interface ProviderCapabilities {
+	competitions: boolean;
+	editions: boolean;
+	teams: boolean;
+	historicalFixtures: boolean;
+	currentFixtures: boolean;
+	liveUpdates: boolean;
+	results: boolean;
+	standings: boolean;
+	rankings: boolean;
+}
 
 export interface FetchEventsOptions {
 	editionExternalKey: string;
@@ -17,6 +30,8 @@ export interface FetchEventsOptions {
 export interface SportProviderAdapter {
 	readonly providerSlug: string;
 	readonly sportSlug: string;
+	/** Declared capabilities are required on production adapters. Optional here keeps legacy test doubles source-compatible. */
+	readonly capabilities?: ProviderCapabilities;
 
 	/**
 	 * Discover competitions provided by this source
@@ -49,4 +64,17 @@ export interface SportProviderAdapter {
 		competitionExternalKey?: string;
 		seasonKey?: string;
 	}): Promise<CanonicalEventDTO[]>;
+
+	/** Optional single-event fetch for providers that support it. */
+	fetchEvent?(externalKey: string): Promise<CanonicalEventDTO | null>;
+
+	/** Optional standings fetch; Phase 3 only defines the contract. */
+	fetchStandings?(options: {
+		editionExternalKey: string;
+		competitionExternalKey?: string;
+	}): Promise<unknown[]>;
 }
+
+export type ProviderSourceEnvelope<T> = T & {
+	sourceMetadata?: ProviderSourceMetadata;
+};

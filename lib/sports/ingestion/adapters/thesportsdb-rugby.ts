@@ -1,4 +1,4 @@
-import { FetchEventsOptions, SportProviderAdapter } from '../adapter';
+import { FetchEventsOptions, ProviderCapabilities, SportProviderAdapter } from '../adapter';
 import {
 	CanonicalCompetitionDTO,
 	CanonicalCompetitorDTO,
@@ -140,6 +140,17 @@ function editionParts(editionExternalKey: string): {
 export class TheSportsDbRugbyAdapter implements SportProviderAdapter {
 	public readonly providerSlug = 'thesportsdb';
 	public readonly sportSlug = 'rugby-union';
+	public readonly capabilities: ProviderCapabilities = {
+		competitions: true,
+		editions: true,
+		teams: true,
+		historicalFixtures: true,
+		currentFixtures: true,
+		liveUpdates: false,
+		results: true,
+		standings: false,
+		rankings: false,
+	};
 
 	private readonly apiKey: string;
 	private readonly baseUrl: string;
