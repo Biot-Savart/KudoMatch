@@ -62,6 +62,24 @@ export interface CanonicalResultDTO {
 	payloadSchemaVersion?: number;
 }
 
+/** Provider-neutral standings row produced after provider schema validation. */
+export interface ProviderStandingDTO {
+	externalCompetitorKey: string;
+	stageKey?: string;
+	position?: number | null;
+	played?: number | null;
+	won?: number | null;
+	drawn?: number | null;
+	lost?: number | null;
+	pointsFor?: number | null;
+	pointsAgainst?: number | null;
+	pointsDifference?: number | null;
+	bonusPoints?: number | null;
+	tablePoints?: number | null;
+	providerUpdatedAt?: string | null;
+	rawPayload: unknown;
+}
+
 export interface CanonicalMarketDTO {
 	marketKey: string;
 	rulesetVersion?: number;

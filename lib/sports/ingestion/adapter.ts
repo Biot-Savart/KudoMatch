@@ -3,6 +3,7 @@ import {
 	CanonicalCompetitorDTO,
 	CanonicalEditionDTO,
 	CanonicalEventDTO,
+	ProviderStandingDTO,
 	ProviderSourceMetadata,
 } from './dto';
 
@@ -91,7 +92,7 @@ export interface SportProviderAdapter {
 	fetchStandings?(options: {
 		editionExternalKey: string;
 		competitionExternalKey?: string;
-	}): Promise<unknown[]>;
+	}): Promise<ProviderStandingDTO[]>;
 }
 
 export type ProviderSourceEnvelope<T> = T & {

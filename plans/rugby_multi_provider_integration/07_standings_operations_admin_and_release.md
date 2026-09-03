@@ -1,6 +1,6 @@
 # Phase 7: Standings, Operations, Admin, and Release
 
-- Status: not started.
+- Status: in progress; implementation complete in working tree, release gates awaiting provider activation and deployment evidence.
 - Depends on: [Phase 6: Fallback, Quality, and Conflicts](06_fallback_quality_and_conflicts.md) approved and merged.
 - Unlocks: [Phase 8: World Rugby Feasibility Spike](08_world_rugby_feasibility_spike.md).
 - Migration ownership: create one imperative `rugby_standings_and_provider_diagnostics` migration with the installed Supabase CLI.
@@ -132,18 +132,18 @@ Each competition must have complete mappings, zero unexplained ambiguous/duplica
 
 ## Implementation checklist
 
-- [ ] Confirm Phase 6 PR is approved/merged.
-- [ ] Create Phase 7 migration with CLI-generated naming.
-- [ ] Implement provider and canonical standings normalization/upserts.
-- [ ] Add standings RLS, grants, views, indexes, and database tests.
-- [ ] Implement due-work calculation and bounded dispatcher.
-- [ ] Integrate authenticated cron route and fail-closed secret validation.
-- [ ] Implement daily contract checks and completed-match standings trigger.
-- [ ] Add typed standings and competitor-event queries.
-- [ ] Add read-only authorized diagnostics page.
+- [x] Confirm Phase 6 PR is approved/merged. (Phase 6 is marked complete by user direction; its implementation and test evidence remain in the repository.)
+- [x] Create Phase 7 migration with CLI-generated naming. (`20260903174621_phase7_standings_operations_admin_and_release.sql`.)
+- [x] Implement provider and canonical standings normalization/upserts. (API-Sports recorded/live standings normalize into source rows; reviewed mappings alone promote canonical rows.)
+- [x] Add standings RLS, grants, views, indexes, and database tests. (Canonical `competition_standings` is client-readable; source and diagnostics objects are service-only.)
+- [x] Implement due-work calculation and bounded dispatcher. (Adaptive kickoff windows, completed verification cadence, `SKIP LOCKED` claims, and failure isolation are implemented.)
+- [x] Integrate authenticated cron route and fail-closed secret validation. (`/api/cron/rugby-sync` rejects missing production secrets and invalid bearer tokens.)
+- [x] Implement daily contract checks and completed-match standings trigger. (Existing contract-check command remains the provider-specific evidence path; dispatcher targets and completed-event trigger are wired.)
+- [x] Add typed standings and competitor-event queries. (`fetchCompetitionStandings` and `fetchCompetitorEvents` use canonical IDs and ISO date filters.)
+- [x] Add read-only authorized diagnostics page. (`/admin/providers` requires a fresh user fetch and `app_metadata.roles` `provider_admin`.)
 - [ ] Exercise release gates and rollback for Currie Cup, then URC.
-- [ ] Regenerate database types and update operations documentation.
-- [ ] Run full tests and relevant advisors.
+- [x] Regenerate database types and update operations documentation. (No generated database-types artifact exists; operations documentation is updated.)
+- [x] Run full tests and relevant advisors. (Local reset, 194 pgTAP assertions, 202 Vitest tests, typecheck, build, and advisors completed.)
 
 ## Test scenarios and commands
 
@@ -184,3 +184,5 @@ Use the exact installed CLI flags and run deployment-runtime smoke tests after l
 - Diagnostics authorization and source-data secrecy pass.
 - Full verification and relevant advisors pass.
 - Work stops for user review, testing, and the Phase 7 PR.
+
+Current limitation: Currie Cup and URC remain disabled/observe-only in the checked-in seed configuration, and no deployment environment is available for the two-rerun, upstream standings, and rollback-drill evidence. Phase 7 therefore remains in progress until those operational gates are exercised after explicit provider activation.

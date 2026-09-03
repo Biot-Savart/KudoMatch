@@ -16,6 +16,7 @@ Welcome to the comprehensive technical documentation for **KudoMatch** (Predicto
 | **How-To Guides** | [Fixtures & Live Score Sync](how-to/fixtures-and-live-scores.md)     | Live score ingestion from Football APIs, fallback simulations, and fixture management.         |
 | **How-To Guides** | [Pools, Banter Chat & H2H](how-to/pools-and-chat.md)                 | Creating private leagues, invite codes, realtime banter rooms, and Head-to-Head matrices.      |
 | **How-To Guides** | [Cron Jobs & Background Automations](how-to/cron-and-automations.md) | `pg_cron` setup, Vercel Cron routes, and `CRON_SECRET` authorization tokens.                   |
+| **How-To Guides** | [Rugby Provider Operations](how-to/rugby-provider-operations.md)    | Standings synchronization, adaptive dispatcher operation, diagnostics, and staged release gates. |
 | **How-To Guides** | [Testing & CI Pipeline](how-to/testing-and-ci.md)                    | Running Vitest test suites, test coverage, and GitHub Actions continuous integration.          |
 
 ---

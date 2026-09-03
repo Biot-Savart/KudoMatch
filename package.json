@@ -24,6 +24,7 @@
 		"provider:verify-results:rugby": "tsx scripts/verify-rugby-completed-results.ts",
 		"provider:prove-reads:rugby": "tsx scripts/prove-rugby-application-reads.ts",
 		"provider:backfill:rugby": "tsx scripts/backfill-rugby-history.ts",
+		"provider:sync:rugby": "tsx scripts/run-rugby-sync.ts",
 		"provider:mapping": "tsx scripts/manage-provider-mapping.ts",
 		"competition:manage": "tsx scripts/manage-competition.ts",
 		"data:import-real": "tsx scripts/import-real-premier-league.ts",

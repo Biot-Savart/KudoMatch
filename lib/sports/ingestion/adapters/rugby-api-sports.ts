@@ -9,6 +9,7 @@ import {
 	CanonicalCompetitorDTO,
 	CanonicalEditionDTO,
 	CanonicalEventDTO,
+	ProviderStandingDTO,
 	ProviderSourceMetadata,
 } from '../dto';
 import { deriveResultStatus, normalizeEventStatus } from '../normalize-status';
@@ -23,6 +24,7 @@ export interface RugbyApiSportsAdapterOptions {
 	recordedGames?: unknown;
 	recordedCompetitions?: unknown;
 	recordedEditions?: unknown;
+	recordedStandings?: unknown;
 	providerSeason?: string;
 }
 
@@ -83,6 +85,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 	private recordedGames?: any;
 	private recordedCompetitions?: any;
 	private recordedEditions?: any;
+	private recordedStandings?: any;
 	private providerSeason?: string;
 
 	constructor(options: RugbyApiSportsAdapterOptions = {}) {
@@ -111,6 +114,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 		this.recordedGames = options.recordedGames;
 		this.recordedCompetitions = options.recordedCompetitions;
 		this.recordedEditions = options.recordedEditions;
+		this.recordedStandings = options.recordedStandings;
 		this.providerSeason = options.providerSeason;
 	}
 
@@ -598,6 +602,62 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 
 		const games = data.response || [];
 		return this.transformGames(games, options.editionExternalKey);
+	}
+
+	async fetchStandings(options: {
+		editionExternalKey: string;
+		competitionExternalKey?: string;
+	}): Promise<ProviderStandingDTO[]> {
+		const leagueId = options.competitionExternalKey || options.editionExternalKey.split('-')[0] || '11';
+		const season = options.editionExternalKey.split('-')[1] || process.env.RUGBY_PROVIDER_SEASON || '2026';
+		let payload: any;
+		if (this.recordedStandings !== undefined) payload = this.recordedStandings;
+		else if (this.recordedGames?.standings !== undefined) payload = this.recordedGames.standings;
+		else payload = await this.request<any>(`/standings?league=${leagueId}&season=${season}`);
+
+		if (hasProviderErrors(payload?.errors)) throw new Error(`API-Sports Rugby standings provider error: ${JSON.stringify(payload.errors)}`);
+		const response = Array.isArray(payload) ? payload : payload?.response;
+		if (!Array.isArray(response)) throw new Error('API-Sports Rugby standings response is malformed');
+		const rows: ProviderStandingDTO[] = [];
+		const asInteger = (value: unknown): number | null => {
+			const numeric = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+			return Number.isInteger(numeric) ? numeric : null;
+		};
+		const addRow = (row: any, rawPayload: unknown, stageKey = 'overall') => {
+			const team = row?.team ?? row?.competitor ?? {};
+			const externalKey = team?.id ?? row?.team_id ?? row?.competitor_id;
+			if (externalKey === undefined || externalKey === null) return;
+			const games = row?.games ?? row?.matches ?? {};
+			const goals = row?.goals ?? row?.points ?? {};
+			rows.push({
+				externalCompetitorKey: String(externalKey),
+				stageKey,
+				position: asInteger(row?.rank ?? row?.position),
+				played: asInteger(games.played ?? row?.played),
+				won: asInteger(games.win ?? games.won ?? row?.won),
+				drawn: asInteger(games.draw ?? games.drawn ?? row?.drawn),
+				lost: asInteger(games.lose ?? games.lost ?? row?.lost),
+				pointsFor: asInteger(goals.for ?? row?.points_for),
+				pointsAgainst: asInteger(goals.against ?? row?.points_against),
+				pointsDifference: asInteger(goals.diff ?? row?.points_difference),
+				bonusPoints: asInteger(row?.bonus ?? row?.bonus_points),
+				tablePoints: asInteger(row?.points ?? row?.table_points),
+				rawPayload,
+			});
+		};
+		for (const group of response) {
+			const league = group?.league ?? group;
+			const stageKey = String(league?.name ?? league?.group ?? 'overall');
+			const standings = league?.standings;
+			if (Array.isArray(standings)) {
+				for (const item of standings.flat()) addRow(item, item, stageKey);
+			} else if (standings && typeof standings === 'object') {
+				for (const [key, value] of Object.entries(standings)) {
+					if (Array.isArray(value)) for (const item of value) addRow(item, item, key);
+				}
+			}
+		}
+		return rows;
 	}
 
 	public transformGames(
