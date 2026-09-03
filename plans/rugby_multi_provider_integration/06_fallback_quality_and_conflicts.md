@@ -1,6 +1,6 @@
 # Phase 6: Fallback, Quality, and Conflicts
 
-- Status: not started.
+- Status: in progress.
 - Depends on: [Phase 5: API-Sports History and Backfill](05_api_sports_history_and_backfill.md) approved and merged.
 - Unlocks: [Phase 7: Standings, Operations, Admin, and Release](07_standings_operations_admin_and_release.md).
 - Migration ownership: create one imperative `provider_runtime_state_and_conflicts` migration with the installed Supabase CLI.
@@ -115,18 +115,18 @@ An unavailable provider remains visible in run diagnostics. Fallback is allowed 
 
 ## Implementation checklist
 
-- [ ] Confirm Phase 5 PR is approved/merged.
-- [ ] Confirm ESPN proof/ADR coverage for each enabled competition.
-- [ ] Implement and fixture-test ESPN adapter.
-- [ ] Create Phase 6 migration with CLI-generated naming.
-- [ ] Implement atomic runtime budget reservation and reporting.
-- [ ] Implement circuit state machine and half-open coordination.
-- [ ] Implement provider selector and recorded fallback tests.
-- [ ] Implement quality transitions and conflict comparison.
-- [ ] Add provisional fallback finalization rules.
-- [ ] Add audited `resolve-conflict` command.
-- [ ] Add RLS, grant, concurrency, and settlement tests.
-- [ ] Regenerate database types.
+- [x] Confirm Phase 5 PR is approved/merged. (Phase 5 is marked complete by user direction; its local migration, worker, and test evidence remain in the repository.)
+- [x] Confirm ESPN proof/ADR coverage for each enabled competition. (No ESPN competition is enabled; Phase 2 evidence supports the disabled Currie Cup/URC scoreboard fixture/result registrations, while standings and exceptional-state gaps remain explicit.)
+- [x] Implement and fixture-test ESPN adapter. (`EspnRugbyAdapter` validates recorded scoreboard envelopes and normalizes scheduled/final events.)
+- [x] Create Phase 6 migration with CLI-generated naming. (`20260903154913_phase6_provider_runtime_state_and_conflicts.sql`.)
+- [x] Implement atomic runtime budget reservation and reporting. (Minute/day counters use row locking and database time; provider success/failure reporting is service-role-only.)
+- [x] Implement circuit state machine and half-open coordination. (Five qualifying failures in ten minutes open the circuit for thirty minutes; one five-minute half-open probe is admitted.)
+- [x] Implement provider selector and recorded fallback tests. (Selection filters capability, mapping/settings, health, circuit, priority, and budget; adapter and policy tests use recorded data.)
+- [x] Implement quality transitions and conflict comparison. (Preferred/fallback results preserve source priority; agreement verifies and disagreement records `conflicted` without overwrite.)
+- [x] Add provisional fallback finalization rules. (Configured fallback provisionals may finalize after 24 hours through the service RPC.)
+- [x] Add audited `resolve-conflict` command. (`manage-provider-mapping.ts resolve-conflict` requires an explicit reason and `--apply`.)
+- [x] Add RLS, grant, concurrency, and settlement tests. (The Phase 6 pgTAP suite covers budgets, circuit recovery, RLS, functions, indexes, and quality contracts.)
+- [x] Regenerate database types. (No generated database-types artifact exists in this repository; RPC/table contracts are covered by pgTAP.)
 
 ## Test scenarios and commands
 
