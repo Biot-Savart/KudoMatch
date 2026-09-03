@@ -96,8 +96,8 @@ select is(
 
 select is(
   (select count(*)::int from public.competitions),
-  6,
-  'Deterministic seeds contain the football competition and five Rugby launch competitions'
+  10,
+  'Deterministic seeds contain the football competition and nine Rugby launch competitions'
 );
 
 select is(
@@ -110,25 +110,25 @@ select is(
 -- Test as anon role
 set local role anon;
 
--- Anon can see active sports (football) but not inactive (rugby-union)
+-- Anon can see both active sports from the current deterministic seed
 select is(
   (select count(*)::int from public.sports),
-  1,
-  'Anon sees only 1 active sport (football)'
+  2,
+  'Anon sees both active sports'
 );
 
--- Anon can see active competitions belonging to active sports (premier-league) but not six-nations
+-- Anon can see active competitions belonging to active sports
 select is(
   (select count(*)::int from public.competitions),
-  1,
-  'Anon sees only Premier League, Six Nations hidden because Rugby Union is inactive'
+  2,
+  'Anon sees the two active competitions'
 );
 
--- Anon can see active football competitors but not rugby competitors
+-- Anon can see all active competitors from the current deterministic seed
 select is(
   (select count(*)::int from public.competitors),
-  6,
-  'Anon sees only the 6 football competitors'
+  12,
+  'Anon sees all 12 active competitors'
 );
 
 -- Anon cannot read operational data_providers or external_entity_refs directly
