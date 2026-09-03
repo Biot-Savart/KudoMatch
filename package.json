@@ -19,6 +19,7 @@
 		"provider:proof:rugby": "tsx scripts/prove-rugby-provider.ts",
 		"provider:proof:rugby:multi": "tsx scripts/prove-rugby-multi-provider.ts",
 		"provider:proof:sofascore:curl-cffi": "python scripts/prove-sofascore-curl-cffi.py --confirm-permitted-access",
+		"provider:mapping": "tsx scripts/manage-provider-mapping.ts",
 		"competition:manage": "tsx scripts/manage-competition.ts",
 		"data:import-real": "tsx scripts/import-real-premier-league.ts",
 		"cron:setup": "tsx scripts/setup-cron.ts",
@@ -56,6 +57,7 @@
 		"react-dom": "^18.3.1",
 		"sonner": "^2.0.8",
 		"tailwind-merge": "^3.6.0",
+		"zod": "3.25.76",
 		"zustand": "^5.0.15"
 	},
 	"devDependencies": {

@@ -1,6 +1,6 @@
 # Phase 3: Source Ledger and Reconciliation Foundation
 
-- Status: not started.
+- Status: implemented; Phase 3 local DB verification passes; awaiting review. Phase 2 approval is recorded; this phase remains provider-neutral and does not activate a provider.
 - Depends on: [Phase 2: Provider Proof and Selection](02_provider_proof_and_selection.md) approved and merged.
 - Unlocks: [Phase 4: Primary Current-Provider Pilot](04_primary_current_provider_pilot.md).
 - Migration ownership: create one imperative `rugby_provider_source_ledger` migration with the installed Supabase CLI.
@@ -170,18 +170,18 @@ Add `scripts/manage-provider-mapping.ts` with `list`, `map`, `create-and-map`, `
 
 ## Implementation checklist
 
-- [ ] Confirm Phase 2 PR and provider ADR are approved.
-- [ ] Add and pin the schema-validation dependency; commit the lockfile.
-- [ ] Define capabilities and source metadata contracts.
-- [ ] Update existing adapters to declare capabilities/source envelopes without behavioral expansion.
-- [ ] Create the Phase 3 migration with CLI-generated naming.
-- [ ] Implement source-ledger upserts and observe-only mode.
-- [ ] Split approved bootstrap from normal fail-closed sync.
-- [ ] Implement deterministic reconciliation.
-- [ ] Add mapping management CLI and immutable audit.
-- [ ] Add item/batch isolation and quarantine behavior.
-- [ ] Regenerate database types.
-- [ ] Add database, unit, integration, and security tests.
+- [x] Confirm Phase 2 PR and provider ADR approval. (User approval recorded; no provider is activated by this foundation phase.)
+- [x] Add and pin the schema-validation dependency; commit the lockfile.
+- [x] Define capabilities and source metadata contracts.
+- [x] Update existing adapters to declare capabilities/source envelopes without behavioral expansion.
+- [x] Create the Phase 3 migration with CLI-generated naming.
+- [x] Implement source-ledger upserts and observe-only mode.
+- [x] Split approved bootstrap from normal fail-closed sync.
+- [x] Implement deterministic reconciliation.
+- [x] Add mapping management CLI and immutable audit.
+- [x] Add item/batch isolation and quarantine behavior.
+- [x] Regenerate database types to include the Phase 3 schema and RPCs.
+- [x] Add database, unit, integration, and security test coverage. (The Phase 3 DB test and full database suite pass.)
 
 ## Test scenarios and commands
 

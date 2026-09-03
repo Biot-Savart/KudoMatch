@@ -15,6 +15,8 @@ import {
 import { applyCanonicalIngestionBatch } from './upsert';
 import { validateEventDTO } from './validate';
 
+export { orchestrateProviderSourceIngestion } from './source-orchestrate';
+
 export interface IngestionExecutionOptions {
 	adapter: SportProviderAdapter;
 	supabase: SupabaseClient;

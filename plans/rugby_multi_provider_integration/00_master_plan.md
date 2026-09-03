@@ -1,6 +1,6 @@
 # Rugby Multi-Provider Integration Master Plan
 
-- Status: Phase 1 documentation complete; Phase 2 in progress; Phases 3–8 not started.
+- Status: Phase 1 documentation complete; Phase 2 approved by user; Phase 3 implemented with local DB verification passing, pending review; Phases 4–8 not started.
 - Source specification: [Rugby Multi-Provider Data Integration Specification](../../docs/specs/rugby_multi_provider_data_integration_specification.md).
 - Architectural prerequisite: [Multi-Sport Architecture Master Specification](../multi_sport_architecture_master.md).
 - Delivery rule: exactly one phase is implemented, reviewed, tested, and merged before the next phase starts.
@@ -30,8 +30,8 @@ If current work changes a future requirement, update that future phase document 
 | Phase | Status | Outcome | Document |
 | --- | --- | --- | --- |
 | 1 | Complete in working tree; awaiting review | Create the complete documentation set | [Documentation Set](01_documentation_set.md) |
-| 2 | In progress; approval blocked | Prove and select the current-data provider | [Provider Proof and Selection](02_provider_proof_and_selection.md) |
-| 3 | Not started | Add source ledger, approved mapping, and deterministic reconciliation | [Source Ledger and Reconciliation Foundation](03_source_ledger_and_reconciliation_foundation.md) |
+| 2 | Approved by user; evidence follow-ups retained | Prove and select the current-data provider | [Provider Proof and Selection](02_provider_proof_and_selection.md) |
+| 3 | Implemented; Phase 3 DB verification passes; awaiting review | Add source ledger, approved mapping, and deterministic reconciliation | [Source Ledger and Reconciliation Foundation](03_source_ledger_and_reconciliation_foundation.md) |
 | 4 | Not started | Deliver the approved current provider, including the SofaScore gateway when selected, and pilot Currie Cup and URC | [Primary Current-Provider Pilot](04_primary_current_provider_pilot.md) |
 | 5 | Not started | Reconcile API-Sports history with resumable backfills | [API-Sports History and Backfill](05_api_sports_history_and_backfill.md) |
 | 6 | Not started | Add ESPN fallback, health, quality, and conflict control | [Fallback, Quality, and Conflicts](06_fallback_quality_and_conflicts.md) |
@@ -85,16 +85,16 @@ Provider modules are server-only. They never create database clients, write rows
 
 ## Provider priority matrix
 
-`approved-current` is resolved by the Phase 2 ADR. SofaScore is the first candidate; a replacement requires explicit ADR approval.
+The user-approved provider priority order for every operation is SofaScore, then ESPN, then API-Sports. This records request/fallback priority; it does not activate providers or imply that an unproven provider may write canonical data.
 
 | Operation | Priority 1 | Priority 2 | Priority 3 | Notes |
 | --- | --- | --- | --- | --- |
-| Historical fixtures/results | API-Sports | approved-current | ESPN | API-Sports remains historical authority |
-| Current club fixtures | approved-current | ESPN | API-Sports when proven | Applies initially to Currie Cup and URC |
-| Current club results | approved-current | ESPN | API-Sports when proven | Fallback finalization follows result-confidence rules |
-| Standings | approved-current | ESPN when proven | None | Canonical standings are delivered in Phase 7 |
-| Current internationals | approved-current | ESPN | API-Sports | World Rugby cannot enter this order before a later implementation approval |
-| International verification | approved-current | ESPN | API-Sports | Phase 8 may recommend World Rugby but does not implement it |
+| Historical fixtures/results | SofaScore | ESPN | API-Sports | Applies to the configured competition and operation; activation remains phase-gated |
+| Current club fixtures | SofaScore | ESPN | API-Sports | Applies initially to Currie Cup and URC |
+| Current club results | SofaScore | ESPN | API-Sports | Fallback finalization follows result-confidence rules |
+| Standings | SofaScore | ESPN | API-Sports | Canonical standings are delivered in Phase 7 |
+| Current internationals | SofaScore | ESPN | API-Sports | World Rugby cannot enter this order before a later implementation approval |
+| International verification | SofaScore | ESPN | API-Sports | Phase 8 may recommend World Rugby but does not implement it |
 
 Priority is stored by competition and operation. Provider request order never implies authority.
 

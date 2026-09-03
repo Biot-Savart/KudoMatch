@@ -1,4 +1,4 @@
-import { FetchEventsOptions, SportProviderAdapter } from '../adapter';
+import { FetchEventsOptions, ProviderCapabilities, SportProviderAdapter } from '../adapter';
 import {
 	CanonicalCompetitionDTO,
 	CanonicalCompetitorDTO,
@@ -9,6 +9,17 @@ import {
 export class MockSportProviderAdapter implements SportProviderAdapter {
 	public readonly providerSlug = 'mock-provider';
 	public readonly sportSlug: string;
+	public readonly capabilities: ProviderCapabilities = {
+		competitions: true,
+		editions: true,
+		teams: true,
+		historicalFixtures: true,
+		currentFixtures: true,
+		liveUpdates: true,
+		results: true,
+		standings: false,
+		rankings: false,
+	};
 
 	constructor(sportSlug = 'football') {
 		if (process.env.NODE_ENV === 'production') {

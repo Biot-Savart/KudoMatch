@@ -81,6 +81,69 @@ export type Database = {
           },
         ]
       }
+      competition_provider_settings: {
+        Row: {
+          allow_single_source_result_finalization: boolean
+          competition_id: number
+          config: Json
+          created_at: string
+          enabled: boolean
+          fixture_authority: boolean
+          fixture_priority: number | null
+          history_priority: number | null
+          observe_only: boolean
+          provider_slug: string
+          result_priority: number | null
+          standings_priority: number | null
+          updated_at: string
+        }
+        Insert: {
+          allow_single_source_result_finalization?: boolean
+          competition_id: number
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          fixture_authority?: boolean
+          fixture_priority?: number | null
+          history_priority?: number | null
+          observe_only?: boolean
+          provider_slug: string
+          result_priority?: number | null
+          standings_priority?: number | null
+          updated_at?: string
+        }
+        Update: {
+          allow_single_source_result_finalization?: boolean
+          competition_id?: number
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          fixture_authority?: boolean
+          fixture_priority?: number | null
+          history_priority?: number | null
+          observe_only?: boolean
+          provider_slug?: string
+          result_priority?: number | null
+          standings_priority?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competition_provider_settings_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "competition_provider_settings_provider_slug_fkey"
+            columns: ["provider_slug"]
+            isOneToOne: false
+            referencedRelation: "data_providers"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       competitions: {
         Row: {
           country: string | null
@@ -280,6 +343,57 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_data_quality: {
+        Row: {
+          conflict_details: Json
+          created_at: string
+          event_id: number
+          last_verified_at: string | null
+          next_verification_at: string | null
+          preferred_provider_slug: string | null
+          quality_status: string
+          source_count: number
+          updated_at: string
+        }
+        Insert: {
+          conflict_details?: Json
+          created_at?: string
+          event_id: number
+          last_verified_at?: string | null
+          next_verification_at?: string | null
+          preferred_provider_slug?: string | null
+          quality_status?: string
+          source_count?: number
+          updated_at?: string
+        }
+        Update: {
+          conflict_details?: Json
+          created_at?: string
+          event_id?: number
+          last_verified_at?: string | null
+          next_verification_at?: string | null
+          preferred_provider_slug?: string | null
+          quality_status?: string
+          source_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_data_quality_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: true
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_data_quality_preferred_provider_slug_fkey"
+            columns: ["preferred_provider_slug"]
+            isOneToOne: false
+            referencedRelation: "data_providers"
+            referencedColumns: ["slug"]
           },
         ]
       }
@@ -489,6 +603,7 @@ export type Database = {
           occurrence_count: number
           payload_fingerprint: string | null
           provider_slug: string
+          raw_payload: Json | null
           reason_code: string
           status: string
           updated_at: string
@@ -504,6 +619,7 @@ export type Database = {
           occurrence_count?: number
           payload_fingerprint?: string | null
           provider_slug: string
+          raw_payload?: Json | null
           reason_code: string
           status?: string
           updated_at?: string
@@ -519,6 +635,7 @@ export type Database = {
           occurrence_count?: number
           payload_fingerprint?: string | null
           provider_slug?: string
+          raw_payload?: Json | null
           reason_code?: string
           status?: string
           updated_at?: string
@@ -562,6 +679,7 @@ export type Database = {
       }
       ingestion_runs: {
         Row: {
+          conflict_count: number
           correlation_id: string | null
           created_at: string
           duration_ms: number
@@ -575,6 +693,10 @@ export type Database = {
           operation: string
           provider_slug: string
           quarantined_count: number
+          rate_limit_count: number
+          request_count: number
+          retries_count: number
+          schema_error_count: number
           sport_slug: string
           started_at: string
           status: string
@@ -584,6 +706,7 @@ export type Database = {
           updated_count: number
         }
         Insert: {
+          conflict_count?: number
           correlation_id?: string | null
           created_at?: string
           duration_ms?: number
@@ -597,6 +720,10 @@ export type Database = {
           operation?: string
           provider_slug: string
           quarantined_count?: number
+          rate_limit_count?: number
+          request_count?: number
+          retries_count?: number
+          schema_error_count?: number
           sport_slug: string
           started_at?: string
           status: string
@@ -606,6 +733,7 @@ export type Database = {
           updated_count?: number
         }
         Update: {
+          conflict_count?: number
           correlation_id?: string | null
           created_at?: string
           duration_ms?: number
@@ -619,6 +747,10 @@ export type Database = {
           operation?: string
           provider_slug?: string
           quarantined_count?: number
+          rate_limit_count?: number
+          request_count?: number
+          retries_count?: number
+          schema_error_count?: number
           sport_slug?: string
           started_at?: string
           status?: string
@@ -997,6 +1129,276 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_catalog_sources: {
+        Row: {
+          competition_id: number | null
+          competitor_id: number | null
+          country_code: string | null
+          created_at: string
+          display_name: string
+          edition_id: number | null
+          entity_kind: string
+          external_key: string
+          first_fetched_at: string
+          id: number
+          is_active: boolean
+          last_fetched_at: string
+          latest_valid_raw_payload: Json | null
+          mapped_at: string | null
+          mapped_by: string | null
+          mapping_status: string
+          media_url: string | null
+          normalized_name: string
+          payload_fingerprint: string | null
+          provider_slug: string
+          provider_updated_at: string | null
+          short_name: string | null
+          sport_slug: string
+          updated_at: string
+        }
+        Insert: {
+          competition_id?: number | null
+          competitor_id?: number | null
+          country_code?: string | null
+          created_at?: string
+          display_name: string
+          edition_id?: number | null
+          entity_kind: string
+          external_key: string
+          first_fetched_at?: string
+          id?: never
+          is_active?: boolean
+          last_fetched_at?: string
+          latest_valid_raw_payload?: Json | null
+          mapped_at?: string | null
+          mapped_by?: string | null
+          mapping_status?: string
+          media_url?: string | null
+          normalized_name: string
+          payload_fingerprint?: string | null
+          provider_slug: string
+          provider_updated_at?: string | null
+          short_name?: string | null
+          sport_slug: string
+          updated_at?: string
+        }
+        Update: {
+          competition_id?: number | null
+          competitor_id?: number | null
+          country_code?: string | null
+          created_at?: string
+          display_name?: string
+          edition_id?: number | null
+          entity_kind?: string
+          external_key?: string
+          first_fetched_at?: string
+          id?: never
+          is_active?: boolean
+          last_fetched_at?: string
+          latest_valid_raw_payload?: Json | null
+          mapped_at?: string | null
+          mapped_by?: string | null
+          mapping_status?: string
+          media_url?: string | null
+          normalized_name?: string
+          payload_fingerprint?: string | null
+          provider_slug?: string
+          provider_updated_at?: string | null
+          short_name?: string | null
+          sport_slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_catalog_sources_competition_id_fkey"
+            columns: ["competition_id"]
+            isOneToOne: false
+            referencedRelation: "competitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_catalog_sources_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_catalog_sources_edition_id_fkey"
+            columns: ["edition_id"]
+            isOneToOne: false
+            referencedRelation: "competition_editions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_catalog_sources_provider_slug_fkey"
+            columns: ["provider_slug"]
+            isOneToOne: false
+            referencedRelation: "data_providers"
+            referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "provider_catalog_sources_sport_slug_fkey"
+            columns: ["sport_slug"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      provider_event_sources: {
+        Row: {
+          away_score: number | null
+          created_at: string
+          event_id: number | null
+          first_fetched_at: string
+          home_score: number | null
+          id: number
+          last_fetched_at: string
+          latest_valid_raw_payload: Json | null
+          mapping_reason: string | null
+          mapping_state: string
+          normalized_kickoff_at: string
+          normalized_status: string
+          payload_fingerprint: string | null
+          provider_away_competitor_key: string | null
+          provider_competition_key: string | null
+          provider_edition_key: string | null
+          provider_event_key: string
+          provider_home_competitor_key: string | null
+          provider_slug: string
+          provider_updated_at: string | null
+          round_name: string | null
+          updated_at: string
+          venue_name: string | null
+        }
+        Insert: {
+          away_score?: number | null
+          created_at?: string
+          event_id?: number | null
+          first_fetched_at?: string
+          home_score?: number | null
+          id?: never
+          last_fetched_at?: string
+          latest_valid_raw_payload?: Json | null
+          mapping_reason?: string | null
+          mapping_state?: string
+          normalized_kickoff_at: string
+          normalized_status: string
+          payload_fingerprint?: string | null
+          provider_away_competitor_key?: string | null
+          provider_competition_key?: string | null
+          provider_edition_key?: string | null
+          provider_event_key: string
+          provider_home_competitor_key?: string | null
+          provider_slug: string
+          provider_updated_at?: string | null
+          round_name?: string | null
+          updated_at?: string
+          venue_name?: string | null
+        }
+        Update: {
+          away_score?: number | null
+          created_at?: string
+          event_id?: number | null
+          first_fetched_at?: string
+          home_score?: number | null
+          id?: never
+          last_fetched_at?: string
+          latest_valid_raw_payload?: Json | null
+          mapping_reason?: string | null
+          mapping_state?: string
+          normalized_kickoff_at?: string
+          normalized_status?: string
+          payload_fingerprint?: string | null
+          provider_away_competitor_key?: string | null
+          provider_competition_key?: string | null
+          provider_edition_key?: string | null
+          provider_event_key?: string
+          provider_home_competitor_key?: string | null
+          provider_slug?: string
+          provider_updated_at?: string | null
+          round_name?: string | null
+          updated_at?: string
+          venue_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_event_sources_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_event_sources_provider_slug_fkey"
+            columns: ["provider_slug"]
+            isOneToOne: false
+            referencedRelation: "data_providers"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      provider_mapping_audit: {
+        Row: {
+          actor_identity: string
+          correlation_id: string | null
+          created_at: string
+          entity_kind: string
+          external_key: string
+          id: number
+          new_canonical_id: number | null
+          operation: string
+          previous_canonical_id: number | null
+          provider_catalog_source_id: number
+          provider_slug: string
+          reason: string
+        }
+        Insert: {
+          actor_identity: string
+          correlation_id?: string | null
+          created_at?: string
+          entity_kind: string
+          external_key: string
+          id?: never
+          new_canonical_id?: number | null
+          operation: string
+          previous_canonical_id?: number | null
+          provider_catalog_source_id: number
+          provider_slug: string
+          reason: string
+        }
+        Update: {
+          actor_identity?: string
+          correlation_id?: string | null
+          created_at?: string
+          entity_kind?: string
+          external_key?: string
+          id?: never
+          new_canonical_id?: number | null
+          operation?: string
+          previous_canonical_id?: number | null
+          provider_catalog_source_id?: number
+          provider_slug?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_mapping_audit_provider_catalog_source_id_fkey"
+            columns: ["provider_catalog_source_id"]
+            isOneToOne: false
+            referencedRelation: "provider_catalog_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_mapping_audit_provider_slug_fkey"
+            columns: ["provider_slug"]
+            isOneToOne: false
+            referencedRelation: "data_providers"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       push_subscriptions: {
         Row: {
           auth: string
@@ -1173,6 +1575,7 @@ export type Database = {
         Args: { p_batch: Json }
         Returns: Json
       }
+      apply_provider_source_batch: { Args: { p_batch: Json }; Returns: Json }
       create_pool: {
         Args: {
           p_competition_id?: number
@@ -1260,6 +1663,16 @@ export type Database = {
         Returns: string
       }
       leave_pool: { Args: { p_pool_id: string }; Returns: boolean }
+      manage_provider_catalog_mapping: {
+        Args: {
+          p_actor_identity?: string
+          p_canonical_id?: number
+          p_operation: string
+          p_reason?: string
+          p_source_id: number
+        }
+        Returns: Json
+      }
       release_ingestion_lease: {
         Args: { p_holder_id: string; p_lease_key: string }
         Returns: boolean

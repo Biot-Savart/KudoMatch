@@ -1,4 +1,4 @@
-import { FetchEventsOptions, SportProviderAdapter } from '../adapter';
+import { FetchEventsOptions, ProviderCapabilities, SportProviderAdapter } from '../adapter';
 import {
 	CanonicalCompetitionDTO,
 	CanonicalCompetitorDTO,
@@ -28,6 +28,17 @@ function hasProviderErrors(errors: unknown): boolean {
 export class FootballDataAdapter implements SportProviderAdapter {
 	public readonly providerSlug = 'football-data';
 	public readonly sportSlug = 'football';
+	public readonly capabilities: ProviderCapabilities = {
+		competitions: true,
+		editions: true,
+		teams: true,
+		historicalFixtures: true,
+		currentFixtures: true,
+		liveUpdates: true,
+		results: true,
+		standings: true,
+		rankings: false,
+	};
 
 	private directApiKey?: string;
 	private rapidApiKey?: string;
