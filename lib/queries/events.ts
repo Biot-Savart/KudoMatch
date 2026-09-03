@@ -16,6 +16,9 @@ export interface EventFilterOptions {
 	roundLabel?: string;
 	status?: string;
 	userId?: string;
+	competitorId?: string;
+	from?: string;
+	to?: string;
 	limit?: number;
 }
 
@@ -31,7 +34,10 @@ export const eventsQueryKeys = {
 				editionId: filters.editionId ?? 'all',
 				roundLabel: filters.roundLabel ?? 'all',
 				status: filters.status ?? 'all',
-				userId: filters.userId ?? 'anon',
+			userId: filters.userId ?? 'anon',
+			competitorId: filters.competitorId ?? 'all',
+			from: filters.from ?? 'all',
+			to: filters.to ?? 'all',
 			},
 		] as const,
 	detail: (id: string, userId?: string) =>
@@ -259,6 +265,18 @@ export async function fetchEvents(
 	if (filters.status && filters.status !== 'all') {
 		query = query.eq('status', filters.status);
 	}
+	if (filters.competitorId && filters.competitorId !== 'all') {
+		const { data: competitorEvents, error: competitorError } = await supabase
+			.from('event_competitors')
+			.select('event_id')
+			.eq('competitor_id', filters.competitorId);
+		if (competitorError) throw competitorError;
+		const eventIds = (competitorEvents ?? []).map((row) => String(row.event_id));
+		if (eventIds.length === 0) return [];
+		query = query.in('id', eventIds);
+	}
+	if (filters.from) query = query.gte('starts_at', filters.from);
+	if (filters.to) query = query.lte('starts_at', filters.to);
 
 	if (filters.limit) {
 		query = query.limit(filters.limit);

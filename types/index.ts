@@ -47,6 +47,36 @@ export interface CompetitionEdition {
 	competition?: Competition;
 }
 
+export interface CompetitionStanding {
+	edition_id: string;
+	stage_key: string;
+	competitor_id: string;
+	competition_id: string;
+	sport_slug: SportSlug;
+	competition_slug: string;
+	competition_name: string;
+	season_key: string;
+	edition_name: string;
+	position: number | null;
+	played: number | null;
+	won: number | null;
+	drawn: number | null;
+	lost: number | null;
+	points_for: number | null;
+	points_against: number | null;
+	points_difference: number | null;
+	bonus_points: number | null;
+	table_points: number | null;
+	preferred_provider_slug: string | null;
+	quality_status: 'unverified' | 'single_source' | 'verified' | 'conflicted';
+	source_count: number;
+	last_verified_at: string | null;
+	details: Record<string, unknown>;
+	competitor_name: string;
+	competitor_short_name: string | null;
+	competitor_media_url: string | null;
+}
+
 export type CompetitorKind = 'team' | 'person' | 'constructor';
 
 export interface Competitor {

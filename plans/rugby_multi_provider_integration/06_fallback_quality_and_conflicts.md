@@ -1,6 +1,6 @@
 # Phase 6: Fallback, Quality, and Conflicts
 
-- Status: in progress.
+- Status: complete.
 - Depends on: [Phase 5: API-Sports History and Backfill](05_api_sports_history_and_backfill.md) approved and merged.
 - Unlocks: [Phase 7: Standings, Operations, Admin, and Release](07_standings_operations_admin_and_release.md).
 - Migration ownership: create one imperative `provider_runtime_state_and_conflicts` migration with the installed Supabase CLI.
