@@ -1,6 +1,6 @@
 # Phase 4: Primary Current-Provider Pilot
 
-- Status: local pilot activation and evidence gates verified; implementation remains in progress pending the remaining operational/release gate. Deployment-runtime verification is deferred because no deployment environment exists.
+- Status: complete by user direction; local pilot activation and evidence gates are verified. Deployment-runtime verification remains deferred because no deployment environment exists.
 - Depends on: [Phase 3: Source Ledger and Reconciliation Foundation](03_source_ledger_and_reconciliation_foundation.md) approved and merged.
 - Unlocks: [Phase 5: API-Sports History and Backfill](05_api_sports_history_and_backfill.md).
 - Migration impact: no new table; provider registration/settings data may use a narrowly scoped migration.

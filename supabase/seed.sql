@@ -82,6 +82,41 @@ on conflict (competition_id, provider_slug) do update set
   standings_priority = excluded.standings_priority,
   config = excluded.config;
 
+-- Phase 5 API-Sports historical authority. Current-provider authority remains
+-- owned by the SofaScore pilot settings above.
+insert into public.competition_provider_settings (
+  competition_id,
+  provider_slug,
+  enabled,
+  observe_only,
+  history_priority,
+  result_priority,
+  fixture_authority,
+  allow_single_source_result_finalization,
+  config
+)
+select
+  c.id,
+  'api-sports',
+  true,
+  false,
+  1,
+  100,
+  true,
+  true,
+  '{"history_authority": true, "historical_only": true, "competition_external_key": "11"}'::jsonb
+from public.competitions c
+where c.sport_slug = 'rugby-union'
+  and c.slug = 'six-nations'
+on conflict (competition_id, provider_slug) do update set
+  enabled = excluded.enabled,
+  observe_only = excluded.observe_only,
+  history_priority = excluded.history_priority,
+  result_priority = excluded.result_priority,
+  fixture_authority = excluded.fixture_authority,
+  allow_single_source_result_finalization = excluded.allow_single_source_result_finalization,
+  config = excluded.config;
+
 -- 4. Competition Editions
 insert into public.competition_editions (competition_id, season_key, name, starts_at, ends_at, status, metadata)
 values

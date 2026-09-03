@@ -25,6 +25,22 @@ export interface FetchEventsOptions {
 	fromDate?: string;
 	toDate?: string;
 	round?: string;
+	/** Provider-native page when the adapter exposes resumable pagination. */
+	page?: number;
+}
+
+/** Provider-neutral page metadata used by bounded historical backfills. */
+export interface ProviderEventPage {
+	items: CanonicalEventDTO[];
+	page: number;
+	totalPages?: number;
+	nextCursor?: Record<string, unknown>;
+	hasMore: boolean;
+	validationErrors?: Array<{
+		externalKey?: string;
+		rawPayload: unknown;
+		reason: string;
+	}>;
 }
 
 export interface SportProviderAdapter {
@@ -55,6 +71,9 @@ export interface SportProviderAdapter {
 	 * Fetch scheduled, live, or past events
 	 */
 	fetchEvents(options: FetchEventsOptions): Promise<CanonicalEventDTO[]>;
+
+	/** Optional provider-native page fetch. Backfills must not invent cursors. */
+	fetchEventsPage?(options: FetchEventsOptions): Promise<ProviderEventPage>;
 
 	/**
 	 * Fetch active / live updates for in-progress or recently finished events
