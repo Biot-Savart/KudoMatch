@@ -164,6 +164,7 @@ export async function orchestrateProviderSourceIngestion(
 			competitors: validCompetitors,
 			events: validEvents,
 			observeOnly: options.observeOnly ?? true,
+			operation: options.operation,
 			correlationId,
 		});
 

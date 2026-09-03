@@ -1,12 +1,19 @@
-import { FetchEventsOptions, ProviderCapabilities, SportProviderAdapter } from '../adapter';
+import {
+	FetchEventsOptions,
+	ProviderCapabilities,
+	ProviderEventPage,
+	SportProviderAdapter,
+} from '../adapter';
 import {
 	CanonicalCompetitionDTO,
 	CanonicalCompetitorDTO,
 	CanonicalEditionDTO,
 	CanonicalEventDTO,
+	ProviderSourceMetadata,
 } from '../dto';
 import { deriveResultStatus, normalizeEventStatus } from '../normalize-status';
 import { withRetry } from '../retry';
+import { z } from 'zod';
 
 export interface RugbyApiSportsAdapterOptions {
 	apiSportsKey?: string;
@@ -16,6 +23,16 @@ export interface RugbyApiSportsAdapterOptions {
 	recordedGames?: unknown;
 	recordedCompetitions?: unknown;
 	recordedEditions?: unknown;
+	providerSeason?: string;
+}
+
+function sourceMetadata(rawPayload: unknown, providerUpdatedAt?: string): ProviderSourceMetadata {
+	return {
+		fetchedAt: new Date().toISOString(),
+		schemaVersion: 1,
+		rawPayload,
+		providerUpdatedAt,
+	};
 }
 
 function hasProviderErrors(errors: unknown): boolean {
@@ -25,6 +42,24 @@ function hasProviderErrors(errors: unknown): boolean {
 	if (typeof errors === 'object') return Object.keys(errors).length > 0;
 	return true;
 }
+
+const apiSportsGameSchema = z.object({
+	id: z.union([z.string(), z.number()]),
+	date: z.string().optional().nullable(),
+	timestamp: z.number().optional().nullable(),
+	teams: z.object({
+		home: z.object({ id: z.union([z.string(), z.number()]), name: z.string() }).passthrough(),
+		away: z.object({ id: z.union([z.string(), z.number()]), name: z.string() }).passthrough(),
+	}).passthrough(),
+	status: z.object({ short: z.string().optional(), long: z.string().optional() }).passthrough().optional(),
+	scores: z.object({ home: z.number().nullable().optional(), away: z.number().nullable().optional() }).passthrough().optional(),
+}).passthrough();
+
+const apiSportsGamesEnvelopeSchema = z.object({
+	response: z.array(z.unknown()),
+	paging: z.object({ current: z.number().int().positive().optional(), total: z.number().int().positive().optional() }).passthrough().optional(),
+	errors: z.unknown().optional(),
+}).passthrough();
 
 export class RugbyApiSportsAdapter implements SportProviderAdapter {
 	public readonly providerSlug = 'api-sports';
@@ -48,10 +83,12 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 	private recordedGames?: any;
 	private recordedCompetitions?: any;
 	private recordedEditions?: any;
+	private providerSeason?: string;
 
 	constructor(options: RugbyApiSportsAdapterOptions = {}) {
-		this.apiSportsKey = options.apiSportsKey || process.env.API_SPORTS_KEY;
-		this.rapidApiKey = options.rapidApiKey || process.env.RAPIDAPI_KEY;
+		const recordedMode = options.recordedGames !== undefined;
+		this.apiSportsKey = options.apiSportsKey ?? (recordedMode ? undefined : process.env.API_SPORTS_KEY);
+		this.rapidApiKey = options.rapidApiKey ?? (recordedMode ? undefined : process.env.RAPIDAPI_KEY);
 		this.rapidApiHost =
 			options.rapidApiHost ||
 			process.env.RAPIDAPI_RUGBY_HOST ||
@@ -74,6 +111,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 		this.recordedGames = options.recordedGames;
 		this.recordedCompetitions = options.recordedCompetitions;
 		this.recordedEditions = options.recordedEditions;
+		this.providerSeason = options.providerSeason;
 	}
 
 	private getHeaders(): Record<string, string> {
@@ -146,6 +184,30 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 		);
 	}
 
+	private recordedPayloadForPage(page?: number): unknown {
+		if (!this.recordedGames || page === undefined) return this.recordedGames;
+		const recorded = this.recordedGames as Record<string, unknown>;
+		if (Array.isArray(recorded.pages)) return recorded.pages[page - 1] ?? { response: [] };
+		if (recorded.pages && typeof recorded.pages === 'object') {
+			return (recorded.pages as Record<string, unknown>)[String(page)] ?? { response: [] };
+		}
+		return this.recordedGames;
+	}
+
+	private async requestPage<T>(endpoint: string, page?: number): Promise<T> {
+		if (this.recordedGames) {
+			const recordedPayload = this.recordedPayloadForPage(page) as T & { errors?: unknown };
+			if (hasProviderErrors(recordedPayload?.errors)) {
+				throw new Error(
+					`API-Sports Rugby provider error: ${JSON.stringify(recordedPayload.errors)}`,
+				);
+			}
+			return recordedPayload;
+		}
+
+		return this.request<T>(endpoint);
+	}
+
 	async fetchCompetitions(): Promise<CanonicalCompetitionDTO[]> {
 		if (this.recordedCompetitions) {
 			const payload = Array.isArray(this.recordedCompetitions)
@@ -167,6 +229,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 					country: item.country?.name ?? item.country ?? undefined,
 					logoUrl: league.logo ?? league.logoUrl ?? undefined,
 					isActive: league.isActive !== false,
+					sourceMetadata: sourceMetadata(item),
 				};
 			});
 		}
@@ -236,6 +299,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 					...meta,
 					logoUrl: undefined,
 					isActive: true,
+					sourceMetadata: sourceMetadata({ competitionExternalKey: ids[slug], slug }),
 				}));
 		}
 		if (this.apiSportsKey) {
@@ -267,7 +331,8 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 						slug,
 						...meta,
 						logoUrl: league.logo,
-						isActive: true,
+					isActive: true,
+						sourceMetadata: sourceMetadata(league),
 					},
 				];
 			});
@@ -289,9 +354,10 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 				name: 'Six Nations Championship',
 				kind: 'cup',
 				country: 'Europe',
-				logoUrl: 'https://media.api-sports.io/rugby/leagues/11.png',
-				isActive: true,
-			},
+					logoUrl: 'https://media.api-sports.io/rugby/leagues/11.png',
+					isActive: true,
+					sourceMetadata: sourceMetadata({ id: 11, name: 'Six Nations Championship' }),
+				},
 		];
 	}
 
@@ -327,6 +393,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 					startsAt: item.startsAt ?? undefined,
 					endsAt: item.endsAt ?? undefined,
 					status: item.status === 'completed' ? 'completed' : 'active',
+					sourceMetadata: sourceMetadata(item),
 				}));
 		}
 		// Direct API-Sports editions are keyed by the verified league ID and the
@@ -334,6 +401,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 		// launch competitions instead of silently assuming Six Nations (11).
 		if (this.apiSportsKey || this.rapidApiKey) {
 			const seasonKey =
+				this.providerSeason ||
 				process.env.RUGBY_PROVIDER_SEASON ||
 				new Date().getUTCFullYear().toString();
 			const seasonNumber = Number.parseInt(seasonKey, 10);
@@ -347,6 +415,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 					seasonKey,
 					name: `${competitionExternalKey} ${seasonKey}`,
 					status: isCompleted ? 'completed' : 'active',
+					sourceMetadata: sourceMetadata({ competitionExternalKey, seasonKey }),
 				},
 			];
 		}
@@ -373,6 +442,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 				startsAt: '2025-01-31T00:00:00Z',
 				endsAt: '2025-03-15T23:59:59Z',
 				status: 'completed',
+				sourceMetadata: sourceMetadata({ competitionExternalKey: '11', seasonKey: '2025' }),
 			},
 			{
 				externalKey: '11-2026',
@@ -382,6 +452,7 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 				startsAt: '2026-02-06T00:00:00Z',
 				endsAt: '2026-03-21T23:59:59Z',
 				status: 'active',
+				sourceMetadata: sourceMetadata({ competitionExternalKey: '11', seasonKey: '2026' }),
 			},
 		];
 	}
@@ -463,20 +534,53 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 			kind: 'team',
 			countryCode: team.country?.code || undefined,
 			isActive: true,
+			sourceMetadata: sourceMetadata(team),
 		}));
 	}
 
 	async fetchEvents(options: FetchEventsOptions): Promise<CanonicalEventDTO[]> {
+		const page = await this.fetchEventsPage(options);
+		return page.items;
+	}
+
+	async fetchEventsPage(options: FetchEventsOptions): Promise<ProviderEventPage> {
 		const leagueId = options.editionExternalKey.split('-')[0] || '11';
 		const season =
 			options.seasonKey || options.editionExternalKey.split('-')[1] || '2026';
-
-		const data = await this.request<{
+		const query = `/games?league=${leagueId}&season=${season}${
+			options.page === undefined ? '' : `&page=${options.page}`
+		}`;
+		const data = await this.requestPage<{
 			response?: Array<any>;
-		}>(`/games?league=${leagueId}&season=${season}`);
+			paging?: { current?: number; total?: number };
+		}>(query, options.page);
 
-		const games = data.response || [];
-		return this.transformGames(games, options.editionExternalKey);
+		const parsedEnvelope = apiSportsGamesEnvelopeSchema.safeParse(data);
+		if (!parsedEnvelope.success) {
+			throw new Error(`API-Sports Rugby schema validation failed: ${parsedEnvelope.error.issues[0]?.message ?? 'invalid games response'}`);
+		}
+		const games = parsedEnvelope.data.response;
+		const validGames = games.filter((game) => apiSportsGameSchema.safeParse(game).success);
+		const validationErrors = games
+			.filter((game) => !apiSportsGameSchema.safeParse(game).success)
+			.map((game) => ({
+				externalKey: typeof game === 'object' && game !== null && 'id' in game ? String((game as { id: unknown }).id) : undefined,
+				rawPayload: game,
+				reason: 'API-Sports Rugby game schema validation failed',
+			}));
+		const currentPage = data.paging?.current ?? options.page ?? 1;
+		const totalPages = data.paging?.total;
+		return {
+			items: this.transformGames(validGames, options.editionExternalKey),
+			page: currentPage,
+			totalPages,
+			nextCursor:
+				totalPages !== undefined && currentPage < totalPages
+					? { provider_page: currentPage + 1 }
+					: undefined,
+			hasMore: totalPages !== undefined ? currentPage < totalPages : false,
+			validationErrors,
+		};
 	}
 
 	async fetchLiveUpdates(options: {
@@ -575,7 +679,8 @@ export class RugbyApiSportsAdapter implements SportProviderAdapter {
 							},
 							revisionNumber: 1,
 						}
-					: undefined,
+						: undefined,
+				sourceMetadata: sourceMetadata(game),
 			};
 		});
 	}

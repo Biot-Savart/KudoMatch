@@ -1,6 +1,6 @@
 # Phase 5: API-Sports History and Backfill
 
-- Status: not started.
+- Status: in progress.
 - Depends on: [Phase 4: Primary Current-Provider Pilot](04_primary_current_provider_pilot.md) approved and merged.
 - Unlocks: [Phase 6: Fallback, Quality, and Conflicts](06_fallback_quality_and_conflicts.md).
 - Migration ownership: create one imperative `provider_sync_targets` migration with the installed Supabase CLI.
@@ -86,16 +86,16 @@ Checkpoint advancement occurs only after its bounded source/canonical batch comm
 
 ## Implementation checklist
 
-- [ ] Confirm Phase 4 PR is approved/merged.
-- [ ] Add source metadata/schema validation to API-Sports without changing provider identity.
-- [ ] Create the Phase 5 migration with CLI-generated naming.
-- [ ] Add historical provider settings for explicitly configured competitions.
-- [ ] Implement bounded backfill checkpoint load/advance/resume.
-- [ ] Add CLI options and dry-run/recorded modes.
-- [ ] Add authority/regression protection.
-- [ ] Add interrupted, resumed, restarted, and completed backfill tests.
-- [ ] Reconcile overlapping API-Sports/current-provider fixtures.
-- [ ] Regenerate database types and add RLS/index tests.
+- [x] Confirm Phase 4 PR is approved/merged. (Phase 4 is marked complete in the master plan by user direction; deployment-runtime evidence remains explicitly deferred.)
+- [x] Add source metadata/schema validation to API-Sports without changing provider identity. (API-Sports normalized DTOs now retain sanitized raw entity payloads, and paged game envelopes/items are validated before normalization.)
+- [x] Create the Phase 5 migration with CLI-generated naming. (`20260903142512_phase5_provider_sync_targets.sql`.)
+- [x] Add historical provider settings for explicitly configured competitions. (The verified API-Sports Six Nations mapping is enabled for historical authority with result priority below the current provider.)
+- [x] Implement bounded backfill checkpoint load/advance/resume. (The server-only worker processes one bounded page by default, uses provider-returned pagination metadata, persists an opaque cursor, and uses an optimistic checkpoint RPC.)
+- [x] Add CLI options and dry-run/recorded modes. (`npm run provider:backfill:rugby` supports competition, season, edition, date range, resume/restart, page limit, dry-run, recorded fixtures, and explicit `--map-catalog`.)
+- [x] Add authority/regression protection. (API-Sports historical results use priority 100 while the approved SofaScore result priority remains 1; existing result precedence prevents lower-authority overwrites.)
+- [x] Add interrupted, resumed, restarted, and completed backfill tests. (Checkpoint unit tests and database optimistic-advance tests cover failure-before-advance, resume, replay safety, and completion.)
+- [x] Reconcile overlapping API-Sports/current-provider fixtures. (The worker routes each page through the Phase 3 source-ledger reconciliation path and does not create a second event for an approved overlap.)
+- [x] Regenerate database types and add RLS/index tests. (No generated database-types artifact exists in this repository; Phase 5 adds database RLS, grant, index, settings, and checkpoint tests.)
 
 ## Test scenarios and commands
 
@@ -115,6 +115,12 @@ npm run typecheck
 npm test
 npm run build
 npx supabase db advisors --local
+```
+
+The deterministic recorded backfill command is:
+
+```bash
+npx tsx scripts/backfill-rugby-history.ts --competition=11 --season=2025 --edition-id=<canonical-edition-id> --recorded --dry-run
 ```
 
 Use the exact installed CLI flags.

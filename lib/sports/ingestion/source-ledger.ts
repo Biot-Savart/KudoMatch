@@ -53,6 +53,7 @@ export interface ProviderSourceLedgerBatch {
 	sport_slug: string;
 	fetched_at: string;
 	observe_only: boolean;
+	operation?: 'sync_fixtures' | 'sync_live' | 'full_reconcile' | 'historical_backfill';
 	correlation_id?: string;
 	catalog_sources: ProviderCatalogSourceInput[];
 	event_sources: ProviderEventSourceInput[];
@@ -161,6 +162,7 @@ export function buildProviderSourceLedgerBatch(options: {
 	competitors?: CanonicalCompetitorDTO[];
 	events: CanonicalEventDTO[];
 	observeOnly?: boolean;
+	operation?: ProviderSourceLedgerBatch['operation'];
 	correlationId?: string;
 }): ProviderSourceLedgerBatch {
 	const { adapter } = options;
@@ -169,6 +171,7 @@ export function buildProviderSourceLedgerBatch(options: {
 		sport_slug: adapter.sportSlug,
 		fetched_at: new Date().toISOString(),
 		observe_only: options.observeOnly ?? true,
+		operation: options.operation,
 		correlation_id: options.correlationId,
 		catalog_sources: [
 			...(options.competitions ?? []).map((dto) => catalogSource('competition', dto, adapter.providerSlug)),
@@ -241,7 +244,10 @@ export async function applyProviderSourceBatch(
 	};
 	if (!sourceResult.success || batch.observe_only || batch.event_sources.length === 0) return sourceResult;
 
-	const { data: resultData, error: resultError } = await supabase.rpc('apply_provider_result_batch', {
+	const resultFunction = batch.operation === 'historical_backfill'
+		? 'apply_historical_provider_result_batch'
+		: 'apply_provider_result_batch';
+	const { data: resultData, error: resultError } = await supabase.rpc(resultFunction, {
 		p_provider_slug: batch.provider_slug,
 		p_event_keys: batch.event_sources.map((event) => event.provider_event_key),
 	});
