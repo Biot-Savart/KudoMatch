@@ -1,0 +1,56 @@
+{
+  "provider": "sofascore",
+  "evidenceDate": "2026-09-03",
+  "competition": "Currie Cup",
+  "uniqueTournamentId": 796,
+  "seasonId": 97057,
+  "hasNextPage": false,
+  "eventCount": 28,
+  "events": [
+    {
+      "id": 16393687,
+      "customId": "eersher",
+      "tournamentName": "Currie Cup",
+      "tournamentId": 796,
+      "homeTeamId": 42704,
+      "homeTeamName": "Airlink Pumas",
+      "awayTeamId": 42707,
+      "awayTeamName": "Hollywoodbets Sharks",
+      "statusType": "finished",
+      "startTimestamp": 1784300400,
+      "homeScoreCurrent": 24,
+      "awayScoreCurrent": 26,
+      "round": null
+    },
+    {
+      "id": 16393690,
+      "customId": "dersier",
+      "tournamentName": "Currie Cup",
+      "tournamentId": 796,
+      "homeTeamId": 42703,
+      "homeTeamName": "DHL Stormers XXIII",
+      "awayTeamId": 42708,
+      "awayTeamName": "Suzuki Griquas",
+      "statusType": "finished",
+      "startTimestamp": 1784307900,
+      "homeScoreCurrent": 25,
+      "awayScoreCurrent": 19,
+      "round": null
+    },
+    {
+      "id": 16393693,
+      "customId": "JIbsTOi",
+      "tournamentName": "Currie Cup",
+      "tournamentId": 796,
+      "homeTeamId": 21993,
+      "homeTeamName": "Toyota Cheetahs",
+      "awayTeamId": 4184,
+      "awayTeamName": "Fidelity ADT Lions",
+      "statusType": "finished",
+      "startTimestamp": 1784458800,
+      "homeScoreCurrent": 29,
+      "awayScoreCurrent": 27,
+      "round": null
+    }
+  ]
+}

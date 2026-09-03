@@ -1,0 +1,24 @@
+{
+  "provider": "sofascore",
+  "evidenceDate": "2026-09-03",
+  "uniqueTournamentId": 796,
+  "seasons": [
+    { "name": "Currie Cup 2026", "year": "2026", "editor": false, "id": 97057 },
+    { "name": "Currie Cup 2025", "year": "2025", "editor": false, "id": 76655 },
+    { "name": "Currie Cup 2024", "year": "2024", "editor": false, "id": 61570 },
+    { "name": "Currie Cup 2023", "year": "2023", "editor": false, "id": 48866 },
+    { "name": "Currie Cup 2022", "year": "2022", "editor": false, "id": 40351 },
+    { "name": "Currie Cup 2021", "year": "2021", "editor": false, "id": 37033 },
+    { "name": "Currie Cup 2020", "year": "2020", "editor": false, "id": 34865 },
+    { "name": "Currie Cup 2019", "year": "2019", "editor": false, "id": 23777 },
+    { "name": "Currie Cup 2018", "year": "2018", "editor": false, "id": 17590 },
+    { "name": "Currie Cup 2017", "year": "2017", "editor": false, "id": 13653 },
+    { "name": "Currie Cup 2016", "year": "2016", "editor": false, "id": 11438 },
+    { "name": "Currie Cup 2015", "year": "2015", "editor": false, "id": 10592 },
+    { "name": "Currie Cup 2014", "year": "2014", "editor": false, "id": 8562 },
+    { "name": "Currie Cup 2013", "year": "2013", "editor": false, "id": 6125 },
+    { "name": "Currie Cup 2012", "year": "2012", "editor": false, "id": 4400 },
+    { "name": "Currie Cup 2011", "year": "2011", "editor": false, "id": 3349 },
+    { "name": "Currie Cup 2010", "year": "2010", "editor": false, "id": 2727 }
+  ]
+}

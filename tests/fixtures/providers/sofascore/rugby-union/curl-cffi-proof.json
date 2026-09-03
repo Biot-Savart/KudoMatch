@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "provider": "sofascore",
+  "capturedAt": "2026-09-03T08:57:47.822498Z",
+  "runtime": "local-curl-cffi",
+  "baseUrl": "https://www.sofascore.com/api/v1",
+  "mode": "write",
+  "probes": [
+    {
+      "case": "currie-cup-seasons",
+      "path": "/unique-tournament/796/seasons",
+      "status": 200,
+      "category": "success",
+      "durationMs": 47,
+      "responseBytes": 1147,
+      "contentType": "application/json",
+      "retryAfter": null,
+      "shape": [
+        "seasons"
+      ],
+      "eventId": null,
+      "statusType": null,
+      "scoreFieldsObserved": false
+    },
+    {
+      "case": "urc-seasons",
+      "path": "/unique-tournament/419/seasons",
+      "status": 200,
+      "category": "success",
+      "durationMs": 16,
+      "responseBytes": 1506,
+      "contentType": "application/json",
+      "retryAfter": null,
+      "shape": [
+        "seasons"
+      ],
+      "eventId": null,
+      "statusType": null,
+      "scoreFieldsObserved": false
+    },
+    {
+      "case": "currie-cup-event-16393687",
+      "path": "/event/16393687",
+      "status": 200,
+      "category": "success",
+      "durationMs": 0,
+      "responseBytes": 5894,
+      "contentType": "application/json",
+      "retryAfter": null,
+      "shape": [
+        "event"
+      ],
+      "eventId": 16393687,
+      "statusType": "finished",
+      "scoreFieldsObserved": true
+    }
+  ],
+  "policy": {
+    "maxRequests": 3,
+    "maxRetries": 2,
+    "timeoutSeconds": 20,
+    "maxRetryAfterSeconds": 10
+  }
+}

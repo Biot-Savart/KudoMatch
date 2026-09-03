@@ -1,0 +1,19 @@
+{
+  "provider": "sofascore",
+  "evidenceDate": "2026-09-03",
+  "competition": "United Rugby Championship",
+  "uniqueTournamentId": 419,
+  "seasonId": 98406,
+  "hasNextPage": true,
+  "eventCount": 30,
+  "statusTypes": [
+    ""
+  ],
+  "sampleEventIds": [
+    16527464,
+    16527457,
+    16527471,
+    16527459,
+    16527467
+  ]
+}

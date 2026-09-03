@@ -1,0 +1,80 @@
+{
+  "provider": "sofascore",
+  "evidenceDate": "2026-09-03",
+  "uniqueTournamentId": 796,
+  "seasonId": 97057,
+  "teams": [
+    {
+      "id": 42708,
+      "name": "Suzuki Griquas",
+      "slug": "griquas",
+      "shortName": "Griquas",
+      "categoryId": 82,
+      "categoryName": "Rugby Union",
+      "sportId": 12
+    },
+    {
+      "id": 42703,
+      "name": "DHL Stormers XXIII",
+      "slug": "western-province",
+      "shortName": "Stormers",
+      "categoryId": 82,
+      "categoryName": "Rugby Union",
+      "sportId": 12
+    },
+    {
+      "id": 4184,
+      "name": "Fidelity ADT Lions",
+      "slug": "lions",
+      "shortName": "Lions",
+      "categoryId": 82,
+      "categoryName": "Rugby Union",
+      "sportId": 12
+    },
+    {
+      "id": 42707,
+      "name": "Hollywoodbets Sharks",
+      "slug": "natal-sharks",
+      "shortName": "Sharks",
+      "categoryId": 82,
+      "categoryName": "Rugby Union",
+      "sportId": 12
+    },
+    {
+      "id": 92190,
+      "name": "Sanlam Boland Kavaliers",
+      "slug": "boland-cavaliers",
+      "shortName": "Boland",
+      "categoryId": 82,
+      "categoryName": "Rugby Union",
+      "sportId": 12
+    },
+    {
+      "id": 21993,
+      "name": "Toyota Cheetahs",
+      "slug": "cheetahs",
+      "shortName": "Cheetahs",
+      "categoryId": 82,
+      "categoryName": "Rugby Union",
+      "sportId": 12
+    },
+    {
+      "id": 245501,
+      "name": "Vodacom Bulls XV",
+      "slug": "bulls",
+      "shortName": "Bulls",
+      "categoryId": 1479,
+      "categoryName": "Rugby Union Tens",
+      "sportId": 12
+    },
+    {
+      "id": 42704,
+      "name": "Airlink Pumas",
+      "slug": "pumas",
+      "shortName": "Pumas",
+      "categoryId": 82,
+      "categoryName": "Rugby Union",
+      "sportId": 12
+    }
+  ]
+}
