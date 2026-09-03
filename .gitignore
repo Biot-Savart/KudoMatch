@@ -36,6 +36,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Python gateway
+__pycache__/
+*.py[cod]
+
 # OS Files
 .DS_Store
 Thumbs.db
