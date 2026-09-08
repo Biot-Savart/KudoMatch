@@ -74,6 +74,12 @@ const PILOTS = {
 	},
 } as const;
 
+const SOFASCORE_IMAGE_BASE_URL = 'https://img.sofascore.com/api/v1';
+
+function imageUrl(resource: 'team' | 'unique-tournament', externalKey: string): string {
+	return `${SOFASCORE_IMAGE_BASE_URL}/${resource}/${encodeURIComponent(externalKey)}/image`;
+}
+
 function object(value: unknown): JsonObject {
 	return value && typeof value === 'object' && !Array.isArray(value)
 		? value as JsonObject
@@ -142,7 +148,7 @@ function teamFromEvent(rawEvent: JsonObject, side: 'home' | 'away'): JsonObject 
 		externalKey: teamId,
 		name: teamName,
 		shortName: text(nested.shortName ?? nested.nameCode),
-		mediaUrl: text(nested.logo),
+		mediaUrl: text(nested.logo) ?? imageUrl('team', teamId),
 	};
 }
 
@@ -261,6 +267,7 @@ export class SofaScoreProvider implements SportProviderAdapter {
 			name: pilot.name,
 			kind: pilot.kind,
 			country: pilot.country,
+			logoUrl: imageUrl('unique-tournament', pilot.externalKey),
 			isActive: true,
 			sourceMetadata: metadata({ provider: this.providerSlug, uniqueTournamentId: pilot.externalKey }, fetchedAt),
 		}));
@@ -309,7 +316,7 @@ export class SofaScoreProvider implements SportProviderAdapter {
 				name: teamName,
 				shortName: text(rawTeam.shortName ?? rawTeam.nameCode),
 				countryCode: text(country.alpha2 ?? country.code),
-				mediaUrl: text(rawTeam.logo),
+				mediaUrl: text(rawTeam.logo) ?? imageUrl('team', teamId),
 				kind: 'team' as const,
 				isActive: true,
 				sourceMetadata: metadata(rawTeam, fetchedAt),

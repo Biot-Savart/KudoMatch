@@ -115,13 +115,14 @@ describe('lib/queries modular unit tests', () => {
 				{ round_label: 'Round 12' },
 				{ round_label: 'Round 13' },
 				{ round_label: 'Round 12' },
+				{ round_label: null },
 			];
 			vi.spyOn(mockSupabaseClient, 'from').mockImplementationOnce(() => {
 				return new MockQueryBuilder(mockEvents);
 			});
 
 			const rounds = await fetchEditionRounds('10');
-			expect(rounds).toEqual(['Round 12', 'Round 13']);
+			expect(rounds).toEqual(['Round 12', 'Round 13', 'Previous rounds']);
 		});
 	});
 
