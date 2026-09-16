@@ -8,6 +8,10 @@ create extension if not exists pg_cron with schema extensions;
 create extension if not exists pg_net with schema extensions;
 
 -- 2. Create RPC to configure automated background score synchronization
+drop function if exists public.setup_automated_score_checks(text, text, text);
+drop function if exists public.setup_automated_score_checks(text, text);
+drop function if exists public.setup_automated_score_checks;
+
 create or replace function public.setup_automated_score_checks(
   p_edge_function_url text,
   p_service_role_key text,
@@ -57,6 +61,9 @@ end;
 $$;
 
 -- 3. Create helper RPC to remove the cron job if needed
+drop function if exists public.unschedule_automated_score_checks();
+drop function if exists public.unschedule_automated_score_checks;
+
 create or replace function public.unschedule_automated_score_checks()
 returns text
 language plpgsql
