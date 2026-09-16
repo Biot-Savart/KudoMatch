@@ -379,7 +379,7 @@ describe('lib/queries modular unit tests', () => {
 			expect(pool?.creator?.full_name).toBe('Pool Admin');
 		});
 
-		it('should create pool and assign admin membership with role=admin', async () => {
+		it('should create pool and assign admin membership via create_pool RPC', async () => {
 			const mockPool = {
 				id: 'p-new',
 				name: 'Premier League Legends',
@@ -391,15 +391,18 @@ describe('lib/queries modular unit tests', () => {
 				is_private: true,
 			};
 
-			let insertedMember: any = null;
-			(mockSupabaseClient.from as any)
-				.mockImplementationOnce(() => new MockQueryBuilder(mockPool))
-				.mockImplementationOnce(() => ({
-					insert: vi.fn().mockImplementation((payload: any) => {
-						insertedMember = payload;
-						return Promise.resolve({ data: { id: 1 }, error: null });
-					}),
-				}));
+			let rpcArgs: any = null;
+			vi.spyOn(mockSupabaseClient, 'rpc').mockImplementationOnce(((
+				fn: string,
+				args: any,
+			) => {
+				rpcArgs = { fn, args };
+				return Promise.resolve({ data: 'p-new', error: null });
+			}) as any);
+
+			(mockSupabaseClient.from as any).mockImplementationOnce(
+				() => new MockQueryBuilder(mockPool),
+			);
 
 			const created = await createPool({
 				name: 'Premier League Legends',
@@ -409,67 +412,53 @@ describe('lib/queries modular unit tests', () => {
 			});
 
 			expect(created.id).toBe('p-new');
-			expect(insertedMember).toBeDefined();
-			expect(insertedMember.role).toBe('admin');
-			expect(insertedMember.user_id).toBe('u1');
+			expect(rpcArgs).toBeDefined();
+			expect(rpcArgs.fn).toBe('create_pool');
+			expect(rpcArgs.args.p_name).toBe('Premier League Legends');
+			expect(rpcArgs.args.p_scope_kind).toBe('sport');
+			expect(rpcArgs.args.p_sport_slug).toBe('football');
 		});
 
 		it('should force normalized scoring_mode for all_sports pools even if omitted', async () => {
-			let insertedPoolPayload: any = null;
-			(mockSupabaseClient.from as any)
-				.mockImplementationOnce(() => ({
-					insert: vi.fn().mockImplementation((payload: any) => {
-						insertedPoolPayload = payload;
-						return {
-							select: vi.fn().mockReturnValue({
-								single: vi.fn().mockResolvedValue({
-									data: { id: 'p-all-sports', ...payload },
-									error: null,
-								}),
-							}),
-						};
-					}),
-				}))
-				.mockImplementationOnce(() => ({
-					insert: vi.fn().mockResolvedValue({ data: { id: 1 }, error: null }),
-				}));
+			const mockPool = {
+				id: 'p-all-sports',
+				name: 'All Sports World Championship',
+				created_by: 'u1',
+				invite_code: 'AS2026',
+				scope_kind: 'all_sports',
+				scoring_mode: 'normalized',
+				is_private: true,
+			};
+
+			let rpcArgs: any = null;
+			vi.spyOn(mockSupabaseClient, 'rpc').mockImplementationOnce(((
+				fn: string,
+				args: any,
+			) => {
+				rpcArgs = { fn, args };
+				return Promise.resolve({ data: 'p-all-sports', error: null });
+			}) as any);
+
+			(mockSupabaseClient.from as any).mockImplementationOnce(
+				() => new MockQueryBuilder(mockPool),
+			);
 
 			const created = await createPool({
 				name: 'All Sports World Championship',
 				user_id: 'u1',
 				scope_kind: 'all_sports',
-				// no scoring_mode provided
 			});
 
-			expect(insertedPoolPayload).toBeDefined();
-			expect(insertedPoolPayload.scoring_mode).toBe('normalized');
+			expect(rpcArgs).toBeDefined();
+			expect(rpcArgs.args.p_scoring_mode).toBe('normalized');
 			expect(created.scoring_mode).toBe('normalized');
 		});
 
-		it('should roll back pool creation when creator membership insertion fails', async () => {
-			const mockPool = {
-				id: 'p-failed',
-				name: 'Orphan Pool',
-				created_by: 'u1',
-			};
-
-			let deletedPoolId: string | null = null;
-			(mockSupabaseClient.from as any)
-				.mockImplementationOnce(() => new MockQueryBuilder(mockPool))
-				.mockImplementationOnce(() => ({
-					insert: vi.fn().mockResolvedValue({
-						data: null,
-						error: { message: 'Database connection failed' },
-					}),
-				}))
-				.mockImplementationOnce(() => ({
-					delete: vi.fn().mockReturnValue({
-						eq: vi.fn().mockImplementation((col: string, val: string) => {
-							if (col === 'id') deletedPoolId = val;
-							return Promise.resolve({ data: null, error: null });
-						}),
-					}),
-				}));
+		it('should throw error when create_pool RPC fails', async () => {
+			vi.spyOn(mockSupabaseClient, 'rpc').mockResolvedValueOnce({
+				data: null,
+				error: { message: 'Database RPC failed' } as any,
+			});
 
 			await expect(
 				createPool({
@@ -478,30 +467,23 @@ describe('lib/queries modular unit tests', () => {
 					scope_kind: 'sport',
 					sport_slug: 'football',
 				}),
-			).rejects.toThrow(/Failed to add creator to pool members/);
-
-			expect(deletedPoolId).toBe('p-failed');
+			).rejects.toThrow(/Database RPC failed/);
 		});
 
-		it('should leave only active membership episode where left_at IS NULL', async () => {
-			let isNullChecked = false;
-			(mockSupabaseClient.from as any).mockImplementationOnce(() => ({
-				update: vi.fn().mockReturnValue({
-					eq: vi.fn().mockReturnValue({
-						eq: vi.fn().mockReturnValue({
-							is: vi.fn().mockImplementation((col: string, val: any) => {
-								if (col === 'left_at' && val === null) {
-									isNullChecked = true;
-								}
-								return Promise.resolve({ data: null, error: null });
-							}),
-						}),
-					}),
-				}),
-			}));
+		it('should leave pool via leave_pool RPC', async () => {
+			let rpcArgs: any = null;
+			vi.spyOn(mockSupabaseClient, 'rpc').mockImplementationOnce(((
+				fn: string,
+				args: any,
+			) => {
+				rpcArgs = { fn, args };
+				return Promise.resolve({ data: true, error: null });
+			}) as any);
 
 			await leavePool('p1', 'u1');
-			expect(isNullChecked).toBe(true);
+			expect(rpcArgs).toBeDefined();
+			expect(rpcArgs.fn).toBe('leave_pool');
+			expect(rpcArgs.args.p_pool_id).toBe('p1');
 		});
 
 		it('should fetch pool leaderboard via RPC', async () => {
