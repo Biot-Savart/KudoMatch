@@ -16,6 +16,8 @@ export const competitionsQueryKeys = {
 		['competition_edition_rounds', editionId ?? 'all'] as const,
 };
 
+export const PREVIOUS_ROUNDS_LABEL = 'Previous rounds';
+
 export async function fetchActiveCompetitions(
 	sportSlug?: string,
 ): Promise<Competition[]> {
@@ -123,7 +125,6 @@ export async function fetchEditionRounds(editionId: string): Promise<string[]> {
 		.from('events')
 		.select('round_label, starts_at')
 		.eq('edition_id', editionId)
-		.not('round_label', 'is', null)
 		.order('starts_at', { ascending: true });
 
 	if (error) {
@@ -131,14 +132,14 @@ export async function fetchEditionRounds(editionId: string): Promise<string[]> {
 		throw error;
 	}
 
+	const rows = data ?? [];
 	const rounds = Array.from(
 		new Set(
-			(data ?? [])
+			rows
 				.map((d) => d.round_label)
 				.filter((r): r is string => Boolean(r)),
 		),
 	);
-
 	rounds.sort((a, b) => {
 		const numA = parseInt(a.replace(/\D+/g, ''), 10);
 		const numB = parseInt(b.replace(/\D+/g, ''), 10);
@@ -148,6 +149,7 @@ export async function fetchEditionRounds(editionId: string): Promise<string[]> {
 			sensitivity: 'base',
 		});
 	});
+	if (rows.some((row) => !row.round_label)) rounds.push(PREVIOUS_ROUNDS_LABEL);
 
 	return rounds;
 }

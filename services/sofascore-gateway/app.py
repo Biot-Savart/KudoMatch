@@ -87,8 +87,8 @@ def upstream_error(status_code: int) -> GatewayFailure:
 
 
 def is_empty_event_history_path(path: str) -> bool:
-    """SofaScore uses 404 for an empty historical page in some active seasons."""
-    return "/events/last/" in path
+    """SofaScore uses 404 for empty historical or upcoming event pages in some active seasons."""
+    return "/events/last/" in path or "/events/next/" in path
 
 
 def require_array(payload: Any, key: str) -> dict[str, Any]:

@@ -44,17 +44,24 @@ function recordedResponses(): Record<string, unknown> {
 describe('SofaScoreProvider', () => {
 	it('normalizes the observed Currie Cup season, teams, fixture, and result contracts', async () => {
 		const provider = new SofaScoreProvider({ recordedResponses: recordedResponses() });
+		const competitions = await provider.fetchCompetitions();
 		const editions = await provider.fetchEditions('796');
 		const teams = await provider.fetchCompetitors('796-97057');
 		const events = await provider.fetchEvents({ editionExternalKey: '796-97057' });
 
+		expect(competitions.find((competition) => competition.externalKey === '796')).toMatchObject({
+			logoUrl: 'https://img.sofascore.com/api/v1/unique-tournament/796/image',
+		});
 		expect(editions[0]).toMatchObject({
 			externalKey: '796-97057',
 			competitionExternalKey: '796',
 			seasonKey: '97057',
 			status: 'active',
 		});
-		expect(teams.map((team) => team.externalKey)).toEqual(['42704', '42707']);
+		expect(teams).toMatchObject([
+			{ externalKey: '42704', mediaUrl: 'https://img.sofascore.com/api/v1/team/42704/image' },
+			{ externalKey: '42707', mediaUrl: 'https://img.sofascore.com/api/v1/team/42707/image' },
+		]);
 		expect(events).toHaveLength(2);
 		expect(events.find((event) => event.externalKey === '16393687')).toMatchObject({
 		status: 'finished',

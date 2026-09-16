@@ -45,8 +45,8 @@ on conflict (sport_slug, slug) do update set
   logo_url = excluded.logo_url,
   is_active = excluded.is_active;
 
--- 3a. SofaScore current-provider pilot settings. Disabled and observe-only by
--- default; activation requires the Phase 4 evidence gates.
+-- 3a. SofaScore current-provider pilot settings. These verified pilots are
+-- the current fixture/result authority for local and deployment resets.
 insert into public.competition_provider_settings (
   competition_id,
   provider_slug,
@@ -62,13 +62,13 @@ insert into public.competition_provider_settings (
 select
   c.id,
   'sofascore',
-  false,
   true,
-  1,
-  1,
-  1,
   false,
-  false,
+  1,
+  1,
+  null,
+  true,
+  true,
   case c.slug
     when 'currie-cup' then '{"unique_tournament_id": 796, "current_season_id": 97057}'::jsonb
     when 'united-rugby-championship' then '{"unique_tournament_id": 419, "current_season_id": 98406}'::jsonb
@@ -78,9 +78,13 @@ from public.competitions c
 where c.sport_slug = 'rugby-union'
   and c.slug in ('currie-cup', 'united-rugby-championship')
 on conflict (competition_id, provider_slug) do update set
+  enabled = excluded.enabled,
+  observe_only = excluded.observe_only,
   fixture_priority = excluded.fixture_priority,
   result_priority = excluded.result_priority,
   standings_priority = excluded.standings_priority,
+  fixture_authority = excluded.fixture_authority,
+  allow_single_source_result_finalization = excluded.allow_single_source_result_finalization,
   config = excluded.config;
 
 -- Phase 6: ESPN is registered for fixture/result fallback but remains disabled

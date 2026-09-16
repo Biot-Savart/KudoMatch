@@ -39,6 +39,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+const ALL_ROUNDS_LABEL = 'All rounds';
+
 function PredictContent() {
 	const supabase = createClient();
 	const queryClient = useQueryClient();
@@ -159,9 +161,9 @@ function PredictContent() {
 	});
 
 	const activeRound =
-		roundParam && availableRounds.includes(roundParam)
+		roundParam && (roundParam === ALL_ROUNDS_LABEL || availableRounds.includes(roundParam))
 			? roundParam
-			: availableRounds[0] || 'Round 1';
+			: ALL_ROUNDS_LABEL;
 
 	// Update URL when dimension changes
 	const updateFilters = (
@@ -221,7 +223,7 @@ function PredictContent() {
 			sportSlug: sportParam,
 			competitionId: competitionParam || undefined,
 			editionId: activeEditionId,
-			roundLabel: activeRound,
+			roundLabel: activeRound === ALL_ROUNDS_LABEL ? undefined : activeRound,
 			userId: user?.id,
 		}),
 		queryFn: () =>
@@ -229,7 +231,7 @@ function PredictContent() {
 				sportSlug: sportParam,
 				competitionId: competitionParam || undefined,
 				editionId: activeEditionId,
-				roundLabel: activeRound,
+				roundLabel: activeRound === ALL_ROUNDS_LABEL ? undefined : activeRound,
 				userId: user?.id,
 			}),
 		enabled: !userLoading,
@@ -448,7 +450,7 @@ function PredictContent() {
 			)}
 
 			{/* Round Navigation Pill Rail */}
-			{availableRounds.length > 1 && (
+			{availableRounds.length > 0 && (
 				<div className="relative flex items-center">
 					<button
 						onClick={() => scrollRail('left')}
@@ -461,6 +463,24 @@ function PredictContent() {
 						ref={railRef}
 						className="flex items-center gap-2 overflow-x-auto no-scrollbar py-2 px-1 w-full"
 					>
+						<button
+							onClick={() =>
+								updateFilters(
+									sportParam,
+									activeEditionId,
+									ALL_ROUNDS_LABEL,
+									competitionParam ||
+										(activeCompetitionId ? String(activeCompetitionId) : undefined),
+								)
+							}
+							className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition ${
+								activeRound === ALL_ROUNDS_LABEL
+									? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 border border-indigo-500'
+									: 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5'
+							}`}
+						>
+							All rounds
+						</button>
 						{availableRounds.map((r) => (
 							<button
 								key={r}

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client';
+import { PREVIOUS_ROUNDS_LABEL } from './competitions';
 import {
 	CompetitorRole,
 	EventCompetitor,
@@ -259,7 +260,9 @@ export async function fetchEvents(
 	query = query.eq('competition_editions.competitions.is_active', true);
 
 	if (filters.roundLabel && filters.roundLabel !== 'all') {
-		query = query.eq('round_label', filters.roundLabel);
+		query = filters.roundLabel === PREVIOUS_ROUNDS_LABEL
+			? query.is('round_label', null)
+			: query.eq('round_label', filters.roundLabel);
 	}
 
 	if (filters.status && filters.status !== 'all') {
