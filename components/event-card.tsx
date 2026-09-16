@@ -123,9 +123,25 @@ export function EventCard(props: EventCardProps) {
 	// Derive predicted result option
 	const getPredictionOption = (): 'home' | 'draw' | 'away' | null => {
 		if (!predSelection) return null;
-		if (predSelection.home > predSelection.away) return 'home';
-		if (predSelection.away > predSelection.home) return 'away';
-		return 'draw';
+		if (
+			predSelection.home === quickPicks.home.home &&
+			predSelection.away === quickPicks.home.away
+		) {
+			return 'home';
+		}
+		if (
+			predSelection.home === quickPicks.draw.home &&
+			predSelection.away === quickPicks.draw.away
+		) {
+			return 'draw';
+		}
+		if (
+			predSelection.home === quickPicks.away.home &&
+			predSelection.away === quickPicks.away.away
+		) {
+			return 'away';
+		}
+		return null;
 	};
 
 	const activeOption = getPredictionOption();

@@ -37,8 +37,6 @@ export async function fetchUserPools(userId: string): Promise<ScopedPool[]> {
       pool:pools (
         id,
         name,
-        slug,
-        description,
         created_by,
         is_private,
         invite_code,
@@ -71,8 +69,6 @@ export async function fetchUserPools(userId: string): Promise<ScopedPool[]> {
 			return {
 				id: p.id,
 				name: p.name,
-				slug: p.slug,
-				description: p.description,
 				created_by: p.created_by,
 				is_private: p.is_private,
 				invite_code: p.invite_code,
@@ -101,26 +97,24 @@ export async function fetchPoolById(
 		.from('pools')
 		.select(
 			`
-		    id,
-		    name,
-		    slug,
-		    description,
-		    created_by,
-		    is_private,
-		    invite_code,
-		    scope_kind,
-		    sport_slug,
-		    competition_id,
-		    edition_id,
-		    scoring_mode,
-		    scoring_starts_at,
-		    created_at,
-		    updated_at,
-		    creator:profiles!pools_created_by_fkey (id, full_name, avatar_url),
-		    sport:sports (slug, name, icon_key),
-		    competition:competitions (id, name, slug, logo_url),
-		    edition:competition_editions (id, name, season_key)
-		  `,
+			   id,
+			   name,
+			   created_by,
+			   is_private,
+			   invite_code,
+			   scope_kind,
+			   sport_slug,
+			   competition_id,
+			   edition_id,
+			   scoring_mode,
+			   scoring_starts_at,
+			   created_at,
+			   updated_at,
+			   creator:profiles!pools_created_by_fkey (id, full_name, avatar_url),
+			   sport:sports (slug, name, icon_key),
+			   competition:competitions (id, name, slug, logo_url),
+			   edition:competition_editions (id, name, season_key)
+			 `,
 		)
 		.eq('id', poolId)
 		.single();
@@ -143,8 +137,6 @@ export async function fetchPoolById(
 	return {
 		id: data.id,
 		name: data.name,
-		slug: data.slug,
-		description: data.description,
 		created_by: data.created_by,
 		creator: (data as any).creator || (data as any).created_by_profile || null,
 		is_private: data.is_private,
@@ -214,132 +206,83 @@ export async function createPool(input: CreatePoolInput): Promise<ScopedPool> {
 	}
 
 	const inviteCode = generateInviteCode();
-	const baseSlug = input.name
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '');
-	const slug = `${baseSlug}-${Math.random().toString(36).substring(2, 6)}`;
 
 	const scoringMode =
 		input.scope_kind === 'all_sports'
 			? 'normalized'
 			: input.scoring_mode || 'raw';
 
-	const { data: poolData, error: poolError } = await supabase
-		.from('pools')
-		.insert({
-			name: input.name,
-			slug,
-			description: input.description || null,
-			created_by: creatorId,
-			is_private: input.is_private ?? true,
-			invite_code: inviteCode,
-			scope_kind: input.scope_kind,
-			sport_slug: input.sport_slug || null,
-			competition_id: input.competition_id || null,
-			edition_id: input.edition_id || null,
-			scoring_mode: scoringMode,
-			scoring_starts_at: new Date().toISOString(),
-		})
-		.select()
-		.single();
-
-	if (poolError) {
-		console.error('Error creating pool:', poolError);
-		throw poolError;
-	}
-
-	const { error: memberError } = await supabase.from('pool_members').insert({
-		pool_id: poolData.id,
-		user_id: creatorId,
-		role: 'admin',
-		joined_at: new Date().toISOString(),
+	const { data: poolId, error: poolError } = await supabase.rpc('create_pool', {
+		p_name: input.name,
+		p_invite_code: inviteCode,
+		p_scope_kind: input.scope_kind,
+		p_sport_slug: input.sport_slug || null,
+		p_competition_id: input.competition_id
+			? Number(input.competition_id)
+			: null,
+		p_edition_id: input.edition_id ? Number(input.edition_id) : null,
+		p_scoring_mode: scoringMode,
+		p_is_private: input.is_private ?? true,
 	});
 
-	if (memberError) {
-		console.error('Error adding creator to pool_members:', memberError);
-		// Roll back newly created pool to prevent orphaned records
-		await supabase.from('pools').delete().eq('id', poolData.id);
-		throw new Error(
-			`Failed to add creator to pool members: ${memberError.message}`,
-		);
+	if (poolError || !poolId) {
+		console.error('Error creating pool via RPC:', poolError);
+		throw poolError || new Error('Failed to create pool');
 	}
 
+	const created = await fetchPoolById(poolId);
+	if (created) return created;
+
 	return {
-		id: poolData.id,
-		name: poolData.name,
-		slug: poolData.slug,
-		description: poolData.description,
-		created_by: poolData.created_by,
-		is_private: poolData.is_private,
-		invite_code: poolData.invite_code,
-		scope_kind: poolData.scope_kind,
-		sport_slug: poolData.sport_slug,
-		competition_id: poolData.competition_id,
-		edition_id: poolData.edition_id,
+		id: poolId,
+		name: input.name,
+		created_by: creatorId,
+		is_private: input.is_private ?? true,
+		invite_code: inviteCode,
+		scope_kind: input.scope_kind,
+		sport_slug: input.sport_slug || null,
+		competition_id: input.competition_id ? String(input.competition_id) : null,
+		edition_id: input.edition_id ? String(input.edition_id) : null,
 		scoring_mode: scoringMode,
-		scoring_starts_at: poolData.scoring_starts_at,
-		created_at: poolData.created_at,
-		updated_at: poolData.updated_at,
+		scoring_starts_at: new Date().toISOString(),
+		created_at: new Date().toISOString(),
+		updated_at: new Date().toISOString(),
 	};
 }
 
 export async function joinPoolByCode(
 	inviteCode: string,
-	userId: string,
+	_userId?: string,
 ): Promise<ScopedPool> {
 	const supabase = createClient();
 
-	const { data: poolData, error: poolError } = await supabase
-		.from('pools')
-		.select('id, name, scope_kind, scoring_starts_at, is_private')
-		.eq('invite_code', inviteCode.trim().toUpperCase())
-		.single();
+	const { data: poolId, error } = await supabase.rpc(
+		'join_pool_by_invite_code',
+		{
+			p_invite_code: inviteCode.trim().toUpperCase(),
+		},
+	);
 
-	if (poolError || !poolData) {
-		throw new Error('Invalid invite code. Pool not found.');
+	if (error || !poolId) {
+		throw new Error(error?.message || 'Invalid invite code. Pool not found.');
 	}
 
-	const { data: existingMember } = await supabase
-		.from('pool_members')
-		.select('id, left_at')
-		.eq('pool_id', poolData.id)
-		.eq('user_id', userId)
-		.maybeSingle();
-
-	if (existingMember && !existingMember.left_at) {
-		throw new Error('You are already an active member of this pool.');
+	const pool = await fetchPoolById(poolId);
+	if (!pool) {
+		throw new Error('Failed to retrieve pool after joining.');
 	}
-
-	if (existingMember && existingMember.left_at) {
-		const { error: rejoinError } = await supabase
-			.from('pool_members')
-			.update({ left_at: null, joined_at: new Date().toISOString() })
-			.eq('id', existingMember.id);
-
-		if (rejoinError) throw rejoinError;
-	} else {
-		const { error: joinError } = await supabase.from('pool_members').insert({
-			pool_id: poolData.id,
-			user_id: userId,
-			joined_at: new Date().toISOString(),
-		});
-
-		if (joinError) throw joinError;
-	}
-
-	return fetchPoolById(poolData.id) as Promise<ScopedPool>;
+	return pool;
 }
 
-export async function leavePool(poolId: string, userId: string): Promise<void> {
+export async function leavePool(
+	poolId: string,
+	_userId?: string,
+): Promise<void> {
 	const supabase = createClient();
 
-	const { error } = await supabase
-		.from('pool_members')
-		.update({ left_at: new Date().toISOString() })
-		.eq('pool_id', poolId)
-		.eq('user_id', userId)
-		.is('left_at', null);
+	const { error } = await supabase.rpc('leave_pool', {
+		p_pool_id: poolId,
+	});
 
 	if (error) {
 		console.error('Error leaving pool:', error);
